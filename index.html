@@ -220,7 +220,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-18.3</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-18.4</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -590,7 +590,7 @@ tr.pick:hover td{background:var(--bg)}
 // BUILD_VERSION: เลขเวอร์ชันที่ต้องแก้คู่กับข้อความ "build ..." ใน <div class="brand"> ของ HTML ทุกครั้งที่ส่งไฟล์ใหม่
 // ให้ทีม — ใช้เช็คได้ง่ายๆ ว่าไฟล์ที่ deploy จริง (เช่น GitHub Pages) เป็นเวอร์ชันล่าสุดที่ส่งไปหรือยัง (ดูที่มุมซ้ายบน
 // ของหน้าเว็บได้เลย ไม่ต้อง login/กดปุ่มตรวจสอบอะไรก่อน) log ออก console ด้วยเผื่อสะดวกกว่าตอน debug
-const BUILD_VERSION = '2026-08-18.3';
+const BUILD_VERSION = '2026-08-18.4';
 console.log('[BOQ Timeline] BUILD_VERSION =', BUILD_VERSION);
 // หมายเหตุ: ค่าเริ่มต้นนี้ (10 ส.ค.–2 พ.ย. 2569) ใช้กับ MOCK DATA เท่านั้น พอเข้าโหมด LIVE ค่าพวกนี้จะถูก
 // คำนวณใหม่จากวันที่จริงของงานใน SharePoint โดย recalcTimelineWindow() (ดูใน bootLive()) จึงต้องเป็น let ไม่ใช่ const
@@ -2971,6 +2971,13 @@ async function bootLive(){
     // ตัวพิมพ์เล็กใหญ่ไม่ตรงกัน) ไปเทียบ Status ของ item ใน BOQ Team Work Plan แทน ในกรณีที่ไม่มี parentTaskId ให้ใช้
     // เทียบเท่า — ถ้ามี Work Plan item มากกว่า 1 รายการชนกุญแจเดียวกัน (พบไม่บ่อย) จะถือว่า "active" ถ้ามีอย่างน้อย 1
     // รายการยัง active อยู่ (กันการซ่อนงานที่ยังทำอยู่จริงผิดๆ โดยไม่ได้ตั้งใจ)
+    // build 2026-08-18.4: กุญแจสำรองด้านบนยังไม่ตัด VOCO/Budget Hotel ออกจริง ("เหมือนเดิม") ตรวจโค้ดพบว่า BOQ Team
+    // Work Plan ใช้ชื่อ field "Package" ไม่สม่ำเสมอ — บางจุดในไฟล์นี้เอง (loadIntakeFromGraph, diagnoseProcRefList เดิม)
+    // ต้อง fallback ไป f.WorkPackage เมื่อ f.Package ว่าง ส่วน BOQ Step Tracking ใช้ "Package" เพียวๆ เสมอ (ไม่มี
+    // WorkPackage) — โค้ดกุญแจสำรองที่เพิ่งเพิ่มไปเช็คแค่ f.Package เฉยๆ ถ้า record ของ Work Plan เก็บชื่อ Package ไว้ใน
+    // WorkPackage แทน จะได้กุญแจ "ชื่อโครงการ::" (ว่างเปล่า) ไม่ตรงกับกุญแจของฝั่ง Step Tracking ("ชื่อโครงการ::mep")
+    // เลย ทำให้ hasOwnProperty เช็คไม่เจอ แล้ว fallback ไป "ไม่มีข้อมูลให้เทียบ → ปล่อยผ่าน" เสมอ (ตรงกับอาการที่เจอ
+    // เป๊ะ) เพิ่ม f.WorkPackage เป็นตัวสำรองตรงนี้ด้วยให้เหมือนจุดอื่นๆ ในไฟล์
     const workplanItemActiveByKey = {};
     workplanItemsAll.forEach(it=>{
       const f = it.fields||{};
@@ -2978,7 +2985,7 @@ async function bootLive(){
       if(!name) return;
       const statusRaw = (f.Status||'').toString().trim().toLowerCase();
       const isActive = ACTIVE_STATUSES.includes(statusRaw);
-      const key = canonicalProjId(name) + '::' + canonicalProjId(f.Package || '');
+      const key = canonicalProjId(name) + '::' + canonicalProjId(f.Package || f.WorkPackage || '');
       workplanItemActiveByKey[key] = (key in workplanItemActiveByKey) ? (workplanItemActiveByKey[key] || isActive) : isActive;
     });
     // กรองระดับ "งานเฉพาะเจาะจง" (แถวเดียว) อีกชั้น — ใช้ parentTaskId ตรงๆ ก่อน (แม่นสุด ไม่ต้องเดา/เทียบชื่อ) ถ้าไม่มี
@@ -3057,6 +3064,79 @@ async function bootLive(){
     toastMsg('⚠️ โหลดข้อมูลจริงไม่สำเร็จ · แสดง MOCK DATA แทน ('+e.message+')');
   }
 }
+// diagnoseTimelineFilter: เครื่องมือ debug กรณี "Status Done แล้วแต่ Timeline ยังโชว์เป็น active" (VOCO/Budget Hotel
+// 18 ส.ค. 2026 — build .3 แล้วยัง "เหมือนเดิม") ไม่มีปุ่มในหน้า Toolbar (ผู้ใช้ขอให้เคลียร์ปุ่ม diagnostic ออกให้หมดแล้ว)
+// เรียกใช้ผ่าน Console ของเบราว์เซอร์แทน: กด F12 → แท็บ Console → พิมพ์ diagnoseTimelineFilter('VOCO') แล้ว Enter — ดึง
+// ข้อมูลสดจาก BOQ Team Work Plan + BOQ Step Tracking มาเทียบให้เห็นเลยว่าแต่ละแถวมี parentTaskId หรือไม่, ค่า Status/
+// Package ที่แท้จริงเป็นอะไร, workplanItemActiveById/workplanItemActiveByKey คำนวณ isActive ออกมาเป็นอะไร และแถวนั้น
+// สุดท้ายจะถูกซ่อนหรือโชว์เพราะอะไร (จำลอง logic ใน bootLive ตรงๆ) — เอาไว้หาสาเหตุจริงจากข้อมูลจริง ไม่ต้องเดาอีกรอบ
+async function diagnoseTimelineFilter(projectSubstr){
+  if(!LIVE_MODE){ console.warn('⚠️ ต้อง login SharePoint ก่อน (LIVE_MODE=false)'); return; }
+  const needle = canonicalProjId(projectSubstr||'');
+  const [stepData, workplanItems] = await Promise.all([
+    graphFetch(`/sites/${SITE_ID}/lists/${STEP_LIST}/items?$expand=fields&$top=200`),
+    graphFetchAllItems(`/sites/${SITE_ID}/lists/${WORKPLAN_LIST}/items?$expand=fields&$top=200`)
+  ]);
+  const stepItems = (stepData.value||[]).filter(it=> canonicalProjId((it.fields||{}).Project||'').includes(needle));
+  const wpItems = workplanItems.filter(it=> canonicalProjId((it.fields||{}).Title||(it.fields||{}).Project||'').includes(needle));
+
+  const workplanItemActiveById = {};
+  workplanItems.forEach(it=>{
+    const statusRaw = ((it.fields||{}).Status||'').toString().trim().toLowerCase();
+    workplanItemActiveById[String(it.id)] = ACTIVE_STATUSES.includes(statusRaw);
+  });
+  const workplanItemActiveByKey = {};
+  workplanItems.forEach(it=>{
+    const f = it.fields||{};
+    const name = f.Title || f.Project_x0020_Name || f.Project || '';
+    if(!name) return;
+    const statusRaw = (f.Status||'').toString().trim().toLowerCase();
+    const isActive = ACTIVE_STATUSES.includes(statusRaw);
+    const key = canonicalProjId(name) + '::' + canonicalProjId(f.Package || f.WorkPackage || '');
+    workplanItemActiveByKey[key] = (key in workplanItemActiveByKey) ? (workplanItemActiveByKey[key] || isActive) : isActive;
+  });
+
+  const lines = [];
+  lines.push(`=== BOQ Team Work Plan (${wpItems.length} รายการที่ชื่อมีคำว่า "${projectSubstr}") ===`);
+  wpItems.forEach(it=>{
+    const f = it.fields||{};
+    const isActive = workplanItemActiveById[String(it.id)];
+    lines.push(`  item id=${it.id} · Title="${f.Title}" · Package="${f.Package}" · WorkPackage="${f.WorkPackage}" · Team="${f.Team}" · Status="${f.Status}" → isActive=${isActive} (key="${canonicalProjId(f.Title||'')}::${canonicalProjId(f.Package||f.WorkPackage||'')}")`);
+  });
+  lines.push('');
+  lines.push(`=== BOQ Step Tracking (${stepItems.length} แถวที่ Project มีคำว่า "${projectSubstr}") ===`);
+  stepItems.forEach(it=>{
+    const f = it.fields||{};
+    lines.push(`  item id=${it.id} · Project="${f.Project}" · Package="${f.Package}" · SubTeam="${f.SubTeam}" · WBSStep="${f.WBSStep}" · ParentTaskID="${f.ParentTaskID||'(ไม่มี)'}"`);
+  });
+  lines.push('');
+  lines.push('=== สรุป: แถวไหนจะถูกซ่อน/โชว์ใน Timeline เพราะอะไร (จำลอง logic ใน bootLive ตรงๆ) ===');
+  stepItems.forEach(it=>{
+    const f = it.fields||{};
+    const parentTaskId = f.ParentTaskID ? String(f.ParentTaskID).trim() : null;
+    const fallbackKey = canonicalProjId(f.Project||'') + '::' + canonicalProjId(f.Package||'');
+    let verdict, reason;
+    if(parentTaskId && Object.prototype.hasOwnProperty.call(workplanItemActiveById, parentTaskId)){
+      const active = workplanItemActiveById[parentTaskId];
+      verdict = active!==false ? 'โชว์' : 'ซ่อน';
+      reason = `ใช้ parentTaskId=${parentTaskId} ตรงๆ → isActive=${active}`;
+    } else if(Object.prototype.hasOwnProperty.call(workplanItemActiveByKey, fallbackKey)){
+      const active = workplanItemActiveByKey[fallbackKey];
+      verdict = active!==false ? 'โชว์' : 'ซ่อน';
+      reason = `ไม่มี parentTaskId → fallback key "${fallbackKey}" → isActive=${active}`;
+    } else {
+      verdict = 'โชว์';
+      reason = `ไม่มีทั้ง parentTaskId และ fallback key ให้เทียบ (key "${fallbackKey}" ไม่พบใน Work Plan เลย) → ปล่อยผ่านตามค่าเริ่มต้น`;
+    }
+    lines.push(`  Step id=${it.id} (Package="${f.Package}" · SubTeam="${f.SubTeam}") → ${verdict} · ${reason}`);
+  });
+  const report = lines.join('\n');
+  console.log(report);
+  const out = document.getElementById('diagOut');
+  if(out){ out.textContent = report; document.getElementById('diagMbg').classList.add('on'); }
+  return report;
+}
+window.diagnoseTimelineFilter = diagnoseTimelineFilter;
 async function doLogin(){
   if(!msalInstance){ const ok = await initAuth(); if(!ok && !isConfigured()){ toastMsg('⚠️ ยังไม่ได้กรอก Client ID/Tenant ID ใน CONFIG'); return; } }
   const ok = await signIn();
