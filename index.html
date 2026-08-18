@@ -84,6 +84,7 @@ body{font-family:'Segoe UI','Sarabun','Tahoma',sans-serif;background:var(--bg);c
 .lab-row.proj .lab small{font-weight:400;color:var(--text2);font-size:11px;display:block}
 .lab-row.pkg .lab{font-weight:600;padding-left:24px}
 .lab-row.pkg .lab small{font-weight:400;color:var(--text2);font-size:11px}
+.lab-row.pkg .lab small.pkg-desc{display:block;font-weight:400;font-style:italic;color:var(--text2);font-size:10.5px;margin-top:2px;white-space:normal}
 .lab-row.leaf .lab{padding-left:38px}
 .lab-row.leaf .lab b{font-size:12.5px}
 .lab-row.leaf .lab small{color:var(--text2);font-size:11px;display:block}
@@ -220,7 +221,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-18.7</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-18.9</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -602,7 +603,7 @@ tr.pick:hover td{background:var(--bg)}
 // BUILD_VERSION: เลขเวอร์ชันที่ต้องแก้คู่กับข้อความ "build ..." ใน <div class="brand"> ของ HTML ทุกครั้งที่ส่งไฟล์ใหม่
 // ให้ทีม — ใช้เช็คได้ง่ายๆ ว่าไฟล์ที่ deploy จริง (เช่น GitHub Pages) เป็นเวอร์ชันล่าสุดที่ส่งไปหรือยัง (ดูที่มุมซ้ายบน
 // ของหน้าเว็บได้เลย ไม่ต้อง login/กดปุ่มตรวจสอบอะไรก่อน) log ออก console ด้วยเผื่อสะดวกกว่าตอน debug
-const BUILD_VERSION = '2026-08-18.7';
+const BUILD_VERSION = '2026-08-18.9';
 console.log('[BOQ Timeline] BUILD_VERSION =', BUILD_VERSION);
 // หมายเหตุ: ค่าเริ่มต้นนี้ (10 ส.ค.–2 พ.ย. 2569) ใช้กับ MOCK DATA เท่านั้น พอเข้าโหมด LIVE ค่าพวกนี้จะถูก
 // คำนวณใหม่จากวันที่จริงของงานใน SharePoint โดย recalcTimelineWindow() (ดูใน bootLive()) จึงต้องเป็น let ไม่ใช่ const
@@ -1712,6 +1713,24 @@ async function commitAndGenerateSteps(task, sug, selectedSubs, editedStart, edit
       AISuggestStart: toISO(start), AISuggestFinish: toISO(finish), AISuggestAssignee: sug.who
     }})
   });
+  // build 2026-08-18.9: ผู้ใช้ยืนยันชัดเจน (หลังรับทราบความเสี่ยงแล้ว) ว่าต้องการ "ลบ Step เก่าทิ้ง สร้างใหม่ผ่าน
+  // Commit เสมอ" — เพราะงานที่เพิ่งจะ Commit ตอนนี้ (CommitStatus เดิมยังไม่ใช่ Committed) อาจมี Step จริงที่กรอกตรงเข้า
+  // SharePoint เอง/มาจากตอนที่ยังคลุมเครือ (ไม่มี ParentTaskID ผูกแน่ชัด) ค้างอยู่แล้วจริง (เช่น VOCO/MEP ที่มีหลายงาน
+  // ชนกัน Package เดียวกัน) ข้อมูลนั้นเชื่อถือไม่ได้ ก่อนสร้าง Step ชุดใหม่ที่ผูก ParentTaskID ถูกต้อง ต้องลบของเก่าที่
+  // ตรง Project+Package เดียวกัน (ทุก SubTeam ไม่ใช่แค่ทีมที่เลือกรอบนี้ กันเศษข้อมูลเก่าค้าง) ทิ้งก่อนเสมอ — จะเสีย
+  // ประวัติ Step ที่เคยปิดไปแล้ว/ผู้ทำที่เคยบันทึกไว้ของชุดเก่า (ผู้ใช้เลือกแบบนี้เองหลังได้รับคำเตือนแล้ว)
+  try{
+    const oldItems = await graphFetchAllItems(`/sites/${SITE_ID}/lists/${STEP_LIST}/items?$expand=fields&$top=200`);
+    const targetProjId = canonicalProjId(task.name), targetPkgId = canonicalProjId(task.packageName);
+    const toDelete = oldItems.filter(it=>{
+      const f = it.fields||{};
+      return canonicalProjId(f.Project||'')===targetProjId && canonicalProjId(f.Package||f.WorkPackage||'')===targetPkgId;
+    });
+    for(const old of toDelete){
+      await graphFetch(`/sites/${SITE_ID}/lists/${STEP_LIST}/items/${old.id}`, { method:'DELETE' });
+    }
+    if(toDelete.length) console.log(`[commitAndGenerateSteps] ลบ Step เก่า ${toDelete.length} รายการของ "${task.name} · ${task.packageName}" ก่อนสร้างชุดใหม่`);
+  }catch(e){ console.warn('[commitAndGenerateSteps] ลบ Step เก่าไม่สำเร็จ (เสี่ยงมี Step ซ้ำ) — ดำเนินการสร้างชุดใหม่ต่อ', e); }
   // ใช้ Step Template ตาม Service Type ของงานนี้ (task.service) แทนค่าตายตัว 8 Step เดิม — ถ้าไม่รู้จัก Service Type
   // เลย getTemplateForService จะ fallback เป็น Blank BOQ ให้เอง (พฤติกรรมเดิมสำหรับงานที่ไม่ระบุ Service Type)
   const template = getTemplateForService(task.service);
@@ -2983,10 +3002,18 @@ async function bootLive(){
     // ParentTaskID) — กันบั๊กที่โครงการเดียวมีหลายงาน (เช่น VOCO มี 3 รายการใน Work Plan) บางงาน Status=Done แล้ว
     // แต่บางงานยัง active: เช็คแค่ระดับโครงการจะยังโชว์งานที่ Done ไปแล้วค้างอยู่ใน Timeline (เคสจริงที่ผู้ใช้เจอ 18
     // ส.ค. 2026 — VOCO/Budget Hotel บาง Package ที่ Work Plan ปรับ Status เป็น Done แล้วแต่ Timeline ยังขึ้นเป็น active)
+    // build 2026-08-18.9: ผู้ใช้ขอให้ "งาน on process ทุกงาน" ต้องผ่านการกด Commit ผ่านแอปนี้ก่อนถึงจะเชื่อ/โชว์ใน
+    // Timeline ได้ (กันข้อมูลที่กรอกตรงเข้า SharePoint เอง/คลุมเครือมาแสดงแบบเดา ต้นเหตุอาการ "เพี้ยนๆ" ที่เจอซ้ำๆ) —
+    // เพิ่มเงื่อนไข CommitStatus==='Committed' เข้าไปเป็นส่วนหนึ่งของ "trusted-active" เลย (ไม่ใช่แค่ Status ยัง active
+    // เฉยๆ เหมือนเดิม) งานที่ยัง active จริงแต่ยังไม่เคย Commit ผ่านแอป จะได้ค่า false ตรงนี้ (เหมือนงานที่ Done ไปแล้ว)
+    // ทำให้ถูกซ่อนออกจาก Timeline เหมือนกัน แล้วไปโผล่ในลิสต์ "รอ Commit" แทน (ดู loadIntakeFromGraph ซึ่งกรองด้วย
+    // CommitStatus เงื่อนไขเดียวกันอยู่แล้ว) ให้ PCM เลือกทีม/คน/วันที่แล้วกด Commit ใหม่ (ลบ Step เก่าที่ไม่น่าเชื่อถือ
+    // ทิ้งแล้วสร้างชุดใหม่ที่ผูก ParentTaskID ถูกต้อง — ดู commitAndGenerateSteps)
     const workplanItemActiveById = {};
     workplanItemsAll.forEach(it=>{
       const statusRaw = ((it.fields||{}).Status||'').toString().trim().toLowerCase();
-      workplanItemActiveById[String(it.id)] = ACTIVE_STATUSES.includes(statusRaw);
+      const commitStatusRaw = ((it.fields||{}).CommitStatus||'').toString().trim().toLowerCase();
+      workplanItemActiveById[String(it.id)] = ACTIVE_STATUSES.includes(statusRaw) && commitStatusRaw==='committed';
     });
     // สำรอง (build 2026-08-18.3): แถวที่ commit ไปก่อนที่ระบบจะเริ่มบันทึก ParentTaskID (ก่อน build .1) จะไม่มี
     // row.parentTaskId เลย ทำให้เช็คด้านบนปล่อยผ่านเสมอ แล้วยังโดนบั๊กเดิม (โครงการเดียวหลายงาน บางงาน Done บางงาน
@@ -3013,6 +3040,8 @@ async function bootLive(){
     // รายการไหนกันแน่) ให้ถือว่า "ไม่มีข้อมูลที่เชื่อถือได้พอ" (ไม่ใช่ "active" อัตโนมัติ) แล้วปล่อยผ่านเหมือนกรณีไม่พบ
     // เลย (โชว์ไว้ก่อน ปลอดภัยกว่าเดาผิด) — ส่วนการปิดงานที่แม่นจริงต้องใช้ปุ่ม "✓ ปิดงาน" ที่เขียนตรงไปที่ BOQ Step
     // Tracking แทน (ดู confirmMarkPackageDone) ไม่ใช่เดาว่าจะ PATCH Work Plan item ไหน
+    // build 2026-08-18.9: เหมือน workplanItemActiveById ด้านบน — เพิ่ม CommitStatus==='Committed' เป็นเงื่อนไข
+    // "trusted-active" ของกุญแจสำรองนี้ด้วย (ใช้เฉพาะตอนไม่มี parentTaskId ให้เทียบตรงๆ)
     const workplanItemActiveByKey = {};
     const workplanKeyAmbiguous = {};
     workplanItemsAll.forEach(it=>{
@@ -3020,16 +3049,49 @@ async function bootLive(){
       const name = f.Title || f.Project_x0020_Name || f.Project || '';
       if(!name) return;
       const statusRaw = (f.Status||'').toString().trim().toLowerCase();
-      const isActive = ACTIVE_STATUSES.includes(statusRaw);
+      const commitStatusRaw = (f.CommitStatus||'').toString().trim().toLowerCase();
+      const isActive = ACTIVE_STATUSES.includes(statusRaw) && commitStatusRaw==='committed';
       const key = canonicalProjId(name) + '::' + canonicalProjId(f.Package || f.WorkPackage || '');
       if(key in workplanItemActiveByKey) workplanKeyAmbiguous[key] = true;
       else workplanItemActiveByKey[key] = isActive;
     });
+    // build 2026-08-18.8: ผู้ใช้แจ้ง "due date ไม่ตรง" — ตรวจโค้ดพบว่า dueDateByProjId (buildDueDateMap) เก็บ Due
+    // Date "ตัวแรกที่เจอ" ต่อ "ทั้งโครงการ" เฉยๆ ไม่แยกตาม Package เลย ถ้าโครงการเดียวมีหลาย Package (เช่น VOCO มีทั้ง
+    // MEP/ID ฯลฯ) แต่ละ Package มี Due Date ของตัวเองไม่เท่ากันจริง (ยืนยันจาก export "all item") Timeline จะเอา Due
+    // Date ของ Package ที่บังเอิญมาก่อนในลิสต์ไปแปะให้ทุก Package ในโครงการเดียวกันหมด ผิดสำหรับ Package อื่นๆ ทั้งหมด
+    // — แก้โดยเทียบระดับ "โครงการ+Package" เหมือนกับที่ใช้เช็ค active/RowClosed ด้านบนแทน (ทั้ง dueDateById ผ่าน
+    // parentTaskId ตรงๆ ถ้ามี และ dueDateByKey ถ้าไม่มี) ถ้าคลุมเครือจริง (กุญแจเดียวกันมี Due Date ไม่ตรงกันหลายค่า)
+    // ให้ปล่อยว่างไว้ (ไม่เดา) ดีกว่าโชว์ผิดเหมือนเดิม — เอา Description ที่ผู้ใช้ขอเพิ่มมาแปะใต้ Package ด้วยกลไก
+    // เดียวกันนี้เลยเพราะเป็นปัญหาเดียวกัน (ต้องแยกตาม Package ไม่ใช่ทั้งโครงการ)
+    const dueDateById = {}, dueDateByKey = {}, dueDateKeyAmbiguous = {};
+    const descByKey = {}, descKeyAmbiguous = {};
+    workplanItemsAll.forEach(it=>{
+      const f = it.fields||{};
+      const name = f.Title || f.Project_x0020_Name || f.Project || '';
+      if(!name) return;
+      const key = canonicalProjId(name) + '::' + canonicalProjId(f.Package || f.WorkPackage || '');
+      const dueRaw = f.Due_x0020_Date || f.DueDate || f.PostDueDate || null;
+      if(dueRaw){
+        dueDateById[String(it.id)] = dueRaw;
+        if(key in dueDateByKey && String(dueDateByKey[key])!==String(dueRaw)) dueDateKeyAmbiguous[key] = true;
+        else dueDateByKey[key] = dueRaw;
+      }
+      const descRaw = (f.Description||'').toString().trim();
+      if(descRaw){
+        if(key in descByKey && descByKey[key]!==descRaw) descKeyAmbiguous[key] = true;
+        else descByKey[key] = descRaw;
+      }
+    });
     // กรองระดับ "งานเฉพาะเจาะจง" (แถวเดียว) อีกชั้น — ใช้ parentTaskId ตรงๆ ก่อน (แม่นสุด ไม่ต้องเดา/เทียบชื่อ) ถ้าไม่มี
     // (กรอก Step ตรงเข้า SharePoint เอง เช่น AIES หรือ commit ไปก่อน build ที่เริ่มบันทึก ParentTaskID) ค่อย fallback ไป
-    // เทียบ "ชื่อโครงการ+ชื่อ Package" แทน (เฉพาะตอนไม่คลุมเครือ — มี Work Plan item ตรงกุญแจนี้แค่รายการเดียว) ถ้ายังไม่มี
-    // ข้อมูลที่เชื่อถือได้พอให้เทียบเลยจริงๆ ก็ปล่อยผ่าน (เชื่อผลระดับโครงการด้านบนแทน) ถ้า Package/โครงการไหนไม่เหลือ
-    // แถวเลยหลังกรอง ก็ตัดออกทั้งชั้นด้วย
+    // เทียบ "ชื่อโครงการ+ชื่อ Package" แทน (เฉพาะตอนไม่คลุมเครือ — มี Work Plan item ตรงกุญแจนี้แค่รายการเดียว)
+    // build 2026-08-18.9: ผู้ใช้ยืนยันชัดเจน (หลังตรวจสอบความเสี่ยงกับผู้ใช้แล้ว) ว่าต้องการให้ "งาน on process ทุกงาน"
+    // ต้องผ่านการกด Commit ผ่านแอปนี้ก่อนถึงจะโชว์ใน Timeline ได้เสมอ ไม่มีข้อยกเว้น — เปลี่ยน default ตอนไม่มีข้อมูลที่
+    // เชื่อถือได้พอ (ไม่มี parentTaskId ตรง หรือกุญแจสำรองคลุมเครือ/ไม่พบ) จาก "โชว์ไว้ก่อน" (build .7) เป็น "ซ่อนไว้ก่อน"
+    // แทน — งานที่ถูกซ่อนแบบนี้จะไปโผล่ในลิสต์ "รอ Commit" แทน (loadIntakeFromGraph กรองด้วย CommitStatus เงื่อนไข
+    // เดียวกันอยู่แล้ว) ให้ PCM เลือกทีม/คน/วันที่แล้วกด Commit ใหม่ (commitAndGenerateSteps จะลบ Step เก่าที่ไม่น่า
+    // เชื่อถือทิ้งก่อนสร้างชุดใหม่ที่ผูก ParentTaskID ถูกต้องเสมอ) ถ้า Package/โครงการไหนไม่เหลือแถวเลยหลังกรอง ก็ตัดออก
+    // ทั้งชั้นด้วย
     liveStepsByProject.forEach(pj=>{
       pj.pkgs.forEach(pk=>{
         pk.rows = pk.rows.filter(row=>{
@@ -3038,13 +3100,13 @@ async function bootLive(){
           // จาก Timeline ทันที ไม่ต้องไปเช็ค parentTaskId/fallback key ต่อ
           if(row.rowItemCount>0 && row.rowClosedCount===row.rowItemCount) return false;
           if(row.parentTaskId && Object.prototype.hasOwnProperty.call(workplanItemActiveById, row.parentTaskId)){
-            return workplanItemActiveById[row.parentTaskId] !== false;
+            return workplanItemActiveById[row.parentTaskId] === true;
           }
           const fallbackKey = canonicalProjId(pj.name) + '::' + canonicalProjId(pk.name);
           if(!workplanKeyAmbiguous[fallbackKey] && Object.prototype.hasOwnProperty.call(workplanItemActiveByKey, fallbackKey)){
-            return workplanItemActiveByKey[fallbackKey] !== false;
+            return workplanItemActiveByKey[fallbackKey] === true;
           }
-          return true;
+          return false;
         });
       });
       pj.pkgs = pj.pkgs.filter(pk=> pk.rows.length);
@@ -3055,16 +3117,26 @@ async function bootLive(){
     // ไปตาม serviceTypeByProjId (จาก Team Work Plan) สำหรับ Service Type อื่นที่ไม่มี offset ซ้อนกัน
     liveSteps.forEach(pj=>{
       const hintService = serviceTypeByProjId[pj.id] || 'Blank BOQ';
-      const dueRaw = dueDateByProjId[pj.id];
-      const dueLabel = dueRaw && !isNaN(new Date(dueRaw)) ? fmtY(new Date(dueRaw)) : '';
-      pj.pkgs.forEach(pk=>pk.rows.forEach(row=>{
-        row.steps.forEach(st=>{ st.name = resolveStepName(st.s, hintService); });
-        // แถวหนึ่ง (ทีม) อาจรวม Blank BOQ (S1-S4) กับ Pretender (S5-S8) เข้าด้วยกัน ถ้า commit แยกกันแต่ตกที่
-        // Project+Package+SubTeam เดียวกัน — resolveRowServiceLabel เช็คจากเลข Step จริงในแถวนี้เพื่อไม่ให้เห็นแค่
-        // Service แรกที่เจอ (บั๊กที่ผู้ใช้เจอ: โครงการที่มีทั้ง Blank BOQ และ Pretender แต่โชว์แค่ Blank BOQ)
-        row.service = resolveRowServiceLabel(row.steps.map(s=>s.s), hintService);
-        row.due = dueLabel;
-      }));
+      pj.pkgs.forEach(pk=>{
+        // กุญแจ "โครงการ+Package" เดียวกับที่ใช้เช็ค active ด้านบน — ใช้หา Due Date/Description ที่ตรงกับ Package
+        // นี้จริงๆ (ไม่ใช่ของทั้งโครงการเหมารวม) ถ้าคลุมเครือ ปล่อยว่าง/fallback ไปโครงการล้วนๆ ตามลำดับ
+        const pkgKey = canonicalProjId(pj.name) + '::' + canonicalProjId(pk.name);
+        let pkgDueRaw = null;
+        if(!dueDateKeyAmbiguous[pkgKey] && Object.prototype.hasOwnProperty.call(dueDateByKey, pkgKey)) pkgDueRaw = dueDateByKey[pkgKey];
+        else if(!dueDateKeyAmbiguous[pkgKey]) pkgDueRaw = dueDateByProjId[pj.id] || null; // ไม่มีข้อมูลระดับ Package เลย ใช้ของโครงการแทนดีกว่าไม่มีเลย
+        pk.desc = (!descKeyAmbiguous[pkgKey] && descByKey[pkgKey]) || '';
+        pk.rows.forEach(row=>{
+          row.steps.forEach(st=>{ st.name = resolveStepName(st.s, hintService); });
+          // แถวหนึ่ง (ทีม) อาจรวม Blank BOQ (S1-S4) กับ Pretender (S5-S8) เข้าด้วยกัน ถ้า commit แยกกันแต่ตกที่
+          // Project+Package+SubTeam เดียวกัน — resolveRowServiceLabel เช็คจากเลข Step จริงในแถวนี้เพื่อไม่ให้เห็นแค่
+          // Service แรกที่เจอ (บั๊กที่ผู้ใช้เจอ: โครงการที่มีทั้ง Blank BOQ และ Pretender แต่โชว์แค่ Blank BOQ)
+          row.service = resolveRowServiceLabel(row.steps.map(s=>s.s), hintService);
+          // parentTaskId ตรงๆ แม่นสุด (แม่นกว่าระดับ Package เพราะเจาะจงตัวงานจริงเลย) ถ้ามีให้ใช้ก่อนเสมอ
+          let dueRawForRow = pkgDueRaw;
+          if(row.parentTaskId && Object.prototype.hasOwnProperty.call(dueDateById, row.parentTaskId)) dueRawForRow = dueDateById[row.parentTaskId];
+          row.due = dueRawForRow && !isNaN(new Date(dueRawForRow)) ? fmtY(new Date(dueRawForRow)) : '';
+        });
+      });
     });
     // build .13: เลิกสังเคราะห์แถว "⚠ ประมาณการ" จาก Start/Finish Date ใน BOQ Team Work Plan เองแล้ว (เดิมเรียก
     // loadLegacyCommittedProjects ตรงนี้) — ผู้ใช้ยืนยันว่านี่คือต้นตอที่ทำให้ AIES (และโครงการอื่น) โชว์ข้อมูล
@@ -3079,16 +3151,15 @@ async function bootLive(){
     // จนโครงการ/งาน active ที่เหลืออยู่ทั้งหมดหมดพอดี) — DATA จะไม่ถูกอัปเดตเลย ทำให้ Timeline ค้างข้อมูลเก่าไว้ตลอดไป
     // (เจอตอนเขียนเทส test_mark_package_done.js CASE B) เอา guard นี้ออก เชื่อผล fetch ที่สำเร็จเสมอไม่ว่าจะว่างหรือไม่
     DATA = liveData;
-    // existingProjIds: โครงการที่มี Step จริงใน BOQ Step Tracking อยู่แล้ว (ไม่ว่า active หรือไม่ก็ตาม ใช้ liveStepsAll
-    // ก่อนกรอง เพื่อกันไม่ให้โครงการที่มี Step จริงแล้วจริงๆ แต่ยังไม่ได้เซ็ต CommitStatus='Committed' ผ่านแอป (เช่น
-    // AIES ที่ผู้ใช้กรอก Step เข้า SharePoint เองโดยตรงหลังลบของซ้ำ) โดนดันกลับไปอยู่ลิสต์ "รอ Commit" อีกรอบ
-    const existingProjIds = new Set(liveStepsAll.map(p=>p.id));
-    const liveIntakeFiltered = liveIntake.filter(it=>{
-      const projId = it._liveTask ? canonicalProjId(it._liveTask.name) : null;
-      return !projId || !existingProjIds.has(projId);
-    });
-    if(liveIntakeFiltered.length!==liveIntake.length) console.log(`[รอ Commit] ตัดออก ${liveIntake.length-liveIntakeFiltered.length} รายการที่มี Step จริงใน BOQ Step Tracking อยู่แล้ว (แม้ CommitStatus จะยังไม่ใช่ Committed ก็ตาม)`);
-    if(liveIntakeFiltered.length) INTAKE = liveIntakeFiltered;
+    // build 2026-08-18.9: เดิมมี existingProjIds/liveIntakeFiltered คอยตัดโครงการที่ "มี Step จริงอยู่แล้ว" (ไม่ว่า
+    // Commit ผ่านแอปหรือไม่) ออกจากลิสต์ "รอ Commit" เพื่อกัน AIES-style ไม่ให้โดนดันกลับไปรอ Commit ซ้ำทั้งที่โชว์ใน
+    // Timeline ถูกต้องอยู่แล้ว — ตอนนี้ไม่ต้องมีชั้นกรองนี้อีกแล้ว เพราะ Timeline (ด้านบน) กับ "รอ Commit"
+    // (loadIntakeFromGraph) ต่างก็เช็ค CommitStatus==='Committed' เป็นตัวตัดสินเดียวกันอยู่แล้ว: งานไหน Commit ผ่าน
+    // แอปแล้วจริงจะโชว์ใน Timeline เท่านั้น (ไม่โผล่ในรอ Commit ซ้ำ เพราะ loadIntakeFromGraph ข้าม CommitStatus=
+    // Committed ไปแล้วตั้งแต่ต้น) ส่วนงานที่ยัง active แต่ยังไม่เคย Commit ผ่านแอป (ต่อให้มี Step จริงอยู่แล้วจาก
+    // ทางอื่นก็ตาม เช่น กรอกตรงเข้า SharePoint เอง) ต้องโผล่ในรอ Commit เสมอ (ตามที่ผู้ใช้ขอ "งาน on process ทุกงาน
+    // ต้องผ่าน Commit") ไม่ตัดออกอีกต่อไป
+    INTAKE = liveIntake;
     curIntake = 0;
     document.getElementById('personFilter').innerHTML='<option value="">— ทุกคน —</option>';
     document.getElementById('projFilter').innerHTML='<option value="">— ทั้งหมด —</option>';
@@ -3127,10 +3198,13 @@ async function diagnoseTimelineFilter(projectSubstr){
   const stepItems = stepItemsAll.filter(it=> canonicalProjId((it.fields||{}).Project||'').includes(needle));
   const wpItems = workplanItems.filter(it=> canonicalProjId((it.fields||{}).Title||(it.fields||{}).Project||'').includes(needle));
 
+  // build 2026-08-18.9: จำลอง bootLive แบบใหม่ตรงๆ — "trusted-active" ต้องทั้ง Status ยัง active จริง AND
+  // CommitStatus==='Committed' (Commit ผ่านแอปนี้แล้วจริง) ไม่ใช่แค่ Status active เฉยๆ เหมือนเดิม
   const workplanItemActiveById = {};
   workplanItems.forEach(it=>{
     const statusRaw = ((it.fields||{}).Status||'').toString().trim().toLowerCase();
-    workplanItemActiveById[String(it.id)] = ACTIVE_STATUSES.includes(statusRaw);
+    const commitStatusRaw = ((it.fields||{}).CommitStatus||'').toString().trim().toLowerCase();
+    workplanItemActiveById[String(it.id)] = ACTIVE_STATUSES.includes(statusRaw) && commitStatusRaw==='committed';
   });
   const workplanItemActiveByKey = {};
   const workplanKeyAmbiguous = {};
@@ -3139,7 +3213,8 @@ async function diagnoseTimelineFilter(projectSubstr){
     const name = f.Title || f.Project_x0020_Name || f.Project || '';
     if(!name) return;
     const statusRaw = (f.Status||'').toString().trim().toLowerCase();
-    const isActive = ACTIVE_STATUSES.includes(statusRaw);
+    const commitStatusRaw = (f.CommitStatus||'').toString().trim().toLowerCase();
+    const isActive = ACTIVE_STATUSES.includes(statusRaw) && commitStatusRaw==='committed';
     const key = canonicalProjId(name) + '::' + canonicalProjId(f.Package || f.WorkPackage || '');
     if(key in workplanItemActiveByKey) workplanKeyAmbiguous[key] = true;
     else workplanItemActiveByKey[key] = isActive;
@@ -3150,7 +3225,7 @@ async function diagnoseTimelineFilter(projectSubstr){
   wpItems.forEach(it=>{
     const f = it.fields||{};
     const isActive = workplanItemActiveById[String(it.id)];
-    lines.push(`  item id=${it.id} · Title="${f.Title}" · Package="${f.Package}" · WorkPackage="${f.WorkPackage}" · Team="${f.Team}" · Status="${f.Status}" → isActive=${isActive} (key="${canonicalProjId(f.Title||'')}::${canonicalProjId(f.Package||f.WorkPackage||'')}")`);
+    lines.push(`  item id=${it.id} · Title="${f.Title}" · Package="${f.Package}" · WorkPackage="${f.WorkPackage}" · Team="${f.Team}" · Status="${f.Status}" · CommitStatus="${f.CommitStatus||'(ว่าง)'}" → isActive(trusted)=${isActive} (key="${canonicalProjId(f.Title||'')}::${canonicalProjId(f.Package||f.WorkPackage||'')}")`);
   });
   lines.push('');
   lines.push(`=== BOQ Step Tracking (${stepItems.length} แถวที่ Project มีคำว่า "${projectSubstr}") ===`);
@@ -3167,18 +3242,18 @@ async function diagnoseTimelineFilter(projectSubstr){
     let verdict, reason;
     if(parentTaskId && Object.prototype.hasOwnProperty.call(workplanItemActiveById, parentTaskId)){
       const active = workplanItemActiveById[parentTaskId];
-      verdict = active!==false ? 'โชว์' : 'ซ่อน';
-      reason = `ใช้ parentTaskId=${parentTaskId} ตรงๆ → isActive=${active}`;
+      verdict = active===true ? 'โชว์' : 'ซ่อน (ไปโผล่ในลิสต์ "รอ Commit" แทนถ้ายัง active)';
+      reason = `ใช้ parentTaskId=${parentTaskId} ตรงๆ → isActive(trusted)=${active}`;
     } else if(workplanKeyAmbiguous[fallbackKey]){
-      verdict = 'โชว์';
-      reason = `ไม่มี parentTaskId และ fallback key "${fallbackKey}" มี Work Plan item มากกว่า 1 รายการชนกัน (คลุมเครือ ไม่รู้ว่าแถวนี้เป็นของรายการไหน) → ปล่อยผ่านตามค่าเริ่มต้น (ปลอดภัยไว้ก่อน)`;
+      verdict = 'ซ่อน (ไปโผล่ในลิสต์ "รอ Commit" แทน)';
+      reason = `ไม่มี parentTaskId และ fallback key "${fallbackKey}" มี Work Plan item มากกว่า 1 รายการชนกัน (คลุมเครือ ไม่รู้ว่าแถวนี้เป็นของรายการไหน) → build .9: default เปลี่ยนเป็น "ซ่อนไว้ก่อน" บังคับให้ไป Commit แต่ละรายการแยกกันให้ชัดเจนแทนการเดา`;
     } else if(Object.prototype.hasOwnProperty.call(workplanItemActiveByKey, fallbackKey)){
       const active = workplanItemActiveByKey[fallbackKey];
-      verdict = active!==false ? 'โชว์' : 'ซ่อน';
-      reason = `ไม่มี parentTaskId → fallback key "${fallbackKey}" (ไม่คลุมเครือ มีรายการเดียว) → isActive=${active}`;
+      verdict = active===true ? 'โชว์' : 'ซ่อน (ไปโผล่ในลิสต์ "รอ Commit" แทนถ้ายัง active)';
+      reason = `ไม่มี parentTaskId → fallback key "${fallbackKey}" (ไม่คลุมเครือ มีรายการเดียว) → isActive(trusted)=${active}`;
     } else {
-      verdict = 'โชว์';
-      reason = `ไม่มีทั้ง parentTaskId และ fallback key ให้เทียบ (key "${fallbackKey}" ไม่พบใน Work Plan เลย) → ปล่อยผ่านตามค่าเริ่มต้น`;
+      verdict = 'ซ่อน (ไม่พบ Work Plan item ที่ตรงกันเลย — ต้องเช็คชื่อโครงการ/Package ใน SharePoint)';
+      reason = `ไม่มีทั้ง parentTaskId และ fallback key ให้เทียบ (key "${fallbackKey}" ไม่พบใน Work Plan เลย) → build .9: default เปลี่ยนเป็น "ซ่อนไว้ก่อน" แทน "โชว์ไว้ก่อน" เดิม`;
     }
     lines.push(`  Step id=${it.id} (Package="${f.Package}" · SubTeam="${f.SubTeam}") → ${verdict} · ${reason}`);
   });
@@ -3316,7 +3391,7 @@ function renderRows(){
 
     pj.pkgs.forEach((pk,ki)=>{
       labelHtml += `<div class="lab-row pkg">
-        <div class="lab" onclick="togglePkg(${pi},${ki})"><span class="caret ${pk.open?'':'closed'}">▾</span> ${pk.name} <small>· ${pk.meta}</small></div>
+        <div class="lab" onclick="togglePkg(${pi},${ki})"><span class="caret ${pk.open?'':'closed'}">▾</span> ${pk.name} <small>· ${pk.meta}</small>${pk.desc? `<small class="pkg-desc">📝 ${pk.desc}</small>`:''}</div>
         <div></div>
         <div class="svc" style="padding:4px"><button class="btn btn2" style="font-size:10.5px;padding:2px 6px;white-space:nowrap" onclick="event.stopPropagation(); openMarkPackageDone(${pi},${ki})" title="ปิดงาน Package นี้ (เปลี่ยน Status เป็น Done ใน BOQ Team Work Plan แล้วเอาออกจาก Timeline)">✓ ปิดงาน</button></div>
         <div class="due"></div></div>`;
