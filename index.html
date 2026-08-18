@@ -220,7 +220,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-18.1</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-18.2</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -590,7 +590,7 @@ tr.pick:hover td{background:var(--bg)}
 // BUILD_VERSION: เลขเวอร์ชันที่ต้องแก้คู่กับข้อความ "build ..." ใน <div class="brand"> ของ HTML ทุกครั้งที่ส่งไฟล์ใหม่
 // ให้ทีม — ใช้เช็คได้ง่ายๆ ว่าไฟล์ที่ deploy จริง (เช่น GitHub Pages) เป็นเวอร์ชันล่าสุดที่ส่งไปหรือยัง (ดูที่มุมซ้ายบน
 // ของหน้าเว็บได้เลย ไม่ต้อง login/กดปุ่มตรวจสอบอะไรก่อน) log ออก console ด้วยเผื่อสะดวกกว่าตอน debug
-const BUILD_VERSION = '2026-08-18.1';
+const BUILD_VERSION = '2026-08-18.2';
 console.log('[BOQ Timeline] BUILD_VERSION =', BUILD_VERSION);
 // หมายเหตุ: ค่าเริ่มต้นนี้ (10 ส.ค.–2 พ.ย. 2569) ใช้กับ MOCK DATA เท่านั้น พอเข้าโหมด LIVE ค่าพวกนี้จะถูก
 // คำนวณใหม่จากวันที่จริงของงานใน SharePoint โดย recalcTimelineWindow() (ดูใน bootLive()) จึงต้องเป็น let ไม่ใช่ const
@@ -1143,6 +1143,12 @@ const projId   = canonicalProjId(projName);
     // notes เก็บเป็น log ข้อความสะสม (บรรทัดใหม่ต่อท้ายทุกครั้งที่บันทึก) ใช้เป็น "ประวัติ" ว่าใครทำ/รีวิว/อนุมัติเมื่อไหร่
     row.steps.push({s:stepNum, start:planStart, dur:Math.max(planEnd-planStart,1), who:resolveAssigneeName(f.StepAssignee, f.StepAssigneeLookupId), role:f.RoleInStep||'', hrs:f.ActualHours!=null && f.ActualHours!==''? Number(f.ActualHours):0, notes:f.StepNotes||''});
     row.itemIds[stepNum] = it.id;
+    // parentTaskId: SharePoint item ID (ตัวเลขจริง ไม่ใช่ชื่อ) ของ BOQ Team Work Plan ที่ commitAndGenerateSteps สร้าง
+    // Step ชุดนี้มาจาก (ดู ParentTaskID ตอน POST) — ใช้เป็นกุญแจตรงๆ เทียบ Status ของ "งานชิ้นนี้โดยเฉพาะ" (ไม่ใช่ทั้ง
+    // โครงการ) กันปัญหาที่โครงการเดียวมีหลายงาน (เช่น VOCO มี 3 รายการใน Work Plan) บางงาน Done แล้วแต่บางงานยัง
+    // active อยู่ — ถ้าเช็คแค่ระดับโครงการจะไม่แม่น (โครงการ "active" เพราะมีงานอื่น ทั้งที่งานนี้จบไปแล้วจริง)
+    // แถวที่กรอก Step ตรงเข้า SharePoint เอง (ไม่ผ่านปุ่ม Commit) จะไม่มีค่านี้ — fallback ไปเช็คระดับโครงการแทน
+    if(f.ParentTaskID && !row.parentTaskId) row.parentTaskId = String(f.ParentTaskID).trim();
     if(f.ActualEnd){
       const endDay = Math.round((new Date(f.ActualEnd)-T0)/864e5);
       row.closed[stepNum] = {end:endDay, over: f.IsOver===true||f.IsOver==='Yes'};
@@ -2945,8 +2951,27 @@ async function bootLive(){
     // เช็คแค่ "มี item ไหนก็ได้ที่ Done" (coarse เกินไป) ในขณะที่ activeProjectIds เช็คถูกต้องกว่าอยู่แล้วคือ "มี item ไหน
     // ที่ยัง active จริงไหม" ถ้าไม่มีเลยสักอันค่อยถือว่าทั้งโครงการจบ — เอา doneProjIds ออกจากเงื่อนไขนี้ ใช้ activeProjectIds
     // เป็นตัวตัดสินเดียวพอ (ยังคง getDoneProjectIds ไว้ใช้แค่ในเครื่องมือ diagnose เท่านั้น ไม่ใช้กรอง liveSteps อีกต่อไป)
-    const liveSteps = liveStepsAll.filter(p=> !knownProjIds.has(p.id) || activeProjectIds[p.id]);
-    if(liveStepsAll.length!==liveSteps.length) console.log(`[Timeline] ซ่อนโครงการที่ไม่ active ออกจาก BOQ Step Tracking: ${liveStepsAll.length-liveSteps.length}/${liveStepsAll.length}`);
+    const liveStepsByProject = liveStepsAll.filter(p=> !knownProjIds.has(p.id) || activeProjectIds[p.id]);
+    if(liveStepsAll.length!==liveStepsByProject.length) console.log(`[Timeline] ซ่อนโครงการที่ไม่ active ออกจาก BOQ Step Tracking: ${liveStepsAll.length-liveStepsByProject.length}/${liveStepsAll.length}`);
+    // workplanItemActiveById: SharePoint item id (ตัวเลขจริงของแต่ละ record ใน BOQ Team Work Plan) -> true ถ้า Status
+    // ของ "งานชิ้นนี้โดยเฉพาะ" ยัง active อยู่ — ต่างจาก activeProjectIds/knownProjIds ด้านบนที่เช็ครวมทั้งโครงการ (ทุก
+    // งานภายใต้ชื่อเดียวกัน) จุดนี้เช็คเฉพาะเจาะจงทีละงาน คู่กับ row.parentTaskId (ผูกกันตั้งแต่ตอน Commit ผ่าน
+    // ParentTaskID) — กันบั๊กที่โครงการเดียวมีหลายงาน (เช่น VOCO มี 3 รายการใน Work Plan) บางงาน Status=Done แล้ว
+    // แต่บางงานยัง active: เช็คแค่ระดับโครงการจะยังโชว์งานที่ Done ไปแล้วค้างอยู่ใน Timeline (เคสจริงที่ผู้ใช้เจอ 18
+    // ส.ค. 2026 — VOCO/Budget Hotel บาง Package ที่ Work Plan ปรับ Status เป็น Done แล้วแต่ Timeline ยังขึ้นเป็น active)
+    const workplanItemActiveById = {};
+    workplanItemsAll.forEach(it=>{
+      const statusRaw = ((it.fields||{}).Status||'').toString().trim().toLowerCase();
+      workplanItemActiveById[String(it.id)] = ACTIVE_STATUSES.includes(statusRaw);
+    });
+    // กรองระดับ "งานเฉพาะเจาะจง" (แถวเดียว) อีกชั้นด้วย parentTaskId ตรงๆ ไม่ต้องเดา/เทียบชื่อ Package เลย — แถวที่ไม่มี
+    // parentTaskId (กรอก Step ตรงเข้า SharePoint เอง ไม่ผ่านปุ่ม Commit เช่น AIES) ไม่มีข้อมูลระดับนี้ให้เช็ค จึงปล่อยผ่าน
+    // (เชื่อผลจากระดับโครงการที่กรองไปแล้วด้านบนแทน) ถ้า Package/โครงการไหนไม่เหลือแถวเลยหลังกรอง ก็ตัดออกทั้งชั้นด้วย
+    liveStepsByProject.forEach(pj=>{
+      pj.pkgs.forEach(pk=>{ pk.rows = pk.rows.filter(row=> !row.parentTaskId || workplanItemActiveById[row.parentTaskId]!==false); });
+      pj.pkgs = pj.pkgs.filter(pk=> pk.rows.length);
+    });
+    const liveSteps = liveStepsByProject.filter(pj=> pj.pkgs.length);
     // แปะชื่อ Stage ที่ถูกต้องให้ทุก step จริง — ใช้ resolveStepName ซึ่งเช็คช่วงเลข Blank BOQ(S1-S4)/Pretender(S5-S8)
     // เป็นพิเศษก่อนเสมอ (เพราะโครงการเดียวอาจมีทั้งคู่ผสมกันในแถวเดียว ตาม Package+SubTeam เดียวกัน) แล้วค่อย fallback
     // ไปตาม serviceTypeByProjId (จาก Team Work Plan) สำหรับ Service Type อื่นที่ไม่มี offset ซ้อนกัน
