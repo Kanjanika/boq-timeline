@@ -221,7 +221,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-18.9</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-18.10</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -393,7 +393,7 @@ tr.pick:hover td{background:var(--bg)}
       <tbody>
         <tr><td>Aquaris</td><td>MEP · EE</td><td>S1 รับแบบ</td><td>Jack</td><td>3</td><td>2</td><td class="delta-ok">−33%</td></tr>
         <tr><td>Aquaris</td><td>MEP · EE</td><td>S3 Blank BOQ</td><td>Jack</td><td>5</td><td>5</td><td class="delta-ok">0%</td></tr>
-        <tr><td>Aquaris</td><td>MEP · AC</td><td>S3 Blank BOQ</td><td>Parri</td><td>5</td><td>6</td><td class="delta-warn">+20%</td></tr>
+        <tr><td>Aquaris</td><td>MEP · AC</td><td>S3 Blank BOQ</td><td>Pari</td><td>5</td><td>6</td><td class="delta-warn">+20%</td></tr>
         <tr><td>Aquaris</td><td>ST</td><td>S5 Take-off</td><td>P</td><td>12</td><td>13</td><td class="delta-warn">+8%</td></tr>
         <tr style="background:#fef2f2"><td>Aquaris</td><td>MEP · EE</td><td><b>S5 Take-off</b></td><td>Jack</td><td>12</td><td><b>16</b></td><td class="delta-bad">+33%</td></tr>
         <tr><td>Ayara</td><td>AR&ID</td><td>S1 รับแบบ</td><td>June</td><td>4</td><td>4</td><td class="delta-ok">0%</td></tr>
@@ -603,7 +603,7 @@ tr.pick:hover td{background:var(--bg)}
 // BUILD_VERSION: เลขเวอร์ชันที่ต้องแก้คู่กับข้อความ "build ..." ใน <div class="brand"> ของ HTML ทุกครั้งที่ส่งไฟล์ใหม่
 // ให้ทีม — ใช้เช็คได้ง่ายๆ ว่าไฟล์ที่ deploy จริง (เช่น GitHub Pages) เป็นเวอร์ชันล่าสุดที่ส่งไปหรือยัง (ดูที่มุมซ้ายบน
 // ของหน้าเว็บได้เลย ไม่ต้อง login/กดปุ่มตรวจสอบอะไรก่อน) log ออก console ด้วยเผื่อสะดวกกว่าตอน debug
-const BUILD_VERSION = '2026-08-18.9';
+const BUILD_VERSION = '2026-08-18.10';
 console.log('[BOQ Timeline] BUILD_VERSION =', BUILD_VERSION);
 // หมายเหตุ: ค่าเริ่มต้นนี้ (10 ส.ค.–2 พ.ย. 2569) ใช้กับ MOCK DATA เท่านั้น พอเข้าโหมด LIVE ค่าพวกนี้จะถูก
 // คำนวณใหม่จากวันที่จริงของงานใน SharePoint โดย recalcTimelineWindow() (ดูใน bootLive()) จึงต้องเป็น let ไม่ใช่ const
@@ -721,14 +721,19 @@ function resolveRowServiceLabel(stepNums, hintServiceType){
 
 // อัปเดตตาม "Team BOQ" roster ที่ทีมส่งมา (PDF): Su รับผิดชอบเฉพาะ AR+ID เท่านั้น (ไม่ใช่ทั้ง 3 ทีมเหมือนที่เคยตั้งไว้
 // ผิดแต่แรก) และเพิ่ม "Best" (Asst. Pre-Contract Manager (Budget), รับผิดชอบ Budget+ST) ที่ขาดหายไปจากระบบทั้งหมด
+// build 2026-08-18.10: ผู้ใช้แจ้งว่าขาดทีม "Budget" ไปเลย (ไม่มีให้เลือกที่หน้า Commit) — เพิ่ม pool ใหม่ BUDGET แยก
+// ต่างหาก (Best/Yo มาจาก ST, Stamp/Jack มาจาก MEP อยู่แล้ว — คนคนเดียวอยู่ได้หลาย pool ตามที่ ALL_TEAM_MEMBERS ด้านล่าง
+// รองรับอยู่แล้ว) ตามที่ผู้ใช้ยืนยันรายชื่อจริงของทีม Budget มา
 const POOLS = {
   ST:['P','Ize','May','Yo','Best'],
   AR:['June','Si','Pang','Memie','Mai','Yim','Su'],
-  MEP:['Jack','Parri','Hongyok','Fah','Wim','Stamp']
+  MEP:['Jack','Pari','Hongyok','Fah','Wim','Stamp'],
+  BUDGET:['Best','Yo','Stamp','Jack']
 };
 // รายชื่อทีมทั้งหมด (unique) รวมจากทุก pool — ใช้เป็น roster หลักของตาราง Manpower เพื่อให้เห็นครบทุกคน
 // แม้ตอนนี้ไม่มีงานถือครองอยู่เลยก็ตาม (ไม่ใช่แค่คนที่บังเอิญมีชื่อโผล่ในข้อมูลปัจจุบัน) — คนหนึ่งอาจอยู่หลาย pool
-// (เช่น 'Su' อยู่ทั้ง ST/AR/MEP) เก็บเป็น Map ชื่อ -> Set ของ pool key ที่เจอ
+// (เช่น 'Su' อยู่ทั้ง ST/AR/MEP, 'Best'/'Yo'/'Stamp'/'Jack' อยู่ทั้ง pool เดิมของตัวเองและ BUDGET) เก็บเป็น Map ชื่อ ->
+// Set ของ pool key ที่เจอ
 const ALL_TEAM_MEMBERS = (()=>{
   const m = new Map();
   Object.entries(POOLS).forEach(([poolKey, names])=>{
@@ -736,7 +741,7 @@ const ALL_TEAM_MEMBERS = (()=>{
   });
   return m;
 })();
-const POOL_LABEL = {ST:'ST', AR:'AR&ID', MEP:'MEP'}; // แปลง pool key -> ชื่อทีมที่ใช้แสดงผล (ตรงกับ subToPool ที่ map กลับทางตรงข้าม)
+const POOL_LABEL = {ST:'ST', AR:'AR&ID', MEP:'MEP', BUDGET:'Budget'}; // แปลง pool key -> ชื่อทีมที่ใช้แสดงผล (ตรงกับ subToPool ที่ map กลับทางตรงข้าม)
 // resolveAssigneeName: ตอนนี้ StepAssignee เขียนกลับ SharePoint ผ่าน StepAssigneeLookupId แล้ว (หลังเติม USER_ID_MAP
 // ครบทั้งทีม) แต่ตอน "อ่าน" ข้อมูลกลับมาจาก Graph ($expand=fields) คอลัมน์ Person or Group จะไม่ได้ส่งค่ามาเป็นสตริง
 // ชื่อเปล่าๆ ตรงๆ เหมือน column ข้อความทั่วไป — จากที่เห็นพฤติกรรมจริงของ Author/Editor (คอลัมน์ Person เดียวกันแบบ
@@ -746,12 +751,12 @@ const POOL_LABEL = {ST:'ST', AR:'AR&ID', MEP:'MEP'}; // แปลง pool key ->
 // ตัวเลือกแรกของ pool (เช่น 'P') ทุกครั้งที่เปิดใหม่ ทั้งที่ backend เขียนถูกต้องแล้วก็ตาม — ฟังก์ชันนี้แปลงค่าที่อ่าน
 // มา (ไม่ว่าจะเป็นอ็อบเจกต์ {LookupValue:'COS_Ize',...} หรือสตริงเปล่าๆ เผื่อ tenant อื่นต่างออกไป) กลับเป็นชื่อเล่นสั้นๆ
 // ที่ตรงกับ POOLS โดยตัดคำด้วยตัวคั่นเดียวกับ findSharePointUserIds (ช่องว่าง/underscore/ยัติภังค์) แล้วเทียบทั้งคำ
-// กับ roster เพื่อกัน 'P' ไป match มั่วกับตัวอักษรที่ปนอยู่ในชื่ออื่น (เช่น "Parri")
-// ASSIGNEE_NAME_ALIASES: เผื่อชื่อจริงใน SharePoint สะกดต่างจากชื่อเล่นที่ฝังในโค้ดเล็กน้อย — เจอเคสจริงระหว่างเติม
-// USER_ID_MAP (17 ส.ค. 2026): SharePoint สะกดว่า "COS_Pari" (r ตัวเดียว) แต่โค้ดใช้ "Parri" (2 ตัว r) มาแต่เดิม ถ้า
-// ไม่มี alias นี้ resolveAssigneeName จะเทียบคำแบบตรงตัวไม่เจอ ("pari" ไม่ตรงกับ "parri") แล้วโชว์ "COS_Pari" เป็น
-// who ตรงๆ แทนที่จะ map กลับเป็น "Parri" ทำให้ dropdown ใน "จัดการ Step" ไม่ขึ้น selected ให้คนนี้เหมือนคนอื่น
-const ASSIGNEE_NAME_ALIASES = { pari: 'Parri' };
+// กับ roster เพื่อกัน 'P' ไป match มั่วกับตัวอักษรที่ปนอยู่ในชื่ออื่น (เช่น "Pari")
+// ASSIGNEE_NAME_ALIASES: เผื่อชื่อจริงใน SharePoint สะกดต่างจากชื่อเล่นที่ฝังในโค้ดเล็กน้อย (ปัจจุบันว่างเปล่า — เคย
+// ต้องใช้ตอนโค้ดสะกดผิดเป็น "Parri" (2 ตัว r) ทั้งที่ SharePoint จริงสะกด "COS_Pari" (r ตัวเดียว) แต่ผู้ใช้ยืนยัน 18
+// ส.ค. 2026 ให้แก้สะกดในโค้ดเป็น "Pari" ให้ตรงกับ SharePoint ไปเลยแทนการใช้ alias ปะไว้เรื่อยๆ — เก็บ object นี้ไว้
+// เผื่อเจอกรณีสะกดไม่ตรงกันแบบอื่นในอนาคต)
+const ASSIGNEE_NAME_ALIASES = {};
 // resolveAssigneeName(raw, lookupId): ผู้ใช้แจ้งซ้ำหลายรอบว่าเลือกชื่อแล้วบันทึก แต่ refresh กลับเป็น default อีก —
 // ตรวจของจริงด้วย diagnoseBackfilledAssignee (17 ส.ค. 2026) แล้วเจอสาเหตุจริง: Graph API ของ tenant นี้ตอบฟิลด์
 // StepAssignee (Person field) กลับมาเป็น "StepAssigneeLookupId" (เลข SharePoint User ID ดิบๆ เป็น string) เท่านั้น
@@ -868,7 +873,7 @@ function workPackageForRawPackage(rawName){
   return PACKAGE_TO_WORKPACKAGE[canon[0]] || canon[0];
 }
 
-// USER_ID_MAP: ชื่อคนในโค้ด (Jack, Parri, ...) -> SharePoint user ID (ตัวเลข) ของ Person field
+// USER_ID_MAP: ชื่อคนในโค้ด (Jack, Pari, ...) -> SharePoint user ID (ตัวเลข) ของ Person field
 // ถ้าไม่กรอก ระบบยัง sync วันที่/สถานะ Step กลับ SharePoint ได้ปกติ แค่จะไม่ sync ผู้ทำ(Person field) กลับไปด้วย
 // หมายเหตุ: นี่คือค่าเริ่มต้นที่ฝังมากับโค้ด (deploy ใหม่ถึงจะเปลี่ยน) — ผู้ใช้กรอกผ่านฟอร์ม "📇 กรอก User ID" ได้เอง
 // โดยไม่ต้องแก้โค้ด ค่าที่กรอกผ่านฟอร์มจะถูกเก็บแยกไว้ใน USER_ID_OVERRIDES (localStorage ของเบราว์เซอร์นั้นๆ) และมี
@@ -889,9 +894,9 @@ const USER_ID_MAP = {
   'Yim': 29,      // COS_Yim
   'Su': 27,       // COS_Su
   'Jack': 33,     // COS_Jack
-  // ⚠️ ใน SharePoint จริงชื่อคือ "COS_Pari" (สะกด Pari ตัว r เดียว) ส่วนในโค้ดสะกดว่า "Parri" (2 ตัว r) มาแต่เดิม
-  // สันนิษฐานว่าเป็นคนเดียวกัน (เจอแค่คนเดียวที่ชื่อขึ้นต้นด้วย "Pari"/"Parri" ในทีม MEP) แต่ควรให้ทีมยืนยันอีกครั้ง
-  'Parri': 181,   // COS_Pari (สะกดต่างจากในโค้ด — ดูหมายเหตุด้านบน)
+  // build 2026-08-18.10: ผู้ใช้ยืนยันให้แก้สะกดในโค้ดจาก "Parri" (2 ตัว r) เป็น "Pari" (r ตัวเดียว) ให้ตรงกับ
+  // SharePoint จริง ("COS_Pari") — เลิกพึ่ง ASSIGNEE_NAME_ALIASES แล้ว
+  'Pari': 181,    // COS_Pari
   'Hongyok': 12,  // COS_Hongyok
   'Fah': 70,      // COS_Fah
   'Wim': 501,     // COS_Wim
@@ -941,8 +946,8 @@ let DATA=[
    ]},
    {name:'MEP',meta:'EE · AC · SN · FP',open:true,rows:[
      {team:'EE · ไฟฟ้า',pool:'MEP',steps:mkSteps(0,AQ,['Jack','Jack','Jack','Stamp','Jack','Jack','Jack','Stamp']),closed:{1:{end:2},2:{end:8,over:true},3:{end:13},4:{end:14},5:{end:30,over:true}},astart:{5:13},inprog:6},
-     {team:'AC · ปรับอากาศ',pool:'MEP',steps:mkSteps(0,AQ,['Parri','Parri','Parri','Stamp','Parri','Parri','Parri','Stamp']),closed:{1:{end:3},2:{end:7},3:{end:14,over:true},4:{end:15,over:true},5:{end:27}},astart:{},inprog:6},
-     {team:'SN · สุขาภิบาล',pool:'MEP',steps:mkSteps(0,AQ,['Jack','Jack','Parri','Stamp','Parri','Jack','Parri','Stamp']),closed:{1:{end:2},2:{end:7},3:{end:12},4:{end:14},5:{end:26}},astart:{5:12},inprog:6},
+     {team:'AC · ปรับอากาศ',pool:'MEP',steps:mkSteps(0,AQ,['Pari','Pari','Pari','Stamp','Pari','Pari','Pari','Stamp']),closed:{1:{end:3},2:{end:7},3:{end:14,over:true},4:{end:15,over:true},5:{end:27}},astart:{},inprog:6},
+     {team:'SN · สุขาภิบาล',pool:'MEP',steps:mkSteps(0,AQ,['Jack','Jack','Pari','Stamp','Pari','Jack','Pari','Stamp']),closed:{1:{end:2},2:{end:7},3:{end:12},4:{end:14},5:{end:26}},astart:{5:12},inprog:6},
      {team:'FP · ดับเพลิง',pool:'MEP',steps:mkSteps(0,AQ,['Wim','Wim','Wim','Stamp','Wim','Wim','Wim','Stamp']),closed:{1:{end:3},2:{end:7},3:{end:13},4:{end:14}},astart:{5:16},inprog:5},
    ]},
  ]},
@@ -1102,9 +1107,12 @@ function canonicalProjId(name){
     .toLowerCase()
     .replace(/\s+/g,'-');
 }
+// build 2026-08-18.10: เพิ่ม 'Budget' แยกออกมาเป็น pool ของตัวเอง (BUDGET) — เดิม fallback ไป 'MEP' หมดถ้าไม่ใช่
+// ST/AR&ID ทำให้ทีม Budget (Best/Yo/Stamp/Jack) ไม่มีตัวเลือกจริงๆ ในหน้า Commit เลย
 function subToPool(sub){
   if(sub==='ST') return 'ST';
   if(sub==='AR&ID') return 'AR';
+  if(sub==='Budget') return 'BUDGET';
   return 'MEP';
 }
 // ALL_SUBTEAMS: รายชื่อทีมย่อยทั้งหมดที่มีจริงในระบบ (คงที่ ไม่ขึ้นกับการเดาจากชื่อ Package) — ใช้เป็นตัวเลือก checkbox
@@ -1112,7 +1120,8 @@ function subToPool(sub){
 // แล้ว — ผู้ใช้ยืนยันว่าไม่ต้องการให้ระบบ "เดา" ทีมจากชื่อ Package อีก เพราะเป็นสาเหตุของบั๊กซ้ำๆ หลายครั้ง เช่น Package
 // ที่มีจริง 3 ทีม (ST/AR&ID/MEP) แต่เดาออกมาแค่ 2 — ใช้ subteamsForRawPackage/ค่าจริงใน column "Team" เป็นแค่ค่า
 // default ที่ติ๊กไว้ให้ตอนเปิดหน้า Commit เท่านั้น ผู้ใช้ยังเห็นและติ๊กเพิ่ม/ลดเองได้เสมอก่อนกด Commit จริง)
-const ALL_SUBTEAMS = ['ST','AR&ID','EE','AC','SN','FP'];
+// build 2026-08-18.10: เพิ่ม 'Budget' เข้าไปในลิสต์นี้ตามที่ผู้ใช้แจ้งว่าขาดไป
+const ALL_SUBTEAMS = ['ST','AR&ID','EE','AC','SN','FP','Budget'];
 // parseTeamField: แปลงค่าดิบจาก column "Team" ใน BOQ Team Work Plan (อาจเป็น string เดี่ยว/คั่นด้วย , ; หรือ array
 // ถ้าเป็น multi-select choice) ให้เป็น array ของชื่อทีมย่อยที่ตรงกับ ALL_SUBTEAMS เท่านั้น (กันค่าพิมพ์ผิด/ไม่รู้จัก)
 function parseTeamField(raw){
@@ -1535,6 +1544,37 @@ const projId = canonicalProjId(name);
   });
   return map;
 }
+// pickLeastBusyPerson(subteam, pool): build 2026-08-18.10 — ผู้ใช้แจ้งว่า "ผู้ทำที่แนะนำ" ในหน้า AI Suggest ขึ้นแค่
+// ชื่อ P/June/Jack ซ้ำๆ ทุกครั้ง ไม่ว่าสถานการณ์จริงจะเป็นยังไง — ต้นเหตุคือเดิม computeAISuggest หยิบ POOLS[pool][0]
+// ตรงๆ เสมอ (คนแรกสุดในรายชื่อของ pool นั้นๆ ไม่เคยเช็คเลยว่าใครมีงานค้างอยู่เท่าไหร่จริง) ฟังก์ชันนี้ดึง BOQ Step
+// Tracking ล่าสุดของ SubTeam นั้น (เรียง PlanEnd ใหม่สุดก่อน) มาหา "วันที่ว่างจริง" (PlanEnd ล่าสุด) ของแต่ละคนใน
+// roster แล้วเลือกคนที่ว่างเร็วที่สุด (PlanEnd น้อยที่สุด/ยังไม่เคยมีงานเลย) แทนการหยิบคนแรกตายตัว — ใช้
+// resolveAssigneeName แบบเดียวกับที่ใช้อ่าน StepAssignee ทุกที่ในไฟล์นี้ (เพราะ tenant นี้ตอบกลับมาเป็น
+// StepAssigneeLookupId ดิบๆ ไม่ใช่อ็อบเจกต์ ดู resolveAssigneeName ด้านบนสำหรับรายละเอียด)
+async function pickLeastBusyPerson(subteam, pool){
+  const roster = POOLS[pool] || [];
+  if(!roster.length) return null;
+  try{
+    // encodeURIComponent จำเป็นเพราะชื่อทีมบางอัน (เช่น "AR&ID") มี & อยู่ในตัว ถ้าไม่ encode Graph จะตอบ 400
+    const q = `/sites/${SITE_ID}/lists/${STEP_LIST}/items?$expand=fields&$orderby=fields/PlanEnd desc&$top=50&$filter=fields/SubTeam eq '${encodeURIComponent(subteam)}'`;
+    const data = await graphFetch(q);
+    const items = (data && data.value) || [];
+    const maxEndByPerson = {};
+    items.forEach(it=>{
+      const f = it.fields||{};
+      const name = resolveAssigneeName(f.StepAssignee, f.StepAssigneeLookupId);
+      if(!name || name==='-' || !roster.includes(name)) return;
+      const end = f.PlanEnd ? new Date(f.PlanEnd).getTime() : 0;
+      if(!(name in maxEndByPerson) || end > maxEndByPerson[name]) maxEndByPerson[name] = end;
+    });
+    // คนที่ไม่เคยมี Step เลย (maxEndByPerson ไม่มี key) ถือว่าว่างที่สุด (0) — เรียงจากว่างเร็วสุด/ว่างอยู่แล้วก่อน
+    const sorted = [...roster].sort((a,b)=> (maxEndByPerson[a]||0) - (maxEndByPerson[b]||0));
+    return sorted[0];
+  }catch(e){
+    console.warn('[pickLeastBusyPerson] ดึงข้อมูลไม่สำเร็จ ใช้คนแรกในรายชื่อแทน', subteam, e);
+    return roster[0] || null;
+  }
+}
 async function computeAISuggest(task){
   // ตาราง "Turnaround Time Framework" (PDF4): Budget/VO/Cost Exercise/VE sub-type ละเอียด (เช่น "Budget -
   // Breakdown Detail (as EIA Drawing)") มีจำนวนสัปดาห์แยกตามขนาด GFA ตรงๆ อยู่แล้ว ไม่มีมิติ WorkPackage เลย (ต่างจาก
@@ -1566,7 +1606,20 @@ async function computeAISuggest(task){
   const needDays = Math.round(targetWeeks*histMult*5); // สัปดาห์ → วันทำการโดยประมาณ
   const subs = subteamsForRawPackage(task.packageName);
   let earliestFree = new Date();
-  const who = subs.map(s=>POOLS[subToPool(s)]?.[0]).filter(Boolean).join(' + ');
+  // build 2026-08-18.10: ผู้ใช้แจ้งว่า "ผู้ทำที่แนะนำ" ในหน้า AI Suggest ขึ้นแค่ชื่อ P/June/Jack ซ้ำๆ ตลอด — ต้นเหตุคือ
+  // เดิมเอา POOLS[pool][0] ตรงๆ เสมอ (คนแรกในรายชื่อของ pool นั้น ไม่เคยดูเลยว่าใครว่างจริง) เปลี่ยนมาใช้
+  // pickLeastBusyPerson (ดูฟังก์ชันด้านล่าง computeAISuggest) แทน เพื่อหมุนเวียนแนะนำคนที่ Step ค้างอยู่น้อย/ว่างจริงๆ
+  // — dedupe ตาม pool กันเรียกซ้ำถ้ามีหลาย subteam ชี้ pool เดียวกัน (เช่น EE/AC/SN/FP ล้วน map ไป MEP)
+  const poolsSeenForWho = new Set();
+  const whoParts = [];
+  for(const st of subs){
+    const pool = subToPool(st);
+    if(poolsSeenForWho.has(pool)) continue;
+    poolsSeenForWho.add(pool);
+    const person = await pickLeastBusyPerson(st, pool);
+    if(person) whoParts.push(person);
+  }
+  const who = whoParts.join(' + ');
   for(const st of subs){
     try{
       // encodeURIComponent จำเป็นเพราะชื่อทีมบางอัน (เช่น "AR&ID") มี & อยู่ในตัว ถ้าไม่ encode จะโดนตีความเป็นตัวแบ่ง query param ทำให้ Graph ตอบ 400 Bad Request
@@ -2770,7 +2823,7 @@ async function findSharePointUserIds(){
       // จับคู่แบบ exact (ทั้งชื่อ) ก่อน แล้วค่อย fallback เป็น "ชื่อที่แสดงมีคำที่ตรงกับชื่อเล่นนี้เป๊ะๆ อยู่คำหนึ่ง"
       // (เผื่อ LookupValue เป็นชื่อเต็ม เช่น "Jack Somchai" หรือ username รูปแบบ "COS_Jack" ตามที่ IT ยืนยันว่าเป็น
       // Display name จริงใน Microsoft 365 ของทีม) — ต้องเทียบเป็น "คำ" ทั้งคำเท่านั้น ห้ามใช้ substring เฉยๆ เพราะ
-      // ชื่อเล่นสั้นๆ เช่น 'P', 'Su', 'Si', 'Yo' จะไป match มั่วกับตัวอักษรที่ปนอยู่ในชื่ออื่น (เช่น 'P' อยู่ใน "Parri"
+      // ชื่อเล่นสั้นๆ เช่น 'P', 'Su', 'Si', 'Yo' จะไป match มั่วกับตัวอักษรที่ปนอยู่ในชื่ออื่น (เช่น 'P' อยู่ใน "Pari"
       // หรือ 'Si' อยู่ใน "outSIder") ทำให้ได้ User ID ผิดคนไปเติมใน USER_ID_MAP โดยไม่รู้ตัว — ตัดคำโดยแยกทั้งช่องว่าง
       // และ underscore/ยัติภังค์ (เช่น "COS_Jack" → ["cos","jack"]) เพื่อให้จับคู่ได้ทั้งชื่อเปล่าๆ และ username แบบมี prefix
       let hitKey = null;
@@ -3803,7 +3856,7 @@ let INTAKE=[
  {name:'Retail BKK Ph.2',service:'Pretender · Main+MEP',type:'Commercial · 20,000 ตร.ม. (10k–30k)',
   std:'Pretender ขนาดกลาง = 4 สัปดาห์',hist:'MEP over เฉลี่ย +33% → ต้องเผื่อเป็น ~6 สัปดาห์',
   free:'MEP ว่างจริง 28 ก.ย. (หลัง Aquaris ปิด S5) · AR&ID ว่าง 22 ก.ย.',
-  start:'28 ก.ย. 2569',finish:'9 พ.ย. 2569',who:'Parri (MEP) + Pang (AR&ID)',
+  start:'28 ก.ย. 2569',finish:'9 พ.ย. 2569',who:'Pari (MEP) + Pang (AR&ID)',
   due:'13 ต.ค. 2569',gap:-4,
   scen:{people:'Wim (ว่าง 14 ก.ย.) + Memie (ว่าง 8 ก.ย.)',start:'14 ก.ย.',finish:'19 ต.ค.',
     note:'เพิ่ม 2 คน → เริ่มเร็วขึ้น 2 สัปดาห์ + บีบงานเหลือ ~5 สัปดาห์ → ส่ง 19 ต.ค. (ช้ากว่าที่ Post ขอ 6 วัน) — เสนอ Post เลื่อน due เป็น 19 ต.ค. แทนการเลื่อน 4 สัปดาห์'},
