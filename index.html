@@ -220,7 +220,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-18.4</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-18.7</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -543,6 +543,18 @@ tr.pick:hover td{background:var(--bg)}
   </div>
 </div>
 
+<!-- ============ MODAL · ยืนยันปิดงาน (เปลี่ยน Status เป็น Done ใน BOQ Team Work Plan จริง) ============ -->
+<div class="mbg" id="doneMbg">
+  <div class="modal" style="max-width:480px">
+    <h3>✓ ปิดงาน (Done)</h3>
+    <div class="sub" id="doneMbgText"></div>
+    <div class="m-actions" style="justify-content:flex-end">
+      <button class="btn btn2" onclick="closeDoneModal()">ยกเลิก</button>
+      <button class="btn" id="doneMbgConfirmBtn" onclick="confirmMarkPackageDone()">✓ ยืนยันปิดงาน</button>
+    </div>
+  </div>
+</div>
+
 <!-- ============ MODAL · ตรวจสอบ Column + ข้อมูลตัวอย่างใน Procurement Plan Reference ============ -->
 <div class="mbg" id="procRefDiagMbg">
   <div class="modal" style="max-width:720px">
@@ -590,7 +602,7 @@ tr.pick:hover td{background:var(--bg)}
 // BUILD_VERSION: เลขเวอร์ชันที่ต้องแก้คู่กับข้อความ "build ..." ใน <div class="brand"> ของ HTML ทุกครั้งที่ส่งไฟล์ใหม่
 // ให้ทีม — ใช้เช็คได้ง่ายๆ ว่าไฟล์ที่ deploy จริง (เช่น GitHub Pages) เป็นเวอร์ชันล่าสุดที่ส่งไปหรือยัง (ดูที่มุมซ้ายบน
 // ของหน้าเว็บได้เลย ไม่ต้อง login/กดปุ่มตรวจสอบอะไรก่อน) log ออก console ด้วยเผื่อสะดวกกว่าตอน debug
-const BUILD_VERSION = '2026-08-18.4';
+const BUILD_VERSION = '2026-08-18.7';
 console.log('[BOQ Timeline] BUILD_VERSION =', BUILD_VERSION);
 // หมายเหตุ: ค่าเริ่มต้นนี้ (10 ส.ค.–2 พ.ย. 2569) ใช้กับ MOCK DATA เท่านั้น พอเข้าโหมด LIVE ค่าพวกนี้จะถูก
 // คำนวณใหม่จากวันที่จริงของงานใน SharePoint โดย recalcTimelineWindow() (ดูใน bootLive()) จึงต้องเป็น let ไม่ใช่ const
@@ -1111,8 +1123,12 @@ function parseTeamField(raw){
 // subteamDomId: id ของ checkbox แต่ละทีมย่อยที่หน้า Commit (ตัด "&"/ช่องว่างออกเพราะใช้ใน HTML id ตรงๆ ไม่ได้)
 function subteamDomId(code){ return 'sub_' + code.replace(/[^A-Za-z]/g,''); }
 async function loadStepsFromGraph(){
-  const data = await graphFetch(`/sites/${SITE_ID}/lists/${STEP_LIST}/items?$expand=fields&$top=200`);
-  const items = data.value || [];
+  // build 2026-08-18.6: เดิมใช้ graphFetch เฉยๆ (ดึงมาแค่หน้าแรกหน้าเดียว) ทั้งที่ผู้ใช้ถามตรงๆ ว่า "ใช้ graph เข้าไป
+  // อ่าน all item ทุก list ด้วยไหม" — เช็คแล้วพบว่า "ไม่" จริงๆ สำหรับ list นี้ (BOQ Step Tracking) Graph มักตัด
+  // response เป็นหลายหน้า (@odata.nextLink) โดยเฉพาะตอน $expand=fields แม้จะขอ $top=200 ก็ตาม (หน้าจริงมักเล็กกว่านั้น
+  // มาก) ถ้ามี Step จริงเกินกว่า 1 หน้า รายการที่อยู่หน้าถัดไปจะหายไปเงียบๆ ทุกครั้งที่โหลด Timeline — เปลี่ยนไปใช้
+  // graphFetchAllItems (วนดึงทุกหน้าจนครบ) แทน ให้เหมือนกับที่ BOQ Team Work Plan ใช้อยู่แล้ว
+  const items = await graphFetchAllItems(`/sites/${SITE_ID}/lists/${STEP_LIST}/items?$expand=fields&$top=200`);
   console.log(`[BOQ Step Tracking] ดึงมาได้ ${items.length} รายการ`);
   const projMap = {};
   items.forEach(it=>{
@@ -1133,7 +1149,7 @@ const projId   = canonicalProjId(projName);
     const pj = projMap[projId];
     if(!pj.pkgs[pkgName]) pj.pkgs[pkgName] = {name:pkgName,meta:'',open:true,rowsMap:{}};
     const pk = pj.pkgs[pkgName];
-    if(!pk.rowsMap[sub]) pk.rowsMap[sub] = {team:sub,pool:subToPool(sub),steps:[],closed:{},astart:{},inprog:1,itemIds:{}};
+    if(!pk.rowsMap[sub]) pk.rowsMap[sub] = {team:sub,pool:subToPool(sub),steps:[],closed:{},astart:{},inprog:1,itemIds:{},rowClosedCount:0,rowItemCount:0};
     const row = pk.rowsMap[sub];
     const stepNum = parseInt(String(f.WBSStep||'S0').replace('S',''))||0;
     const planStart = f.PlanStart? Math.round((new Date(f.PlanStart)-T0)/864e5) : 0;
@@ -1149,6 +1165,11 @@ const projId   = canonicalProjId(projName);
     // active อยู่ — ถ้าเช็คแค่ระดับโครงการจะไม่แม่น (โครงการ "active" เพราะมีงานอื่น ทั้งที่งานนี้จบไปแล้วจริง)
     // แถวที่กรอก Step ตรงเข้า SharePoint เอง (ไม่ผ่านปุ่ม Commit) จะไม่มีค่านี้ — fallback ไปเช็คระดับโครงการแทน
     if(f.ParentTaskID && !row.parentTaskId) row.parentTaskId = String(f.ParentTaskID).trim();
+    // rowClosedCount/rowItemCount: build 2026-08-18.7 — นับว่า item ในแถวนี้กี่ตัวถูกปิดด้วยปุ่ม "✓ ปิดงาน" แล้ว
+    // (RowClosed=true เขียนตรงจาก confirmMarkPackageDone ผ่าน id จริง ไม่ต้องเดา/ค้นหา Work Plan เลย) ถ้าปิดครบทุก
+    // item ในแถว (rowClosedCount===rowItemCount) ถือว่าทั้งแถวปิดแล้ว ให้กรองออกจาก Timeline (ดู bootLive)
+    row.rowItemCount++;
+    if(f.RowClosed===true || f.RowClosed==='true' || f.RowClosed==='Yes') row.rowClosedCount++;
     if(f.ActualEnd){
       const endDay = Math.round((new Date(f.ActualEnd)-T0)/864e5);
       row.closed[stepNum] = {end:endDay, over: f.IsOver===true||f.IsOver==='Yes'};
@@ -1171,8 +1192,11 @@ const projId   = canonicalProjId(projName);
 let PROC_REF_CACHE = null;
 async function getProcRef(){
   if(PROC_REF_CACHE) return PROC_REF_CACHE;
-  const data = await graphFetch(`/sites/${SITE_ID}/lists/${PROCREF_LIST}/items?$expand=fields&$top=200`);
-  PROC_REF_CACHE = (data.value||[]).map(it=>it.fields);
+  // build 2026-08-18.6: เดิม graphFetch หน้าเดียว (ดูหมายเหตุเดียวกันใน loadStepsFromGraph) — ถ้า Procurement Plan
+  // Reference (144 combo ตาม ProjectType×SizeBand×Package×ServiceType) มีมากกว่า 1 หน้า ค่าอ้างอิงบางชุดจะหายไปเงียบๆ
+  // ทำให้ duration/x-factor บาง combo fallback เป็นค่า default 4 สัปดาห์·x1.2 ทั้งที่จริงมีเลขที่ถูกต้องอยู่แล้ว
+  const items = await graphFetchAllItems(`/sites/${SITE_ID}/lists/${PROCREF_LIST}/items?$expand=fields&$top=200`);
+  PROC_REF_CACHE = items.map(it=>it.fields);
   return PROC_REF_CACHE;
 }
 /* ================= 🌱 ข้อมูล seed สำหรับ Procurement Plan Reference (ตาม "Procurement Plan Schedule Rev.1"
@@ -2978,7 +3002,19 @@ async function bootLive(){
     // WorkPackage แทน จะได้กุญแจ "ชื่อโครงการ::" (ว่างเปล่า) ไม่ตรงกับกุญแจของฝั่ง Step Tracking ("ชื่อโครงการ::mep")
     // เลย ทำให้ hasOwnProperty เช็คไม่เจอ แล้ว fallback ไป "ไม่มีข้อมูลให้เทียบ → ปล่อยผ่าน" เสมอ (ตรงกับอาการที่เจอ
     // เป๊ะ) เพิ่ม f.WorkPackage เป็นตัวสำรองตรงนี้ด้วยให้เหมือนจุดอื่นๆ ในไฟล์
+    // build 2026-08-18.7: ผู้ใช้ส่ง export "all item" เต็มๆ มาให้ (ไฟล์ก่อนหน้าที่เคยดู 68 บรรทัด เป็นแค่ view ที่กรอง
+    // ไว้ ไม่ใช่ของทั้งหมดจริง) เจอ record จริงของ VOCO/MEP/Budget (Status=Done, Due 23/1/2569 ตรงกับที่ Timeline โชว์
+    // เป๊ะ) — แต่ VOCO ยังมี Work Plan item อื่นอีก 3 รายการที่ Package="MEP" เหมือนกันทุกตัว (Blank BOQ/Pretender/VO
+    // ทั้งหมด Status active) กุญแจสำรอง "โครงการ+Package" ด้านบนที่ใช้ OR รวมกัน (ถือว่า active ถ้ามีอย่างน้อย 1 รายการ
+    // active) จึงกลืนสถานะ Done ของ "Budget" ไปเงียบๆ เพราะพี่น้องร่วม Package เดียวกันยัง active อยู่ 3 ตัว — นี่คือ
+    // สาเหตุจริงที่ build .3/.4 ยังไม่หาย ("เหมือนเดิม") ไม่ใช่แค่ปัญหา WorkPackage field อีกต่อไปแล้ว OR-aggregation
+    // แบบเดิมไม่ปลอดภัย (ทั้งซ่อนงาน Done ไม่ได้ และเสี่ยงพา PATCH ผิดตัวถ้าเอาไปใช้กับปุ่ม "✓ ปิดงาน" ด้วย) — เปลี่ยน
+    // เป็น: ถ้ากุญแจเดียวกันมี Work Plan item มากกว่า 1 รายการ (คลุมเครือ ไม่รู้ว่า Step Tracking row นี้เป็นของ
+    // รายการไหนกันแน่) ให้ถือว่า "ไม่มีข้อมูลที่เชื่อถือได้พอ" (ไม่ใช่ "active" อัตโนมัติ) แล้วปล่อยผ่านเหมือนกรณีไม่พบ
+    // เลย (โชว์ไว้ก่อน ปลอดภัยกว่าเดาผิด) — ส่วนการปิดงานที่แม่นจริงต้องใช้ปุ่ม "✓ ปิดงาน" ที่เขียนตรงไปที่ BOQ Step
+    // Tracking แทน (ดู confirmMarkPackageDone) ไม่ใช่เดาว่าจะ PATCH Work Plan item ไหน
     const workplanItemActiveByKey = {};
+    const workplanKeyAmbiguous = {};
     workplanItemsAll.forEach(it=>{
       const f = it.fields||{};
       const name = f.Title || f.Project_x0020_Name || f.Project || '';
@@ -2986,20 +3022,26 @@ async function bootLive(){
       const statusRaw = (f.Status||'').toString().trim().toLowerCase();
       const isActive = ACTIVE_STATUSES.includes(statusRaw);
       const key = canonicalProjId(name) + '::' + canonicalProjId(f.Package || f.WorkPackage || '');
-      workplanItemActiveByKey[key] = (key in workplanItemActiveByKey) ? (workplanItemActiveByKey[key] || isActive) : isActive;
+      if(key in workplanItemActiveByKey) workplanKeyAmbiguous[key] = true;
+      else workplanItemActiveByKey[key] = isActive;
     });
     // กรองระดับ "งานเฉพาะเจาะจง" (แถวเดียว) อีกชั้น — ใช้ parentTaskId ตรงๆ ก่อน (แม่นสุด ไม่ต้องเดา/เทียบชื่อ) ถ้าไม่มี
     // (กรอก Step ตรงเข้า SharePoint เอง เช่น AIES หรือ commit ไปก่อน build ที่เริ่มบันทึก ParentTaskID) ค่อย fallback ไป
-    // เทียบ "ชื่อโครงการ+ชื่อ Package" แทน ถ้ายังไม่มีข้อมูลให้เทียบเลยจริงๆ ก็ปล่อยผ่าน (เชื่อผลระดับโครงการด้านบนแทน)
-    // ถ้า Package/โครงการไหนไม่เหลือแถวเลยหลังกรอง ก็ตัดออกทั้งชั้นด้วย
+    // เทียบ "ชื่อโครงการ+ชื่อ Package" แทน (เฉพาะตอนไม่คลุมเครือ — มี Work Plan item ตรงกุญแจนี้แค่รายการเดียว) ถ้ายังไม่มี
+    // ข้อมูลที่เชื่อถือได้พอให้เทียบเลยจริงๆ ก็ปล่อยผ่าน (เชื่อผลระดับโครงการด้านบนแทน) ถ้า Package/โครงการไหนไม่เหลือ
+    // แถวเลยหลังกรอง ก็ตัดออกทั้งชั้นด้วย
     liveStepsByProject.forEach(pj=>{
       pj.pkgs.forEach(pk=>{
         pk.rows = pk.rows.filter(row=>{
+          // build 2026-08-18.7: เช็คก่อนเลยว่าผู้ใช้กดปุ่ม "✓ ปิดงาน" ปิดแถวนี้เองไปแล้วหรือยัง (RowClosed เขียนตรงลง
+          // BOQ Step Tracking ผ่าน id จริง แม่นยำ 100% ไม่ต้องพึ่ง Work Plan เลย) ถ้าปิดครบทุก item ในแถวแล้ว ซ่อนออก
+          // จาก Timeline ทันที ไม่ต้องไปเช็ค parentTaskId/fallback key ต่อ
+          if(row.rowItemCount>0 && row.rowClosedCount===row.rowItemCount) return false;
           if(row.parentTaskId && Object.prototype.hasOwnProperty.call(workplanItemActiveById, row.parentTaskId)){
             return workplanItemActiveById[row.parentTaskId] !== false;
           }
           const fallbackKey = canonicalProjId(pj.name) + '::' + canonicalProjId(pk.name);
-          if(Object.prototype.hasOwnProperty.call(workplanItemActiveByKey, fallbackKey)){
+          if(!workplanKeyAmbiguous[fallbackKey] && Object.prototype.hasOwnProperty.call(workplanItemActiveByKey, fallbackKey)){
             return workplanItemActiveByKey[fallbackKey] !== false;
           }
           return true;
@@ -3031,7 +3073,12 @@ async function bootLive(){
     // จริงจาก BOQ Step Tracking เท่านั้น ส่วนโครงการที่ active แต่ยังไม่มี Step จริงเลย จะไปโผล่ในลิสต์ "รอ Commit"
     // แทน (ดูการกรอง liveIntake ด้านล่าง) บังคับให้กด Commit ผ่านแอปเพื่อสร้าง Step จริงที่ถูกต้อง ไม่ใช่ข้อมูลเดา
     const liveData = liveSteps;
-    if(liveData.length) DATA = liveData;
+    // build 2026-08-18.7: เดิมเช็ค `if(liveData.length)` ก่อนค่อย set DATA (กันเคส fetch ล้มเหลวเงียบๆ) แต่การ fetch
+    // ที่ล้มเหลวจริงจะ throw แล้วเข้า catch ด้านล่างอยู่แล้ว (คง DATA เดิม + LIVE_MODE=false + toast แจ้งเตือน) ทำให้
+    // guard นี้ป้องกันซ้ำซ้อนโดยไม่ตั้งใจไปกันเคสที่ fetch "สำเร็จ" แต่ผลลัพธ์ที่กรองแล้วว่างเปล่าจริงๆ (เช่นกด "✓ ปิดงาน"
+    // จนโครงการ/งาน active ที่เหลืออยู่ทั้งหมดหมดพอดี) — DATA จะไม่ถูกอัปเดตเลย ทำให้ Timeline ค้างข้อมูลเก่าไว้ตลอดไป
+    // (เจอตอนเขียนเทส test_mark_package_done.js CASE B) เอา guard นี้ออก เชื่อผล fetch ที่สำเร็จเสมอไม่ว่าจะว่างหรือไม่
+    DATA = liveData;
     // existingProjIds: โครงการที่มี Step จริงใน BOQ Step Tracking อยู่แล้ว (ไม่ว่า active หรือไม่ก็ตาม ใช้ liveStepsAll
     // ก่อนกรอง เพื่อกันไม่ให้โครงการที่มี Step จริงแล้วจริงๆ แต่ยังไม่ได้เซ็ต CommitStatus='Committed' ผ่านแอป (เช่น
     // AIES ที่ผู้ใช้กรอก Step เข้า SharePoint เองโดยตรงหลังลบของซ้ำ) โดนดันกลับไปอยู่ลิสต์ "รอ Commit" อีกรอบ
@@ -3073,11 +3120,11 @@ async function bootLive(){
 async function diagnoseTimelineFilter(projectSubstr){
   if(!LIVE_MODE){ console.warn('⚠️ ต้อง login SharePoint ก่อน (LIVE_MODE=false)'); return; }
   const needle = canonicalProjId(projectSubstr||'');
-  const [stepData, workplanItems] = await Promise.all([
-    graphFetch(`/sites/${SITE_ID}/lists/${STEP_LIST}/items?$expand=fields&$top=200`),
+  const [stepItemsAll, workplanItems] = await Promise.all([
+    graphFetchAllItems(`/sites/${SITE_ID}/lists/${STEP_LIST}/items?$expand=fields&$top=200`),
     graphFetchAllItems(`/sites/${SITE_ID}/lists/${WORKPLAN_LIST}/items?$expand=fields&$top=200`)
   ]);
-  const stepItems = (stepData.value||[]).filter(it=> canonicalProjId((it.fields||{}).Project||'').includes(needle));
+  const stepItems = stepItemsAll.filter(it=> canonicalProjId((it.fields||{}).Project||'').includes(needle));
   const wpItems = workplanItems.filter(it=> canonicalProjId((it.fields||{}).Title||(it.fields||{}).Project||'').includes(needle));
 
   const workplanItemActiveById = {};
@@ -3086,6 +3133,7 @@ async function diagnoseTimelineFilter(projectSubstr){
     workplanItemActiveById[String(it.id)] = ACTIVE_STATUSES.includes(statusRaw);
   });
   const workplanItemActiveByKey = {};
+  const workplanKeyAmbiguous = {};
   workplanItems.forEach(it=>{
     const f = it.fields||{};
     const name = f.Title || f.Project_x0020_Name || f.Project || '';
@@ -3093,7 +3141,8 @@ async function diagnoseTimelineFilter(projectSubstr){
     const statusRaw = (f.Status||'').toString().trim().toLowerCase();
     const isActive = ACTIVE_STATUSES.includes(statusRaw);
     const key = canonicalProjId(name) + '::' + canonicalProjId(f.Package || f.WorkPackage || '');
-    workplanItemActiveByKey[key] = (key in workplanItemActiveByKey) ? (workplanItemActiveByKey[key] || isActive) : isActive;
+    if(key in workplanItemActiveByKey) workplanKeyAmbiguous[key] = true;
+    else workplanItemActiveByKey[key] = isActive;
   });
 
   const lines = [];
@@ -3120,10 +3169,13 @@ async function diagnoseTimelineFilter(projectSubstr){
       const active = workplanItemActiveById[parentTaskId];
       verdict = active!==false ? 'โชว์' : 'ซ่อน';
       reason = `ใช้ parentTaskId=${parentTaskId} ตรงๆ → isActive=${active}`;
+    } else if(workplanKeyAmbiguous[fallbackKey]){
+      verdict = 'โชว์';
+      reason = `ไม่มี parentTaskId และ fallback key "${fallbackKey}" มี Work Plan item มากกว่า 1 รายการชนกัน (คลุมเครือ ไม่รู้ว่าแถวนี้เป็นของรายการไหน) → ปล่อยผ่านตามค่าเริ่มต้น (ปลอดภัยไว้ก่อน)`;
     } else if(Object.prototype.hasOwnProperty.call(workplanItemActiveByKey, fallbackKey)){
       const active = workplanItemActiveByKey[fallbackKey];
       verdict = active!==false ? 'โชว์' : 'ซ่อน';
-      reason = `ไม่มี parentTaskId → fallback key "${fallbackKey}" → isActive=${active}`;
+      reason = `ไม่มี parentTaskId → fallback key "${fallbackKey}" (ไม่คลุมเครือ มีรายการเดียว) → isActive=${active}`;
     } else {
       verdict = 'โชว์';
       reason = `ไม่มีทั้ง parentTaskId และ fallback key ให้เทียบ (key "${fallbackKey}" ไม่พบใน Work Plan เลย) → ปล่อยผ่านตามค่าเริ่มต้น`;
@@ -3266,7 +3318,7 @@ function renderRows(){
       labelHtml += `<div class="lab-row pkg">
         <div class="lab" onclick="togglePkg(${pi},${ki})"><span class="caret ${pk.open?'':'closed'}">▾</span> ${pk.name} <small>· ${pk.meta}</small></div>
         <div></div>
-        <div class="svc"></div>
+        <div class="svc" style="padding:4px"><button class="btn btn2" style="font-size:10.5px;padding:2px 6px;white-space:nowrap" onclick="event.stopPropagation(); openMarkPackageDone(${pi},${ki})" title="ปิดงาน Package นี้ (เปลี่ยน Status เป็น Done ใน BOQ Team Work Plan แล้วเอาออกจาก Timeline)">✓ ปิดงาน</button></div>
         <div class="due"></div></div>`;
       trackHtml += `<div class="g-row pkg">
         <div class="track"><div class="gridlines" style="grid-template-columns:repeat(${weekCount()},1fr)">${'<div></div>'.repeat(weekCount())}</div>
@@ -3374,6 +3426,81 @@ function syncRowHeights(){
 }
 function toggle(pi){DATA[pi].open=!DATA[pi].open;renderRows()}
 function togglePkg(pi,ki){DATA[pi].pkgs[ki].open=!DATA[pi].pkgs[ki].open;renderRows()}
+// markPackageDone: ปุ่ม "✓ ปิดงาน" ที่หัว Package ใน Timeline — ตามคำขอผู้ใช้ 18 ส.ค. 2026 ("ถ้าโครงการไหนเสร็จแล้ว
+// ขอปุ่มเปลี่ยน status จะเปลี่ยนเป็น done แล้วเอาออกจาก timeline link กับ sharepoint ด้วย")
+// build 2026-08-18.7: เดิม (build .5) หา item ใน BOQ Team Work Plan ที่ตรงกับ "โครงการ+Package" แล้ว PATCH
+// Status='Done' — แต่ผู้ใช้ส่ง export "all item" เต็มๆ มาให้ยืนยันว่า VOCO มี Work Plan item ถึง 4 รายการที่
+// Package="MEP" เหมือนกันหมด (Budget/Blank BOQ/Pretender/VO คนละ Service Type) ถ้าใช้วิธีเดิมกดปุ่มนี้จะ PATCH
+// Status='Done' ทับทั้ง 4 รายการพร้อมกัน (รวมงานที่ยัง active อยู่จริงด้วย!) ผิดพลาดร้ายแรงเกินไป — เปลี่ยนกลไกหลักมา
+// เขียนตรงไปที่ตัว BOQ Step Tracking item ที่ประกอบเป็น Package นี้จริงๆ แทน (ผ่าน row.itemIds ที่รู้ id ตรงๆ อยู่แล้ว
+// ไม่ต้องเดา/ค้นหาเลย) ใส่ field ใหม่ "RowClosed"=true แล้วให้ bootLive() กรองแถวที่ RowClosed ครบทุก item ออกจาก
+// Timeline (ดู loadStepsFromGraph/bootLive) — วิธีนี้แม่นยำ 100% ไม่ว่า Work Plan จะมีข้อมูลกี่รายการ/คลุมเครือแค่ไหน
+// ส่วนการ sync Status='Done' กลับไปที่ BOQ Team Work Plan ยังพยายามทำให้เป็น best-effort ต่อ แต่ทำเฉพาะตอนกุญแจ
+// "โครงการ+Package" ไม่คลุมเครือ (เจอ item เดียวเป๊ะ) เท่านั้น — ถ้าเจอ 0 หรือมากกว่า 1 รายการ จะข้ามส่วนนี้ไปเงียบๆ
+// (ไม่ทำให้ปุ่มล้มเหลว เพราะกลไกหลักที่ทำให้หายจาก Timeline คือ RowClosed ไม่ใช่ Work Plan Status)
+let pendingMarkDone = null;
+function openMarkPackageDone(pi, ki){
+  const pj = DATA[pi], pk = pj && pj.pkgs[ki];
+  if(!pj || !pk) return;
+  const itemIds = [...new Set(pk.rows.flatMap(row=> Object.values(row.itemIds||{})))];
+  if(!itemIds.length){
+    toastMsg('⚠️ Package นี้ไม่มี Step จริงใน BOQ Step Tracking ให้ปิด (อาจยังไม่ได้ Commit)');
+    return;
+  }
+  pendingMarkDone = {projName: pj.name, pkgName: pk.name, itemIds};
+  document.getElementById('doneMbgText').textContent =
+    `ยืนยันปิดงาน "${pj.name} · ${pk.name}" — ระบบจะเขียน "ปิดงานแล้ว" ลงในทุก Step จริงของ Package นี้ใน BOQ Step Tracking (${itemIds.length} รายการ) แล้วเอาแถวนี้ออกจาก Timeline ทันที และจะพยายามอัปเดต Status เป็น "Done" ใน BOQ Team Work Plan ให้ด้วยถ้าหางานที่ตรงกันเจอแบบไม่คลุมเครือ (ย้อนกลับได้โดยเข้าไปแก้ใน SharePoint เอง)`;
+  document.getElementById('doneMbg').classList.add('on');
+}
+function closeDoneModal(){ document.getElementById('doneMbg').classList.remove('on'); pendingMarkDone = null; }
+async function confirmMarkPackageDone(){
+  if(!pendingMarkDone) return;
+  const {projName, pkgName, itemIds} = pendingMarkDone;
+  const btn = document.getElementById('doneMbgConfirmBtn');
+  const oldLabel = btn.textContent;
+  btn.disabled = true; btn.textContent = '⏳ กำลังบันทึก...';
+  try{
+    // กลไกหลัก (แม่นยำเสมอ): เขียน RowClosed=true ลงทุก Step Tracking item ของ Package นี้ตรงๆ ผ่าน id จริง
+    for(const itemId of itemIds){
+      await graphFetch(`/sites/${SITE_ID}/lists/${STEP_LIST}/items/${itemId}`, {
+        method:'PATCH',
+        body: JSON.stringify({ fields: { RowClosed: true } })
+      });
+    }
+    // ส่วนเสริม (best-effort เท่านั้น): sync Status='Done' กลับ Work Plan เฉพาะตอนหางานที่ตรงกันเจอแบบไม่คลุมเครือ
+    try{
+      const workplanItems = await graphFetchAllItems(`/sites/${SITE_ID}/lists/${WORKPLAN_LIST}/items?$expand=fields&$top=200`);
+      const targetProjId = canonicalProjId(projName);
+      const targetPkgId = canonicalProjId(pkgName);
+      const matches = workplanItems.filter(it=>{
+        const f = it.fields||{};
+        const name = f.Title || f.Project_x0020_Name || f.Project || '';
+        const pkg = f.Package || f.WorkPackage || '';
+        return canonicalProjId(name)===targetProjId && canonicalProjId(pkg)===targetPkgId;
+      });
+      if(matches.length===1){
+        await graphFetch(`/sites/${SITE_ID}/lists/${WORKPLAN_LIST}/items/${matches[0].id}`, {
+          method:'PATCH', body: JSON.stringify({ fields: { Status:'Done' } })
+        });
+      } else {
+        console.log(`[markPackageDone] ข้ามการ sync Status ไปที่ BOQ Team Work Plan (เจอ ${matches.length} รายการที่ตรงกับ "${projName} · ${pkgName}" — คลุมเครือหรือไม่พบเลย) — ปิดจาก Timeline สำเร็จแล้วผ่าน BOQ Step Tracking โดยตรง`);
+      }
+    }catch(syncErr){
+      console.warn('[markPackageDone] sync Status ไปที่ Work Plan ไม่สำเร็จ (ไม่กระทบผลหลัก)', syncErr);
+    }
+    closeDoneModal();
+    toastMsg(`✓ ปิดงาน "${projName} · ${pkgName}" แล้ว (${itemIds.length} Step ใน BOQ Step Tracking) กำลังโหลด Timeline ใหม่...`);
+    await bootLive();
+  }catch(e){
+    console.error('markPackageDone failed', e);
+    const looksLikeMissingColumn = /RowClosed|400|BadRequest|invalid/i.test(e.message||'');
+    toastMsg(looksLikeMissingColumn
+      ? '⚠️ ปิดงานไม่สำเร็จ — น่าจะเป็นเพราะ BOQ Step Tracking ยังไม่มีคอลัมน์ "RowClosed" กรุณาเพิ่มคอลัมน์ชนิด Yes/No ชื่อ "RowClosed" ก่อน แล้วลองใหม่'
+      : '⚠️ ปิดงานไม่สำเร็จ: ' + e.message);
+  }finally{
+    btn.disabled = false; btn.textContent = oldLabel;
+  }
+}
 function expandAll(v){DATA.forEach(p=>{p.open=v;p.pkgs.forEach(k=>k.open=v)});renderRows()}
 
 function initFilters(){
