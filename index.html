@@ -220,7 +220,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-17.13</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-18.1</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -332,21 +332,18 @@ tr.pick:hover td{background:var(--bg)}
       <div class="ai-step"><span class="n">3</span><div>คิวทีมที่ต้องใช้ ว่างจริงเมื่อ: <b id="aiFree">—</b></div></div>
 
       <div class="ai-suggest">
-        <b style="color:var(--primary)">🤖 AI แนะนำกำหนดการ</b>
+        <b style="color:var(--primary)">🤖 AI แนะนำกำหนดการ <small style="font-weight:normal;color:var(--text2)">(ปรับวันที่ได้ก่อน Commit จริง)</small></b>
         <div class="dates">
-          <div><small>Start</small><b id="aiStart">—</b></div>
-          <div><small>Finish</small><b id="aiFinish">—</b></div>
+          <div><small>Start</small><input type="date" id="ciStartInput" style="font-weight:600;font-size:14px"></div>
+          <div><small>Finish</small><input type="date" id="ciFinishInput" style="font-weight:600;font-size:14px"></div>
           <div><small>ผู้ทำที่แนะนำ</small><b id="aiWho" style="font-size:13px">—</b></div>
         </div>
       </div>
 
-      <div class="frow" id="splitSubteamRow" style="display:none;margin-top:10px">
+      <div class="frow" style="margin-top:10px">
         <div class="field" style="flex:1">
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:normal">
-            <input type="checkbox" id="splitSubteamChk" checked onchange="toggleSplitSubteam()">
-            แยกงานตามระบบย่อย (เช่น EE/AC/SN/FP) — ปิดถ้ามีคนเดียวรับผิดชอบทุกระบบ (เช่น Budget เบื้องต้นที่ยังไม่มีแบบละเอียด)
-          </label>
-          <div id="splitSubteamNote" style="font-size:12px;color:var(--text2);margin-top:4px"></div>
+          <label style="font-weight:normal;color:var(--text2);font-size:12.5px">👥 ทีมย่อยที่จะสร้าง Step ให้ (ติ๊กเอง/แก้ไขได้เสมอ — ค่าเริ่มต้นมาจาก column "Team" จริงถ้ามี ไม่ใช่การเดา)</label>
+          <div id="subteamChecks" style="display:flex;flex-wrap:wrap;gap:12px;margin-top:6px"></div>
         </div>
       </div>
 
@@ -593,7 +590,7 @@ tr.pick:hover td{background:var(--bg)}
 // BUILD_VERSION: เลขเวอร์ชันที่ต้องแก้คู่กับข้อความ "build ..." ใน <div class="brand"> ของ HTML ทุกครั้งที่ส่งไฟล์ใหม่
 // ให้ทีม — ใช้เช็คได้ง่ายๆ ว่าไฟล์ที่ deploy จริง (เช่น GitHub Pages) เป็นเวอร์ชันล่าสุดที่ส่งไปหรือยัง (ดูที่มุมซ้ายบน
 // ของหน้าเว็บได้เลย ไม่ต้อง login/กดปุ่มตรวจสอบอะไรก่อน) log ออก console ด้วยเผื่อสะดวกกว่าตอน debug
-const BUILD_VERSION = '2026-08-17.13';
+const BUILD_VERSION = '2026-08-18.1';
 console.log('[BOQ Timeline] BUILD_VERSION =', BUILD_VERSION);
 // หมายเหตุ: ค่าเริ่มต้นนี้ (10 ส.ค.–2 พ.ย. 2569) ใช้กับ MOCK DATA เท่านั้น พอเข้าโหมด LIVE ค่าพวกนี้จะถูก
 // คำนวณใหม่จากวันที่จริงของงานใน SharePoint โดย recalcTimelineWindow() (ดูใน bootLive()) จึงต้องเป็น let ไม่ใช่ const
@@ -1097,6 +1094,22 @@ function subToPool(sub){
   if(sub==='AR&ID') return 'AR';
   return 'MEP';
 }
+// ALL_SUBTEAMS: รายชื่อทีมย่อยทั้งหมดที่มีจริงในระบบ (คงที่ ไม่ขึ้นกับการเดาจากชื่อ Package) — ใช้เป็นตัวเลือก checkbox
+// เต็มชุดที่หน้า Commit ให้ PCM เลือก/ยืนยันเองตรงๆ (build .13: เลิกใช้ subteamsForRawPackage เป็นคำตอบสุดท้ายแบบเงียบๆ
+// แล้ว — ผู้ใช้ยืนยันว่าไม่ต้องการให้ระบบ "เดา" ทีมจากชื่อ Package อีก เพราะเป็นสาเหตุของบั๊กซ้ำๆ หลายครั้ง เช่น Package
+// ที่มีจริง 3 ทีม (ST/AR&ID/MEP) แต่เดาออกมาแค่ 2 — ใช้ subteamsForRawPackage/ค่าจริงใน column "Team" เป็นแค่ค่า
+// default ที่ติ๊กไว้ให้ตอนเปิดหน้า Commit เท่านั้น ผู้ใช้ยังเห็นและติ๊กเพิ่ม/ลดเองได้เสมอก่อนกด Commit จริง)
+const ALL_SUBTEAMS = ['ST','AR&ID','EE','AC','SN','FP'];
+// parseTeamField: แปลงค่าดิบจาก column "Team" ใน BOQ Team Work Plan (อาจเป็น string เดี่ยว/คั่นด้วย , ; หรือ array
+// ถ้าเป็น multi-select choice) ให้เป็น array ของชื่อทีมย่อยที่ตรงกับ ALL_SUBTEAMS เท่านั้น (กันค่าพิมพ์ผิด/ไม่รู้จัก)
+function parseTeamField(raw){
+  const values = Array.isArray(raw)
+    ? raw.map(t=>String(t).trim()).filter(Boolean)
+    : (typeof raw === 'string' && raw.trim() ? raw.split(/[,;]/).map(t=>t.trim()).filter(Boolean) : []);
+  return values.filter(v=> ALL_SUBTEAMS.includes(v));
+}
+// subteamDomId: id ของ checkbox แต่ละทีมย่อยที่หน้า Commit (ตัด "&"/ช่องว่างออกเพราะใช้ใน HTML id ตรงๆ ไม่ได้)
+function subteamDomId(code){ return 'sub_' + code.replace(/[^A-Za-z]/g,''); }
 async function loadStepsFromGraph(){
   const data = await graphFetch(`/sites/${SITE_ID}/lists/${STEP_LIST}/items?$expand=fields&$top=200`);
   const items = data.value || [];
@@ -1601,16 +1614,15 @@ async function loadIntakeFromGraph(){
     // แม้ item นั้นจะเคย commit ไปแล้วจริง (มี Start/Finish Date ครบ หรือ CommitStatus=Committed แล้วก็ตาม) — ต่างจาก
     // Done/Reject/Replace ที่จบเรื่องแล้วจริงๆ ไม่ต้องกลับมา commit อีก จึงข้ามเช็ค "commit ไปแล้วหรือยัง" 2 ข้อถัดไปไปเลย
     const isOnHold = statusRaw.includes('on hold');
+    // build .13: เอาเช็ค "มี Start/Finish Date แล้ว = commit ไปแล้ว" ออก — เดิมเช็คนี้ทำให้โครงการที่มีคนกรอก Start/
+    // Finish Date ไว้ใน BOQ Team Work Plan เอง (นอกแอปนี้ หรือจากของเก่าก่อนใช้แอป) โดนตัดออกจากลิสต์ "รอ Commit"
+    // ทันที ทั้งที่ยังไม่มี Step จริงใน BOQ Step Tracking เลย แล้วต้องพึ่งการสังเคราะห์ "⚠ ประมาณการ" เดาเอาแทน (ต้นตอ
+    // บั๊กหลายเรื่องที่ผ่านมา) — ตอนนี้ตัวชี้วัดว่า "commit ผ่านแอปนี้แล้วจริง" มีแค่ CommitStatus='Committed' เท่านั้น
+    // (ตั้งค่าจาก commitAndGenerateSteps ตอนกด Commit จริง) ส่วนโครงการที่มี Step จริงอยู่แล้วจากทางอื่น (เช่น กรอกตรง
+    // เข้า SharePoint เอง) จะถูกกรองออกจากลิสต์นี้แยกต่างหากใน bootLive (เทียบกับ BOQ Step Tracking จริง ไม่ใช่เดาจาก
+    // Start/Finish Date ใน Work Plan)
     if(!isOnHold){
-      // สัญญาณที่แม่นที่สุดว่า "commit ไปแล้ว" คือมีการกรอก Start Date และ Finish Date ไว้แล้ว (เกิดขึ้นตอนกด PCM ยืนยัน Commit)
-      // ต่อให้ Status/CommitStatus (field เก่า) จะยังไม่อัปเดตตรงกัน ก็ให้ยึด Start/Finish Date เป็นหลักก่อน
-      const startDateRaw  = f.Start_x0020_Date  || f.StartDate  || f.Start  || null;
-      const finishDateRaw = f.Finish_x0020_Date || f.FinishDate || f.Finish || null;
-      if(startDateRaw && finishDateRaw){
-        console.log('[SKIP - already committed: มี Start/Finish Date แล้ว]', f.Title || f.Project_x0020_Name || it.id, '| Start:', startDateRaw, '| Finish:', finishDateRaw);
-        continue;
-      }
-      // CommitStatus ว่าง/ไม่มีค่า = ยังไม่เคย commit = ต้องโชว์ในลิสต์รอ Commit
+      // CommitStatus ว่าง/ไม่มีค่า = ยังไม่เคย commit ผ่านแอปนี้ = ต้องโชว์ในลิสต์รอ Commit
       // มีค่าแล้วและเท่ากับ "Committed" เท่านั้นที่ถือว่า commit ไปแล้ว ไม่ต้องโชว์
       const commitStatusRaw = (f.CommitStatus || '').toString().trim().toLowerCase();
       if(commitStatusRaw === 'committed'){
@@ -1631,6 +1643,9 @@ async function loadIntakeFromGraph(){
       name: f.Title || f.Project_x0020_Name || f.Project || 'Unnamed',
       service: f.Service_x0020_Type || f.ServiceType || '-',
       packageName: f.Package || f.WorkPackage || '-',
+      // team: ค่าจริงจาก column "Team" ใน BOQ Team Work Plan — ใช้เป็นค่า default ที่ติ๊กไว้ให้ตอนเปิดหน้า Commit
+      // (ดู parseTeamField/ALL_SUBTEAMS) แทนการเดาจากชื่อ Package ล้วนๆ เหมือนเดิม — ยังคงแก้ไข/ติ๊กเพิ่มลดเองได้เสมอ
+      team: f.Team || null,
       // projectType/sizeBand: ใช้ตรงจากฟิลด์ ProjectType/ProjectSize เลย (ยืนยันจากการตรวจสอบข้อมูลจริงแล้วว่า
       // ProjectSize เป็น choice field ที่ใช้ค่าเดียวกับ SizeBand ของ Procurement Plan Reference เป๊ะ ["0-10000",
       // "10001-30000", "30000up"] ไม่ต้องแปลง/หาช่วงตัวเลขเอง) ใช้คู่กับ pickProcRefRow ใน computeAISuggest
@@ -1651,29 +1666,32 @@ async function loadIntakeFromGraph(){
   }
   return out;
 }
-async function commitAndGenerateSteps(task, sug, splitSubteam){
+async function commitAndGenerateSteps(task, sug, selectedSubs, editedStart, editedFinish){
+  // build .13: เลิกเดา subteam จากชื่อ Package (subteamsForRawPackage) แล้ว — selectedSubs มาจาก checkbox ที่ PCM
+  // เห็น/ติ๊กเองตรงๆ ที่หน้า Commit (ดู renderIntake) ค่าเริ่มต้นติ๊กไว้ให้จาก column "Team" จริง/คำแนะนำ แต่ปรับเองได้
+  // เสมอก่อนกด Commit จริง กันบั๊กแบบ "เดาได้ 2 ทีม ทั้งที่จริงมี 3" ที่เจอซ้ำๆ มาก่อนหน้านี้
+  const subs = (selectedSubs && selectedSubs.length) ? selectedSubs : ['ST'];
+  // editedStart/editedFinish: วันที่ที่ PCM แก้ไขเองที่หน้า Commit (ช่องกรอกวันที่ editable ตั้งแต่ build .13 — เดิม
+  // เป็นแค่ค่า AI แนะนำที่แก้ไม่ได้) fallback เป็นค่า AI แนะนำ (sug.start/sug.finish) ถ้าไม่ได้ส่งมา
+  const start = editedStart || sug.start;
+  const finish = editedFinish || sug.finish;
   await graphFetch(`/sites/${SITE_ID}/lists/${WORKPLAN_LIST}/items/${task.itemId}`, {
     method:'PATCH',
     body: JSON.stringify({ fields: {
-      CommitStatus:'Committed', CommittedFinish: toISO(sug.finish),
-      AISuggestStart: toISO(sug.start), AISuggestFinish: toISO(sug.finish), AISuggestAssignee: sug.who
+      CommitStatus:'Committed', CommittedFinish: toISO(finish),
+      AISuggestStart: toISO(start), AISuggestFinish: toISO(finish), AISuggestAssignee: sug.who
     }})
   });
-  const allSubs = subteamsForRawPackage(task.packageName);
-  // splitSubteam===false (ผู้ใช้ถอดติ๊กที่หน้า Commit) → สร้างแค่ 1 แถวแทนทั้ง Package โดยใช้ SubTeam ตัวแรกในลิสต์
-  // เป็นตัวแทน (ยังคงเป็นค่าที่ถูกต้องตาม Choice column เดิมเสมอ ไม่เสี่ยง error จากค่าที่ไม่มีใน SharePoint) — ใช้ตอน
-  // งานนี้มีคนเดียวรับผิดชอบทุกระบบย่อยจริง (เช่น Budget เบื้องต้นที่ยังไม่มีแบบละเอียดพอจะแยกทีละระบบ)
-  const subs = (splitSubteam===false) ? [allSubs[0]] : allSubs;
   // ใช้ Step Template ตาม Service Type ของงานนี้ (task.service) แทนค่าตายตัว 8 Step เดิม — ถ้าไม่รู้จัก Service Type
   // เลย getTemplateForService จะ fallback เป็น Blank BOQ ให้เอง (พฤติกรรมเดิมสำหรับงานที่ไม่ระบุ Service Type)
   const template = getTemplateForService(task.service);
   // offset: Pretender เริ่มนับเลข Step ต่อจาก 4 (ได้ S5-S8) ไม่ใช่เริ่ม S1 ใหม่ — ตาม Concept เดิมที่ Blank BOQ=S1-S4
   const offset = getStepOffset(task.service);
   const stepSplit = sug.refRow && sug.refRow.StepSplit ? JSON.parse(sug.refRow.StepSplit) : null;
-  const totalDays = Math.max(Math.round((sug.finish - sug.start)/864e5),8);
+  const totalDays = Math.max(Math.round((finish - start)/864e5),8);
   const durations = computeStageDurations(template, totalDays, stepSplit, offset);
   for(const st of subs){
-    let cursor = new Date(sug.start);
+    let cursor = new Date(start);
     for(let i=1; i<=template.length; i++){
       const s = i + offset; // เลข Step จริงที่ใช้เก็บ/แสดง (ปรับ offset แล้ว)
       const stage = template[i-1];
@@ -1703,11 +1721,22 @@ async function doCommit(btn){
     return;
   }
   if(_committing){ toastMsg('⏳ กำลัง Commit อยู่ · กรุณารอสักครู่ อย่ากดซ้ำ'); return; }
+  // selectedSubs: อ่านจาก checkbox ที่ PCM ติ๊กเองจริงตอนนี้ (ดู renderSubteamChecks) แทนการเดาจากชื่อ Package —
+  // ต้องเลือกอย่างน้อย 1 ทีมก่อนถึงจะ Commit ได้ (กันโดนลืมติ๊กแล้วไม่มี Step ถูกสร้างเลย)
+  const selectedSubs = ALL_SUBTEAMS.filter(s=>{ const el = document.getElementById(subteamDomId(s)); return el && el.checked; });
+  if(!selectedSubs.length){ toastMsg('⚠️ เลือกอย่างน้อย 1 ทีมก่อน Commit'); return; }
+  // วันเริ่ม/วันจบ: อ่านจากช่องกรอกที่ PCM แก้ไขได้เองที่หน้า Commit (build .13 — เดิมเป็นแค่ค่า AI แนะนำที่แก้ไม่ได้
+  // ตามที่ผู้ใช้ขอ "ปรับวันที่ได้แทนที่จะ fix ไว้")
+  const startVal = document.getElementById('ciStartInput')?.value;
+  const finishVal = document.getElementById('ciFinishInput')?.value;
+  if(!startVal || !finishVal){ toastMsg('⚠️ กรอกวันเริ่ม/วันจบให้ครบก่อน Commit'); return; }
+  const editedStart = new Date(startVal), editedFinish = new Date(finishVal);
+  if(isNaN(editedStart) || isNaN(editedFinish) || editedFinish < editedStart){ toastMsg('⚠️ วันที่ไม่ถูกต้อง (วันจบต้องไม่ก่อนวันเริ่ม)'); return; }
   _committing = true;
   if(btn) btn.disabled = true;
   try{
     toastMsg('⏳ กำลัง Commit ไปยัง SharePoint...');
-    await commitAndGenerateSteps(it._liveTask, it._liveSug, it.splitSubteam);
+    await commitAndGenerateSteps(it._liveTask, it._liveSug, selectedSubs, editedStart, editedFinish);
     toastMsg('✓ Commit แล้ว · กำลังโหลดหน้าใหม่เพื่อดึงข้อมูลล่าสุด...');
     // เดิมเรียก bootLive() ซ้ำในหน้าเดิมทันที แต่พบว่า SharePoint/Graph API บางครั้งยังไม่ทัน index รายการ Step
     // ที่เพิ่ง POST ไปหมาดๆ (เพิ่ง commit สร้าง Step หลายสิบรายการรวดเดียว) ทำให้ตาราง Timeline เพี้ยน/ซ้อนกันตอน
@@ -2934,17 +2963,24 @@ async function bootLive(){
         row.due = dueLabel;
       }));
     });
-    let liveData = liveSteps;
-    // เติมโครงการที่ commit ไปแล้วนอกแอปนี้ (มีแค่ Start/Finish Date ใน Team Work Plan ไม่มีข้อมูล Step จริง)
-    // เข้าไปใน Timeline ด้วย โดยประมาณการแบ่ง Step ให้ (ดูรายละเอียดที่ loadLegacyCommittedProjects — ฟังก์ชันนั้น
-    // กรอง Status=Done ออกเองอยู่แล้วตั้งแต่ต้นทาง เพราะเช็ค field f.Status ได้ตรงๆ ระหว่างวนลูปอยู่แล้ว)
-    try{
-      const legacyProjects = await loadLegacyCommittedProjects(workplanItemsAll, liveSteps.map(p=>p.id), activeProjectIds);
-      console.log(`[Legacy committed] ประมาณการ Step ให้ ${legacyProjects.length} โครงการที่ commit นอกแอป (ไม่รวม Status=Done/โครงการที่จบแล้ว)`);
-      if(legacyProjects.length) liveData = [...liveSteps, ...legacyProjects];
-    }catch(e){ console.warn('โหลดโครงการที่ commit แบบ legacy (ประมาณการ Step) ไม่สำเร็จ', e); }
+    // build .13: เลิกสังเคราะห์แถว "⚠ ประมาณการ" จาก Start/Finish Date ใน BOQ Team Work Plan เองแล้ว (เดิมเรียก
+    // loadLegacyCommittedProjects ตรงนี้) — ผู้ใช้ยืนยันว่านี่คือต้นตอที่ทำให้ AIES (และโครงการอื่น) โชว์ข้อมูล
+    // สังเคราะห์ทับ Step จริงที่มีอยู่แล้ว ทั้งที่ projId ควรจะตรงกัน (เคสจริง 18 ส.ค. 2026) แทนที่จะพยายามไล่จับทุกจุด
+    // ที่อาจทำให้ projId ไม่ตรงกัน ให้ตัดการเดา/สังเคราะห์ทิ้งไปเลยตามที่ผู้ใช้ร้องขอ — Timeline ตอนนี้แสดงเฉพาะ Step
+    // จริงจาก BOQ Step Tracking เท่านั้น ส่วนโครงการที่ active แต่ยังไม่มี Step จริงเลย จะไปโผล่ในลิสต์ "รอ Commit"
+    // แทน (ดูการกรอง liveIntake ด้านล่าง) บังคับให้กด Commit ผ่านแอปเพื่อสร้าง Step จริงที่ถูกต้อง ไม่ใช่ข้อมูลเดา
+    const liveData = liveSteps;
     if(liveData.length) DATA = liveData;
-    if(liveIntake.length) INTAKE = liveIntake;
+    // existingProjIds: โครงการที่มี Step จริงใน BOQ Step Tracking อยู่แล้ว (ไม่ว่า active หรือไม่ก็ตาม ใช้ liveStepsAll
+    // ก่อนกรอง เพื่อกันไม่ให้โครงการที่มี Step จริงแล้วจริงๆ แต่ยังไม่ได้เซ็ต CommitStatus='Committed' ผ่านแอป (เช่น
+    // AIES ที่ผู้ใช้กรอก Step เข้า SharePoint เองโดยตรงหลังลบของซ้ำ) โดนดันกลับไปอยู่ลิสต์ "รอ Commit" อีกรอบ
+    const existingProjIds = new Set(liveStepsAll.map(p=>p.id));
+    const liveIntakeFiltered = liveIntake.filter(it=>{
+      const projId = it._liveTask ? canonicalProjId(it._liveTask.name) : null;
+      return !projId || !existingProjIds.has(projId);
+    });
+    if(liveIntakeFiltered.length!==liveIntake.length) console.log(`[รอ Commit] ตัดออก ${liveIntake.length-liveIntakeFiltered.length} รายการที่มี Step จริงใน BOQ Step Tracking อยู่แล้ว (แม้ CommitStatus จะยังไม่ใช่ Committed ก็ตาม)`);
+    if(liveIntakeFiltered.length) INTAKE = liveIntakeFiltered;
     curIntake = 0;
     document.getElementById('personFilter').innerHTML='<option value="">— ทุกคน —</option>';
     document.getElementById('projFilter').innerHTML='<option value="">— ทั้งหมด —</option>';
@@ -3456,22 +3492,27 @@ function renderIntake(){
   ciName.textContent=it.name; ciService.textContent=it.service;
   ciType.textContent=it.type; ciDue.textContent=it.due;
   aiStd.textContent=it.std; aiHist.textContent=it.hist; aiFree.textContent=it.free;
-  aiStart.textContent=it.start; aiFinish.textContent=it.finish; aiWho.textContent=it.who;
-  // splitSubteamRow: ตัวเลือกแยก/รวม SubTeam ก่อน Commit — โชว์เฉพาะ Package ที่มีมากกว่า 1 ระบบย่อยจริง (เช่น MEP
-  // มี EE/AC/SN/FP) Package ที่มีระบบเดียว (ID, Piling) ไม่ต้องมีตัวเลือกนี้เพราะไม่มีอะไรให้แยก/รวม
-  const splitRow = document.getElementById('splitSubteamRow');
-  if(splitRow){
-    const allSubs = it._liveTask ? subteamsForRawPackage(it._liveTask.packageName) : [];
-    if(allSubs.length>1){
-      splitRow.style.display='block';
-      if(it.splitSubteam===undefined) it.splitSubteam = true;
-      document.getElementById('splitSubteamChk').checked = it.splitSubteam;
-      document.getElementById('splitSubteamNote').textContent = it.splitSubteam
-        ? `จะแยกเป็น ${allSubs.length} แถว: ${allSubs.join(', ')} (แต่ละแถวมี Step ของตัวเอง)`
-        : `จะรวมเป็น 1 แถวเดียว (บันทึกลง SharePoint เป็น SubTeam: "${allSubs[0]}") — ใช้เมื่อคนเดียวรับผิดชอบทุกระบบ`;
-    } else {
-      splitRow.style.display='none';
-    }
+  aiWho.textContent=it.who;
+  // ช่องวันที่ Start/Finish: build .13 เปลี่ยนจาก <b> ข้อความอย่างเดียว (แก้ไม่ได้) เป็น <input type="date"> ที่ PCM
+  // แก้เองได้ก่อนกด Commit จริง (ตามที่ผู้ใช้ขอ) — โหมด LIVE มี it._liveSug.start/finish เป็น Date object จริง แปลง
+  // เป็น yyyy-mm-dd ด้วย toISO ได้ตรงๆ ส่วนโหมด MOCK (ยังไม่ login) ไม่มี Date object ให้แปลง ปล่อยว่างไว้เฉยๆ
+  const startInput = document.getElementById('ciStartInput'), finishInput = document.getElementById('ciFinishInput');
+  const sugStartValid = it._liveSug && it._liveSug.start instanceof Date && !isNaN(it._liveSug.start);
+  const sugFinishValid = it._liveSug && it._liveSug.finish instanceof Date && !isNaN(it._liveSug.finish);
+  if(startInput) startInput.value = sugStartValid ? toISO(it._liveSug.start) : '';
+  if(finishInput) finishInput.value = sugFinishValid ? toISO(it._liveSug.finish) : '';
+  // ทีมย่อยที่จะสร้าง Step ให้: เลิกเดาจากชื่อ Package แล้ว (build .13) — โชว์ checkbox ครบทั้ง 6 ทีมย่อยจริงเสมอ
+  // ค่าเริ่มต้นติ๊กไว้ให้จาก column "Team" จริง (parseTeamField) ถ้ามี ไม่งั้น fallback ไปใช้คำแนะนำจากชื่อ Package
+  // (subteamsForRawPackage) เป็นแค่จุดเริ่มต้นที่สะดวก — PCM ยังเห็น/ติ๊กเพิ่ม-ลดเองได้เสมอก่อนกด Commit จริง
+  const checksEl = document.getElementById('subteamChecks');
+  if(checksEl){
+    const teamFieldSubs = it._liveTask ? parseTeamField(it._liveTask.team) : [];
+    const defaultChecked = teamFieldSubs.length ? teamFieldSubs : (it._liveTask ? subteamsForRawPackage(it._liveTask.packageName) : ALL_SUBTEAMS);
+    checksEl.innerHTML = ALL_SUBTEAMS.map(code=>{
+      const id = subteamDomId(code);
+      const checked = defaultChecked.includes(code) ? 'checked' : '';
+      return `<label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:13px"><input type="checkbox" id="${id}" ${checked}>${code}</label>`;
+    }).join('');
   }
   const v=document.getElementById('ciVerdict');
   const btnS=document.getElementById('btnScen');
@@ -3489,15 +3530,6 @@ function renderIntake(){
     v.innerHTML=`<b>🔴 ไม่ทันตามที่ Post ขอ — ขาด ${Math.abs(it.gap)} สัปดาห์</b><br>AI Finish ${it.finish} vs due ${it.due}<ul><li>ขั้นที่ 1: <b>PCM ต่อรอง Post</b> เลื่อน due เป็น ${it.finish} (ใช้ปุ่ม Copy ข้อความต่อรอง)</li><li>ขั้นที่ 2: ถ้าต่อรองไม่ได้ → <b>เพิ่มกำลังคน</b> (ดู scenario ปุ่มส้ม)</li></ul>`;
     btnS.style.display='inline-block';
   }
-}
-// toggleSplitSubteam: ผู้ใช้ (PCM) กดติ๊ก/ถอดติ๊กก่อน Commit เพื่อเลือกว่างานนี้ (เช่น Budget เบื้องต้นที่ยังไม่มีแบบ
-// ละเอียด vs Budget ที่มีแบบแล้วทำละเอียดแบบ Pretender) จะแยก Step ตามระบบย่อย (EE/AC/SN/FP) หรือรวมเป็นแถวเดียว
-// ให้คนเดียวรับผิดชอบทุกระบบ — ค่านี้เก็บไว้ที่ it.splitSubteam แล้วส่งต่อให้ commitAndGenerateSteps ตอนกด Commit จริง
-function toggleSplitSubteam(){
-  const it = INTAKE[curIntake];
-  if(!it) return;
-  it.splitSubteam = document.getElementById('splitSubteamChk').checked;
-  renderIntake();
 }
 function showScenario(){
   const it=INTAKE[curIntake]; if(!it.scen)return;
