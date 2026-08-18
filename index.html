@@ -220,7 +220,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-17.9</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-17.10</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -246,6 +246,7 @@ tr.pick:hover td{background:var(--bg)}
     <button class="btn btn2" onclick="diagnoseAISuggestAssigneeColumn()">🔍 ตรวจสอบ AISuggestAssignee</button>
     <button class="btn btn2" onclick="diagnoseBackfilledAssignee()">🔍 ตรวจสอบ Step จริง AIES (ผู้ทำหาย)</button>
     <button class="btn btn2" onclick="openDeleteAiesStDuplicates()">🗑️ ลบ Step ซ้ำ AIES · ST</button>
+    <button class="btn btn2" onclick="diagnoseAiesActiveStatus()">🔍 ตรวจสอบสถานะ Active ของ AIES</button>
     <button class="btn btn2" onclick="diagnoseProcRefList()">🔍 ตรวจสอบ Procurement Plan Reference</button>
     <button class="btn btn2" onclick="openExpandServiceType()">🔧 เพิ่ม Choice ใหม่ตาม PDF4</button>
     <button class="btn btn2" onclick="openUserIdForm()">📇 กรอก User ID</button>
@@ -599,7 +600,7 @@ tr.pick:hover td{background:var(--bg)}
 // BUILD_VERSION: เลขเวอร์ชันที่ต้องแก้คู่กับข้อความ "build ..." ใน <div class="brand"> ของ HTML ทุกครั้งที่ส่งไฟล์ใหม่
 // ให้ทีม — ใช้เช็คได้ง่ายๆ ว่าไฟล์ที่ deploy จริง (เช่น GitHub Pages) เป็นเวอร์ชันล่าสุดที่ส่งไปหรือยัง (ดูที่มุมซ้ายบน
 // ของหน้าเว็บได้เลย ไม่ต้อง login/กดปุ่มตรวจสอบอะไรก่อน) log ออก console ด้วยเผื่อสะดวกกว่าตอน debug
-const BUILD_VERSION = '2026-08-17.9';
+const BUILD_VERSION = '2026-08-17.10';
 console.log('[BOQ Timeline] BUILD_VERSION =', BUILD_VERSION);
 // หมายเหตุ: ค่าเริ่มต้นนี้ (10 ส.ค.–2 พ.ย. 2569) ใช้กับ MOCK DATA เท่านั้น พอเข้าโหมด LIVE ค่าพวกนี้จะถูก
 // คำนวณใหม่จากวันที่จริงของงานใน SharePoint โดย recalcTimelineWindow() (ดูใน bootLive()) จึงต้องเป็น let ไม่ใช่ const
@@ -2216,7 +2217,59 @@ async function runDeleteAiesStDuplicates(){
   window._deleteDupRunning = false;
   cancelBtn.disabled = false; cancelBtn.textContent = 'ปิด';
   confirmBtn.style.display = 'none';
-  toastMsg(fail===0? '✓ ลบ Step ซ้ำของ AIES · ST ครบแล้ว — กรอกผู้ทำใหม่ได้เลย' : `⚠️ ลบสำเร็จ ${ok}/${queue.length} — ดูรายละเอียดที่ล้มเหลวได้ในหน้าต่างนี้`);
+  if(ok>0 && fail===0){
+    // โหลดหน้าใหม่อัตโนมัติหลังลบสำเร็จ — กัน DATA ในหน่วยความจำยังจำ itemIds ของรายการที่เพิ่งลบไปค้างอยู่ (ถ้าผู้ใช้
+    // กดแก้ไข step ต่อทันทีโดยไม่ reload ก่อน โค้ดจะเห็นว่า row.itemIds ยังมีค่าอยู่ เลย PATCH ไปที่ id ที่ถูกลบไปแล้ว
+    // (จะ error เงียบๆ ในคอนโซล) แทนที่จะสร้าง Step ใหม่ให้ถูกต้อง ต้อง reload ให้ DATA ตรงกับ SharePoint จริงก่อนเสมอ)
+    progressEl.textContent += `\n\n⏳ กำลังโหลดหน้าใหม่ให้ข้อมูลตรงกับ SharePoint...`;
+    toastMsg('✓ ลบ Step ซ้ำของ AIES · ST ครบแล้ว · กำลังโหลดหน้าใหม่...');
+    setTimeout(()=>{ location.reload(); }, 2000);
+  } else {
+    toastMsg(fail===0? '✓ ลบ Step ซ้ำของ AIES · ST ครบแล้ว — กรอกผู้ทำใหม่ได้เลย' : `⚠️ ลบสำเร็จ ${ok}/${queue.length} — ดูรายละเอียดที่ล้มเหลวได้ในหน้าต่างนี้`);
+  }
+}
+// diagnoseAiesActiveStatus: ผู้ใช้แจ้งว่าลบ Step ซ้ำแล้ว บันทึกผู้ทำใหม่ แล้ว refresh ก็ยังขึ้น default (P) เหมือนเดิม
+// ทั้งที่ build .8/.9 แก้ทั้งจุดอ่าน StepAssigneeLookupId และกันสร้างซ้ำไปแล้ว — สงสัยว่าอาจเป็นอีกจุดหนึ่งที่ยังไม่ได้
+// ตรวจ: ระบบจะซ่อนข้อมูลจริงทั้งโครงการออกจาก Timeline ถ้า Status ของ AIES ใน BOQ Team Work Plan ไม่ตรงกับ
+// ACTIVE_STATUSES เป๊ะๆ สักตัว (ดู buildActiveProjectIds/bootLive) ถ้าเป็นแบบนี้จริง ต่อให้ Step จริงถูกสร้าง+PATCH
+// ผู้ทำถูกต้องแค่ไหนก็ตาม ระบบจะไม่เอาข้อมูลจริงมาโชว์เลย แล้วสังเคราะห์ "⚠ ประมาณการ" (default) ทับซ้อนแทนอยู่ดี —
+// ฟังก์ชันนี้เช็คตรงๆ ว่าเกิดกรณีนี้กับ AIES จริงไหม แทนการเดา
+async function diagnoseAiesActiveStatus(){
+  if(!LIVE_MODE){ toastMsg('⚠️ ต้อง login SharePoint ก่อนถึงจะตรวจสอบได้'); return; }
+  const out = document.getElementById('diagOut');
+  out.textContent = '⏳ กำลังตรวจสอบสถานะ Active ของ AIES...';
+  document.getElementById('diagMbg').classList.add('on');
+  try{
+    const workplanItems = await graphFetchAllItems(`/sites/${SITE_ID}/lists/${WORKPLAN_LIST}/items?$expand=fields&$top=200`);
+    const aiesItems = workplanItems.filter(it=> String((it.fields||{}).Title || (it.fields||{}).Project_x0020_Name || '').trim().toLowerCase()==='aies');
+    const activeProjectIds = buildActiveProjectIds(workplanItems);
+    const knownProjIds = new Set(workplanItems.map(it=>{
+      const f = it.fields, name = f.Title || f.Project_x0020_Name || f.Project || '';
+      return name ? name.toLowerCase().trim().replace(/\s+/g,'-') : null;
+    }).filter(Boolean));
+    const doneProjIds = getDoneProjectIds(workplanItems);
+
+    let report = `=== BOQ Team Work Plan item(s) ที่ Title = "AIES" เป๊ะๆ (${aiesItems.length} รายการ) ===\n`;
+    report += aiesItems.length ? aiesItems.map((it,i)=> `--- item ${i+1} (id=${it.id}) ---\n  Status = ${JSON.stringify((it.fields||{}).Status)}\n  Package = ${JSON.stringify((it.fields||{}).Package)}\n  Team = ${JSON.stringify((it.fields||{}).Team)}`).join('\n\n') : '(ไม่พบเลย)';
+
+    report += `\n\n=== ผลตรวจสอบว่า "aies" ผ่านเงื่อนไข active ที่ Timeline ใช้กรองข้อมูลจริงไหม ===\n`;
+    report += `ACTIVE_STATUSES ที่ระบบยอมรับตอนนี้: ${JSON.stringify(ACTIVE_STATUSES)}\n`;
+    report += `activeProjectIds['aies'] = ${JSON.stringify(!!activeProjectIds['aies'])}\n`;
+    report += `knownProjIds.has('aies') = ${knownProjIds.has('aies')}\n`;
+    report += `doneProjIds.has('aies') = ${doneProjIds.has('aies')}\n`;
+
+    if(!activeProjectIds['aies'] && knownProjIds.has('aies')){
+      report += `\n⚠️ เจอสาเหตุแล้ว! Status จริงของ AIES ไม่ตรงกับ ACTIVE_STATUSES เป๊ะๆ สักตัว (ดู Status ด้านบน เทียบตัวอักษรกับลิสต์ ACTIVE_STATUSES — ระวังตัวพิมพ์เล็ก/ใหญ่ไม่มีผล แต่ช่องว่างเกิน/สะกดต่างมีผล) ทำให้ระบบซ่อนข้อมูลจริงของ AIES ออกจาก Timeline ทั้งหมด (ถึง Step จริงจะถูกสร้าง+บันทึกผู้ทำถูกต้องแค่ไหนก็ตาม) แล้วสังเคราะห์ "⚠ ประมาณการ" (default) ทับซ้อนขึ้นมาแทนทุกครั้ง — นี่คือสาเหตุที่ผู้ทำไม่เคยติดจริงสักที ทั้งที่บันทึกสำเร็จทุกรอบ ส่ง Status จริงที่เห็นด้านบนกลับมาได้เลย จะเพิ่มเข้า ACTIVE_STATUSES ให้`;
+    } else if(activeProjectIds['aies']){
+      report += `\n✓ AIES ผ่านเงื่อนไข active แล้ว ไม่ใช่สาเหตุจากจุดนี้ — ลองกด "🔍 ตรวจสอบ Step จริง AIES (ผู้ทำหาย)" อีกรอบดูว่า Step จริงที่เพิ่งบันทึกใหม่ (หลังลบซ้ำ) มีค่า StepAssigneeLookupId ถูกต้องไหม`;
+    } else {
+      report += `\n⚠️ ไม่พบ AIES ใน BOQ Team Work Plan เลย (knownProjIds ไม่มี "aies") — เช็คว่าพิมพ์ชื่อโครงการถูกต้องไหม`;
+    }
+    out.textContent = report;
+  }catch(e){
+    out.textContent = '⚠️ ตรวจสอบไม่สำเร็จ: ' + e.message;
+    console.error('diagnoseAiesActiveStatus failed', e);
+  }
 }
 document.getElementById('deleteDupMbg').addEventListener('click', e=>{ if(e.target.id==='deleteDupMbg') closeDeleteDupModal(); });
 
