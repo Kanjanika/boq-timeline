@@ -220,7 +220,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-17.12</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-17.13</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -243,13 +243,6 @@ tr.pick:hover td{background:var(--bg)}
     <button class="btn btn2" onclick="expandAll(false)">▸ หุบทั้งหมด</button>
     <button class="btn btn2" style="margin-left:auto" onclick="openBackfillAll()">🗄️ Backfill ข้อมูลจริงทั้งหมด</button>
     <button class="btn btn2" onclick="fixExistingReviewStepDurations()">🛠️ ปรับ Step วันคงที่ให้ตรง Template</button>
-    <button class="btn btn2" onclick="diagnoseAISuggestAssigneeColumn()">🔍 ตรวจสอบ AISuggestAssignee</button>
-    <button class="btn btn2" onclick="diagnoseBackfilledAssignee()">🔍 ตรวจสอบ Step จริง AIES (ผู้ทำหาย)</button>
-    <button class="btn btn2" onclick="openDeleteAiesStDuplicates()">🗑️ ลบ Step ซ้ำ AIES · ST</button>
-    <button class="btn btn2" onclick="diagnoseAiesActiveStatus()">🔍 ตรวจสอบสถานะ Active ของ AIES</button>
-    <button class="btn btn2" onclick="diagnoseProcRefList()">🔍 ตรวจสอบ Procurement Plan Reference</button>
-    <button class="btn btn2" onclick="openExpandServiceType()">🔧 เพิ่ม Choice ใหม่ตาม PDF4</button>
-    <button class="btn btn2" onclick="openUserIdForm()">📇 กรอก User ID</button>
     <button class="btn btn2" onclick="openTemplateEditor()">⚙️ Step Template</button>
   </div>
 
@@ -600,7 +593,7 @@ tr.pick:hover td{background:var(--bg)}
 // BUILD_VERSION: เลขเวอร์ชันที่ต้องแก้คู่กับข้อความ "build ..." ใน <div class="brand"> ของ HTML ทุกครั้งที่ส่งไฟล์ใหม่
 // ให้ทีม — ใช้เช็คได้ง่ายๆ ว่าไฟล์ที่ deploy จริง (เช่น GitHub Pages) เป็นเวอร์ชันล่าสุดที่ส่งไปหรือยัง (ดูที่มุมซ้ายบน
 // ของหน้าเว็บได้เลย ไม่ต้อง login/กดปุ่มตรวจสอบอะไรก่อน) log ออก console ด้วยเผื่อสะดวกกว่าตอน debug
-const BUILD_VERSION = '2026-08-17.12';
+const BUILD_VERSION = '2026-08-17.13';
 console.log('[BOQ Timeline] BUILD_VERSION =', BUILD_VERSION);
 // หมายเหตุ: ค่าเริ่มต้นนี้ (10 ส.ค.–2 พ.ย. 2569) ใช้กับ MOCK DATA เท่านั้น พอเข้าโหมด LIVE ค่าพวกนี้จะถูก
 // คำนวณใหม่จากวันที่จริงของงานใน SharePoint โดย recalcTimelineWindow() (ดูใน bootLive()) จึงต้องเป็น let ไม่ใช่ const
@@ -1083,6 +1076,22 @@ async function recalcTimelineWindow(){
 }
 
 /* ================= LIVE DATA LOADERS ================= */
+// canonicalProjId: จุดเดียวทั่วทั้งระบบสำหรับแปลงชื่อโครงการ → projId (ก่อนหน้านี้สูตร .toLowerCase().trim().replace(/\s+/g,'-')
+// กระจายเขียนซ้ำแยกกันอยู่ ~10 จุดในไฟล์นี้ — ผู้ใช้ยืนยันด้วยข้อมูลจริงแล้วว่า Step Tracking มี Project="AIES" ครบ 4
+// รายการ พร้อม StepAssigneeLookupId ถูกต้อง แต่ Timeline ก็ยังสังเคราะห์ "ประมาณการ" ทับซ้อนอยู่ดี ทั้งที่ projId ที่
+// คำนวณด้วยมือดูตรงกัน ("aies"="aies") — จุดที่ยังตรวจไม่ถึงคือ "อักขระที่มองไม่เห็น" ที่อาจติดมากับชื่อโครงการตอน
+// copy-paste ระหว่างระบบ (zero-width space/joiner/BOM ไม่โชว์ผลตอน console.log ปกติ, non-breaking space หน้าตา
+// เหมือน space ธรรมดาทุกประการ) ถ้าจุดใดจุดหนึ่งใน ~10 จุดที่คำนวณ projId ไม่ได้ล้างอักขระพวกนี้ก่อน จะได้ string ที่
+// "หน้าตา" เหมือนกันแต่ไม่ === กันจริง ทำให้ existingProjIds.includes(projId) เช็คไม่เจอแบบเงียบๆ — รวมทุกจุดมาไว้ที่
+// ฟังก์ชันเดียวนี้ ล้างอักขระที่มองไม่เห็นก่อนเทียบเสมอ กันจุดใดจุดหนึ่งพลาดไปคำนวณเองแยกจากจุดอื่น
+function canonicalProjId(name){
+  return String(name||'')
+    .replace(/[\u200B\u200C\u200D\uFEFF]/g,'') // zero-width space/joiner/BOM — ไม่โชว์ให้เห็นแต่ทำให้ string ไม่เท่ากัน
+    .replace(/\u00A0/g,' ')                       // non-breaking space → space ปกติ (พบบ่อยตอน copy จาก Word/Excel/PDF)
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g,'-');
+}
 function subToPool(sub){
   if(sub==='ST') return 'ST';
   if(sub==='AR&ID') return 'AR';
@@ -1106,7 +1115,7 @@ async function loadStepsFromGraph(){
     const projName = (f.Project || 'Unknown').trim();
     const pkgName  = (f.Package || 'Unknown').trim();
     const sub      = (f.SubTeam || 'Unknown').trim();
-    const projId   = projName.toLowerCase().replace(/\s+/g,'-');
+const projId   = canonicalProjId(projName);
     if(!projMap[projId]) projMap[projId] = {id:projId,name:projName,meta:'',open:true,pkgs:{}};
     const pj = projMap[projId];
     if(!pj.pkgs[pkgName]) pj.pkgs[pkgName] = {name:pkgName,meta:'',open:true,rowsMap:{}};
@@ -1364,7 +1373,7 @@ async function loadLegacyCommittedProjects(items, existingProjIds, activeProject
     const statusRaw = (f.Status||'').toString().trim().toLowerCase();
     if(statusRaw.includes('done') || statusRaw.includes('reject') || statusRaw.includes('replace') || statusRaw.includes('on hold')) return;
     const name = f.Title || f.Project_x0020_Name || f.Project || 'Unnamed';
-    const projId = name.toLowerCase().trim().replace(/\s+/g,'-');
+const projId = canonicalProjId(name);
     // เช็คซ้ำอีกชั้นระดับ "ทั้งโครงการ": ถ้าไม่มี item ไหนของโครงการนี้เลยที่ Status เป็น active จริงๆ (ทุก item เป็น
     // Done/Reject/Replace/หรือแม้แต่เว้นว่างไว้เฉยๆ) ถือว่าทั้งโครงการจบแล้ว ข้ามไปเลย — กันเคสที่บาง item ลืมกรอก
     // Status ให้เป็น "Done" ตรงๆ (เจอจริงกับโครงการ Tubkaeak ที่ item หนึ่งเว้น Status ว่างไว้ ทั้งที่โครงการจบไปแล้ว)
@@ -1428,7 +1437,7 @@ function getDoneProjectIds(items){
     const statusRaw = (f.Status||'').toString().trim().toLowerCase();
     if(statusRaw.includes('done')){
       const name = f.Title || f.Project_x0020_Name || f.Project || '';
-      if(name) doneIds.add(name.toLowerCase().trim().replace(/\s+/g,'-'));
+if(name) doneIds.add(canonicalProjId(name));
     }
   });
   return doneIds;
@@ -1448,7 +1457,7 @@ function buildActiveProjectIds(items){
     const f = it.fields;
     const name = f.Title || f.Project_x0020_Name || f.Project || '';
     if(!name) return;
-    const projId = name.toLowerCase().trim().replace(/\s+/g,'-');
+const projId = canonicalProjId(name);
     const statusRaw = (f.Status||'').toString().trim().toLowerCase();
     if(ACTIVE_STATUSES.includes(statusRaw)) map[projId] = true;
   });
@@ -1462,7 +1471,7 @@ function buildServiceTypeMap(items){
     const f = it.fields;
     const name = f.Title || f.Project_x0020_Name || f.Project || '';
     if(!name) return;
-    const projId = name.toLowerCase().trim().replace(/\s+/g,'-');
+const projId = canonicalProjId(name);
     const svc = f.Service_x0020_Type || f.ServiceType || null;
     if(svc && !map[projId]) map[projId] = svc;
   });
@@ -1476,7 +1485,7 @@ function buildDueDateMap(items){
     const f = it.fields;
     const name = f.Title || f.Project_x0020_Name || f.Project || '';
     if(!name) return;
-    const projId = name.toLowerCase().trim().replace(/\s+/g,'-');
+const projId = canonicalProjId(name);
     const dueRaw = f.Due_x0020_Date || f.DueDate || f.PostDueDate || null;
     if(dueRaw && !map[projId]) map[projId] = dueRaw;
   });
@@ -2131,8 +2140,8 @@ async function diagnoseBackfilledAssignee(){
     } else {
       report += '(ไม่พบ Step จริงของ AIES เลยใน BOQ Step Tracking ตอนนี้ — แปลว่า backfill ไม่เคยสำเร็จจริง หรือถูกลบไปแล้ว หลังจากนี้ลองกด "บันทึก" ที่ step อีกครั้งแล้วดู Console (F12) ว่ามี error สีแดงตอน POST/PATCH ขึ้นไหม)';
     }
-    const projIdsFound = Array.from(new Set(aiesSteps.map(it=> String((it.fields||{}).Project||'').trim().toLowerCase().replace(/\s+/g,'-'))));
-    const expectedProjId = 'AIES'.toLowerCase().trim().replace(/\s+/g,'-');
+const projIdsFound = Array.from(new Set(aiesSteps.map(it=> canonicalProjId((it.fields||{}).Project))));
+const expectedProjId = canonicalProjId('AIES');
     report += `\n\n=== เช็ค projId ให้ตรงกัน (นี่คือจุดที่ทำให้ระบบรู้ว่า "มี Step จริงแล้ว ไม่ต้องสังเคราะห์ ⚠ ประมาณการ ซ้ำ") ===\n`;
     report += `projId ที่ควรจะเป็น (คำนวณจาก Title "AIES" ใน BOQ Team Work Plan): "${expectedProjId}"\n`;
     report += `projId ที่คำนวณได้จริงจากฟิลด์ Project ใน BOQ Step Tracking: ${projIdsFound.length? projIdsFound.map(id=>`"${id}"`).join(', ') : '(ไม่มีเลย เพราะไม่พบ Step จริงข้างบน)'}\n`;
@@ -2245,7 +2254,7 @@ async function diagnoseAiesActiveStatus(){
     const activeProjectIds = buildActiveProjectIds(workplanItems);
     const knownProjIds = new Set(workplanItems.map(it=>{
       const f = it.fields, name = f.Title || f.Project_x0020_Name || f.Project || '';
-      return name ? name.toLowerCase().trim().replace(/\s+/g,'-') : null;
+      return name ? canonicalProjId(name) : null;
     }).filter(Boolean));
     const doneProjIds = getDoneProjectIds(workplanItems);
 
@@ -2258,12 +2267,33 @@ async function diagnoseAiesActiveStatus(){
     report += `knownProjIds.has('aies') = ${knownProjIds.has('aies')}\n`;
     report += `doneProjIds.has('aies') = ${doneProjIds.has('aies')} (ค่านี้แสดงไว้เพื่ออ้างอิงเท่านั้น — build 2026-08-17.11 เลิกใช้ doneProjIds กรอง Timeline แล้ว เพราะพบว่าถ้า AIES มี item เก่าที่ Status="Done" ปนอยู่ (เช่นงานที่ปิดไปแล้ว) จะทำให้ Step จริงทั้งหมดของ AIES ถูกซ่อนออกจาก Timeline ทั้งก้อน ทั้งที่โครงการยังมีงานอื่น active อยู่จริง — ใช้ activeProjectIds เป็นตัวตัดสินเดียวแล้ว)\n`;
 
-    if(!activeProjectIds['aies'] && knownProjIds.has('aies')){
-      report += `\n⚠️ เจอสาเหตุแล้ว! Status จริงของ AIES ไม่ตรงกับ ACTIVE_STATUSES เป๊ะๆ สักตัว (ดู Status ด้านบน เทียบตัวอักษรกับลิสต์ ACTIVE_STATUSES — ระวังตัวพิมพ์เล็ก/ใหญ่ไม่มีผล แต่ช่องว่างเกิน/สะกดต่างมีผล) ทำให้ระบบซ่อนข้อมูลจริงของ AIES ออกจาก Timeline ทั้งหมด (ถึง Step จริงจะถูกสร้าง+บันทึกผู้ทำถูกต้องแค่ไหนก็ตาม) แล้วสังเคราะห์ "⚠ ประมาณการ" (default) ทับซ้อนขึ้นมาแทนทุกครั้ง — นี่คือสาเหตุที่ผู้ทำไม่เคยติดจริงสักที ทั้งที่บันทึกสำเร็จทุกรอบ ส่ง Status จริงที่เห็นด้านบนกลับมาได้เลย จะเพิ่มเข้า ACTIVE_STATUSES ให้`;
-    } else if(activeProjectIds['aies']){
-      report += `\n✓ AIES ผ่านเงื่อนไข active แล้ว ไม่ใช่สาเหตุจากจุดนี้ — ถ้า doneProjIds.has('aies') ข้างบนเป็น true ด้วย นั่นคือสาเหตุที่แท้จริงที่เจอ (แก้ไปแล้วใน build 2026-08-17.11 — อัปโหลดขึ้น GitHub แล้วลองบันทึกผู้ทำใหม่อีกครั้ง) ถ้าไม่ใช่ ลองกด "🔍 ตรวจสอบ Step จริง AIES (ผู้ทำหาย)" อีกรอบดูว่า Step จริงที่เพิ่งบันทึกใหม่มีค่า StepAssigneeLookupId ถูกต้องไหม`;
-    } else {
+    // ขั้นต่อไป (เพิ่มใน build .12 หลังพบว่า diagnoseAiesActiveStatus เดิมเช็คได้แค่ครึ่งทาง — activeProjectIds ผ่าน
+    // แล้วจริง แต่ผู้ใช้ยังเจอบั๊ก แปลว่าต้องเช็คต่อว่า existingProjIds (ที่คำนวณจาก liveSteps จริง หลังผ่าน filter
+    // ทั้งหมดใน bootLive) มี "aies" จริงไหม ไม่ใช่แค่เช็ค activeProjectIds เฉยๆ เหมือนเดิม — เพราะ loadLegacyCommittedProjects
+    // เช็คจาก existingProjIds โดยตรง (ดู line ~1372) ไม่ได้เช็คจาก activeProjectIds ตรงๆ)
+    let liveStepsAll = [];
+    try{ liveStepsAll = await loadStepsFromGraph(); }catch(e){ console.warn('loadStepsFromGraph ล้มเหลวระหว่าง diagnose', e); }
+    const aiesLiveEntry = liveStepsAll.find(p=>p.id==='aies');
+    const liveSteps = liveStepsAll.filter(p=> !knownProjIds.has(p.id) || activeProjectIds[p.id]);
+    const existingProjIds = liveSteps.map(p=>p.id);
+    report += `\n=== ขั้นที่ต่อไป: BOQ Step Tracking (loadStepsFromGraph) เจอ Step จริงของ "aies" ไหม แล้วรอดผ่าน filter ทุกชั้นจนถึง existingProjIds รึเปล่า ===\n`;
+    report += `พบ project id="aies" ใน liveStepsAll (ก่อนกรอง) = ${aiesLiveEntry ? 'ใช่ ✓' : 'ไม่พบเลย ✗'}\n`;
+    if(aiesLiveEntry){
+      report += `  Package ที่พบใต้ "aies": ${aiesLiveEntry.pkgs.map(pk=>`"${pk.name}" (${pk.rows.map(r=>r.team+'='+r.steps.map(s=>`S${s.s}:${s.who}`).join(',')).join(' | ')})`).join(' || ')}\n`;
+    }
+    report += `existingProjIds ทั้งหมด (โครงการที่ถือว่า "มี Step จริงแล้ว ไม่ต้องสังเคราะห์ประมาณการซ้ำ") = [${existingProjIds.join(', ')}]\n`;
+    report += `existingProjIds.includes('aies') = ${existingProjIds.includes('aies')}\n`;
+
+    if(!knownProjIds.has('aies')){
       report += `\n⚠️ ไม่พบ AIES ใน BOQ Team Work Plan เลย (knownProjIds ไม่มี "aies") — เช็คว่าพิมพ์ชื่อโครงการถูกต้องไหม`;
+    } else if(!activeProjectIds['aies']){
+      report += `\n⚠️ เจอสาเหตุแล้ว! Status จริงของ AIES ไม่ตรงกับ ACTIVE_STATUSES เป๊ะๆ สักตัว (ดู Status ด้านบน เทียบตัวอักษรกับลิสต์ ACTIVE_STATUSES — ระวังตัวพิมพ์เล็ก/ใหญ่ไม่มีผล แต่ช่องว่างเกิน/สะกดต่างมีผล) ทำให้ระบบซ่อนข้อมูลจริงของ AIES ออกจาก Timeline ทั้งหมด (ถึง Step จริงจะถูกสร้าง+บันทึกผู้ทำถูกต้องแค่ไหนก็ตาม) แล้วสังเคราะห์ "⚠ ประมาณการ" (default) ทับซ้อนขึ้นมาแทนทุกครั้ง — นี่คือสาเหตุที่ผู้ทำไม่เคยติดจริงสักที ทั้งที่บันทึกสำเร็จทุกรอบ ส่ง Status จริงที่เห็นด้านบนกลับมาได้เลย จะเพิ่มเข้า ACTIVE_STATUSES ให้`;
+    } else if(!aiesLiveEntry){
+      report += `\n⚠️ เจอสาเหตุแล้ว! loadStepsFromGraph ไม่เจอ Step จริงของ "aies" เลย ทั้งที่ BOQ Step Tracking มีรายการอยู่ (ตรวจสอบด้วยปุ่ม "🔍 ตรวจสอบ Step จริง AIES (ผู้ทำหาย)" แล้วเจอ 4 รายการ Project="AIES") — แปลว่าปัญหาอาจเป็นเรื่อง timing/cache ระหว่างสอง Graph call นี้ (เรียกคนละรอบ ข้อมูลอาจยังไม่ index ทัน หรือ query ผิด) ลอง hard refresh (Ctrl+Shift+R) แล้วกดตรวจสอบใหม่อีกครั้ง`;
+    } else if(!existingProjIds.includes('aies')){
+      report += `\n⚠️ เจอสาเหตุแล้ว! "aies" มี Step จริงและผ่านเงื่อนไข active แล้ว แต่ยังหลุดจาก existingProjIds (ดูรายการด้านบน) — นี่คือจุดที่ทำให้ loadLegacyCommittedProjects คิดว่ายังไม่มี Step จริง แล้วสังเคราะห์ "⚠ ประมาณการ" ทับซ้อนขึ้นมาอีก ทั้งที่ Step จริง (พร้อมผู้ทำ) มีอยู่แล้วจริงๆ — ส่งรายงานนี้ทั้งหมดกลับมา จะดูโค้ดจุดที่คำนวณ existingProjIds ต่อให้`;
+    } else {
+      report += `\n✓ AIES ผ่านทุกเงื่อนไขแล้ว (active + มี Step จริง + อยู่ใน existingProjIds ถูกต้อง) — ถ้าหน้าเว็บยังโชว์ "⚠ ประมาณการ"/"ประมาณการ" อยู่ ปัญหาน่าจะอยู่ที่หน้าเว็บยังไม่ได้โหลด build ล่าสุด (เช็คเลข build มุมซ้ายบนให้ตรงกับที่อัปโหลดขึ้น GitHub Pages ล่าสุด) หรือ cache เบราว์เซอร์เก่าค้างอยู่ ลอง hard refresh (Ctrl+Shift+R) ก่อน`;
     }
     out.textContent = report;
   }catch(e){
@@ -2292,7 +2322,7 @@ async function diagnoseProjectNameMismatch(){
       graphFetchAllItems(`/sites/${SITE_ID}/lists/${STEP_LIST}/items?$expand=fields&$top=200`),
       graphFetchAllItems(`/sites/${SITE_ID}/lists/${WORKPLAN_LIST}/items?$expand=fields&$top=200`)
     ]);
-    const slugOf = s => String(s||'').trim().toLowerCase().replace(/\s+/g,'-');
+    const slugOf = s => canonicalProjId(s);
     // stepProjMap: slug -> Set ของชื่อดิบที่เจอจริงใน BOQ Step Tracking (ปกติควรมีแค่ชื่อเดียวต่อ slug)
     const stepProjMap = new Map();
     stepItems.forEach(it=>{
@@ -2873,7 +2903,7 @@ async function bootLive(){
     // (ควรซ่อน) กับ "ไม่มีข้อมูลให้เช็คเลย" (ไม่ควรซ่อน เผื่อกรณีข้อมูลไม่ครบ จะได้ไม่ซ่อนโครงการที่ยังทำอยู่จริงผิดๆ)
     const knownProjIds = new Set(workplanItemsAll.map(it=>{
       const f = it.fields, name = f.Title || f.Project_x0020_Name || f.Project || '';
-      return name? name.toLowerCase().trim().replace(/\s+/g,'-') : null;
+      return name? canonicalProjId(name) : null;
     }).filter(Boolean));
     const serviceTypeByProjId = buildServiceTypeMap(workplanItemsAll); // ใช้แปะชื่อ Stage ที่ถูกต้องให้ steps จริง
     const dueDateByProjId = buildDueDateMap(workplanItemsAll); // ใช้แปะคอลัมน์ "Due Date" ข้างชื่อทีม
