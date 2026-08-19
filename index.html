@@ -133,6 +133,23 @@ body{font-family:'Segoe UI','Sarabun','Tahoma',sans-serif;background:var(--bg);c
 .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--text2);padding:10px 14px;border-top:1px solid var(--border);background:var(--bg);border-bottom-left-radius:11px;border-bottom-right-radius:11px}
 .legend i{display:inline-block;width:11px;height:11px;border-radius:2px;margin-right:4px;vertical-align:middle}
 
+/* ===== Delay Alert (build 2026-08-19.4): แถบสรุปความล่าช้าบนสุดของ Timeline + badge ติดแต่ละแถว/Package/โครงการ ===== */
+.delay-banner{display:none;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 14px;margin-bottom:10px;border-radius:10px;background:#fff;border:1px solid var(--border)}
+.db-chip{display:inline-flex;align-items:center;gap:5px;padding:6px 12px;border-radius:20px;font-size:12.5px;font-weight:700;cursor:pointer;border:1px solid transparent}
+.db-chip.db-overdue{background:#fee2e2;color:var(--bad);border-color:#fecaca}
+.db-chip.db-risk{background:#fef3c7;color:var(--warn);border-color:#fde68a}
+.db-hint{font-size:11px;color:var(--text3);cursor:pointer}
+.db-detail{flex-basis:100%;margin-top:8px;max-height:280px;overflow-y:auto;border-top:1px solid var(--border);padding-top:8px}
+.db-section{margin-bottom:8px}
+.db-section b{font-size:12px}
+.db-item{font-size:12px;padding:5px 8px;border-radius:6px;margin-top:4px}
+.db-item.db-overdue{background:#fef2f2}
+.db-item.db-risk{background:#fffbeb}
+.db-item small{color:var(--text2);font-weight:400}
+.row-delay-badge{display:inline-block;font-size:9.5px;font-weight:700;padding:1px 6px;border-radius:8px;margin-left:5px;vertical-align:middle;white-space:nowrap}
+.row-delay-badge.rdb-overdue{background:#fee2e2;color:var(--bad)}
+.row-delay-badge.rdb-risk{background:#fef3c7;color:var(--warn)}
+
 /* ===== Cards / Commit ===== */
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 @media(max-width:960px){.grid2{grid-template-columns:1fr}}
@@ -221,7 +238,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-19.3</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-19.4</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -246,6 +263,11 @@ tr.pick:hover td{background:var(--bg)}
     <button class="btn btn2" onclick="fixExistingReviewStepDurations()">🛠️ ปรับ Step วันคงที่ให้ตรง Template</button>
     <button class="btn btn2" onclick="openTemplateEditor()">⚙️ Step Template</button>
   </div>
+
+  <!-- build 2026-08-19.4: แถบสรุปความล่าช้า/เสี่ยงล่าช้าภาพรวมทุกโครงการ (ไม่ผูกกับตัวกรองคน/โครงการด้านบน — ต้องการให้
+       เห็นภาพรวมทั้งหมดเสมอ) คลิกที่ chip เพื่อดูรายละเอียดว่าติดที่โครงการ/Package/Stage ไหนบ้าง — renderDelayBanner()
+       ซ่อนแถบนี้ไปเองถ้าไม่มีอะไรต้องเตือน (ไม่มีงานล่าช้า/เสี่ยงล่าช้าเลย หรือยังไม่มีข้อมูล) -->
+  <div class="delay-banner" id="delayBanner"></div>
 
   <div class="board">
     <!-- แถบวันที่ปักหมุดนิ่งอยู่บนสุดตอนเลื่อนหน้าจอขึ้นลง (เหมือน 3 tab ด้านบน) แยกออกมาจาก .tl-flex ที่เลื่อนซ้าย-ขวาได้
@@ -609,7 +631,7 @@ tr.pick:hover td{background:var(--bg)}
 // BUILD_VERSION: เลขเวอร์ชันที่ต้องแก้คู่กับข้อความ "build ..." ใน <div class="brand"> ของ HTML ทุกครั้งที่ส่งไฟล์ใหม่
 // ให้ทีม — ใช้เช็คได้ง่ายๆ ว่าไฟล์ที่ deploy จริง (เช่น GitHub Pages) เป็นเวอร์ชันล่าสุดที่ส่งไปหรือยัง (ดูที่มุมซ้ายบน
 // ของหน้าเว็บได้เลย ไม่ต้อง login/กดปุ่มตรวจสอบอะไรก่อน) log ออก console ด้วยเผื่อสะดวกกว่าตอน debug
-const BUILD_VERSION = '2026-08-19.3';
+const BUILD_VERSION = '2026-08-19.4';
 console.log('[BOQ Timeline] BUILD_VERSION =', BUILD_VERSION);
 // หมายเหตุ: ค่าเริ่มต้นนี้ (10 ส.ค.–2 พ.ย. 2569) ใช้กับ MOCK DATA เท่านั้น พอเข้าโหมด LIVE ค่าพวกนี้จะถูก
 // คำนวณใหม่จากวันที่จริงของงานใน SharePoint โดย recalcTimelineWindow() (ดูใน bootLive()) จึงต้องเป็น let ไม่ใช่ const
@@ -3260,6 +3282,9 @@ async function bootLive(){
           let dueRawForRow = pkgDueRaw;
           if(row.parentTaskId && Object.prototype.hasOwnProperty.call(dueDateById, row.parentTaskId)) dueRawForRow = dueDateById[row.parentTaskId];
           row.due = dueRawForRow && !isNaN(new Date(dueRawForRow)) ? fmtY(new Date(dueRawForRow)) : '';
+          // build 2026-08-19.4: เก็บค่าดิบ (ISO date string) ไว้แยกจาก row.due (ที่ format เป็นข้อความไทยแล้วเทียบวันที่
+          // ต่อไม่ได้) ให้ computeDelayStatus ใช้เช็คว่าเลย Due Date ที่ Post ขอไปแล้วหรือใกล้ถึงหรือยัง
+          row.dueRaw = dueRawForRow || null;
         });
       });
     });
@@ -3485,6 +3510,100 @@ function sumBar(rowsList){
     </div></div>`;
 }
 
+/* ================= แจ้งเตือนความล่าช้า (build 2026-08-19.4) =================
+   ผู้ใช้ขอ: (1) ภาพรวมทุกโครงการว่ามีกี่งานล่าช้า/เสี่ยงล่าช้า (2) รายละเอียดว่าติดที่ Package/Stage ไหนของแต่ละโครงการ
+   (3) เตือนล่วงหน้าก่อนจะสายเกินแก้ — ออกแบบตามที่ผู้ใช้เลือกไว้ตอนถาม: แสดงเป็นแถบสรุปบนสุด + badge ติดแต่ละแถวใน
+   Timeline เลย, เกณฑ์ "เสี่ยงล่าช้า" นับทั้งใกล้ครบกำหนด และยังไม่เริ่มงานทั้งที่ถึงวันแล้ว, เช็คเทียบทั้งแผนของ Stage
+   เอง (st.start/st.dur) และ Due Date ที่ Post ขอ (row.dueRaw) */
+const DELAY_WARN_DAYS = 3; // จำนวนวันล่วงหน้าที่เริ่มเตือน "ใกล้ครบกำหนด/เสี่ยงล่าช้า" ก่อนถึงวันจริง
+// computeDelayStatus(row): เช็คสถานะความล่าช้าของแถวนี้ (1 ทีมย่อยใน 1 Package) จาก "Step ปัจจุบัน" (Step แรกที่ยังไม่
+// ปิด) — ถ้าทุก Step ปิดหมดแล้วคืน null (ไม่มีอะไรต้องเตือน) ใช้หน่วย "day offset จาก T0" ตลอด (เหมือน TODAY_D/
+// st.start ที่ใช้อยู่ทั่วทั้งไฟล์นี้) กันปัญหา timezone ที่เพิ่งแก้ไป (build .19.2) ไม่ให้กลับมาอีกจากการสร้าง Date
+// ใหม่ๆ โดยไม่จำเป็น — คืนค่า {level:'overdue'|'at_risk', reasons:[ข้อความ,...]} หรือ null
+function computeDelayStatus(row){
+  if(!row || !row.steps || !row.steps.length) return null;
+  const closed = row.closed || {};
+  const st = row.steps.find(s=> !(s.s in closed));
+  if(!st) return null; // ทุก Step ในแถวนี้ปิดหมดแล้ว
+  const planStartD = st.start, planEndD = st.start + st.dur;
+  const hasStarted = !!(row.astart && (st.s in row.astart));
+  const dueD = row.dueRaw && !isNaN(new Date(row.dueRaw)) ? Math.round((new Date(row.dueRaw)-T0)/864e5) : null;
+  const stName = `S${st.s}${st.name? ' '+st.name : ''}`;
+
+  // 1) ล่าช้าแล้วจริง (overdue) — เลยกำหนดไปแล้วแต่ยังไม่ปิดงาน เช็คทั้งแผนของ Stage เองและ Due Date ที่ Post ขอ
+  const overdueReasons = [];
+  if(TODAY_D > planEndD) overdueReasons.push(`เลยแผนของ ${stName} มาแล้ว ${TODAY_D-planEndD} วัน`);
+  if(dueD!=null && TODAY_D > dueD) overdueReasons.push(`เลย Due Date ที่ Post ขอมาแล้ว ${TODAY_D-dueD} วัน (งานยังไม่เสร็จ)`);
+  if(overdueReasons.length) return { level:'overdue', reasons:overdueReasons };
+
+  // 2) เสี่ยงล่าช้า (at_risk) — ยังไม่เลยกำหนด แต่เข้าเงื่อนไขเตือนล่วงหน้าอย่างน้อย 1 อย่าง (ตามที่ผู้ใช้เลือก: ใกล้ครบ
+  // กำหนด หรือ ยังไม่เริ่มงานทั้งที่ถึงวันแผนเริ่มแล้ว)
+  const riskReasons = [];
+  const daysToPlanEnd = planEndD - TODAY_D;
+  if(daysToPlanEnd <= DELAY_WARN_DAYS) riskReasons.push(`ใกล้ครบกำหนดแผนของ ${stName} อีก ${Math.max(daysToPlanEnd,0)} วัน`);
+  if(dueD!=null){
+    const daysToDue = dueD - TODAY_D;
+    if(daysToDue <= DELAY_WARN_DAYS) riskReasons.push(`ใกล้ Due Date ที่ Post ขออีก ${Math.max(daysToDue,0)} วัน`);
+  }
+  if(TODAY_D >= planStartD && !hasStarted) riskReasons.push(`ยังไม่เริ่มงาน ${stName} ทั้งที่ถึงวันแผนเริ่มแล้ว`);
+  if(riskReasons.length) return { level:'at_risk', reasons:riskReasons };
+
+  return null;
+}
+// worstDelayLevel(rows): หาสถานะที่แย่ที่สุดในกลุ่มแถว (ใช้แปะ badge บนหัว Package/โครงการ ที่อาจถูกหุบอยู่ ให้เห็นว่า
+// "ข้างในมีอะไรต้องเตือน" โดยไม่ต้องเปิดดูทีละแถว) — overdue มาก่อน at_risk เสมอ
+function worstDelayLevel(rows){
+  let worst = null;
+  (rows||[]).forEach(row=>{
+    const d = computeDelayStatus(row);
+    if(!d) return;
+    if(d.level==='overdue') worst = 'overdue';
+    else if(d.level==='at_risk' && worst!=='overdue') worst = 'at_risk';
+  });
+  return worst;
+}
+function delayBadgeHtml(level, reasons){
+  if(!level) return '';
+  const cls = level==='overdue' ? 'rdb-overdue' : 'rdb-risk';
+  const label = level==='overdue' ? '🔴 ล่าช้า' : '🟡 เสี่ยงล่าช้า';
+  const title = (reasons||[]).join(' · ').replace(/"/g,'&quot;');
+  return `<span class="row-delay-badge ${cls}"${title? ` title="${title}"`:''}>${label}</span>`;
+}
+// computeDelaySummary(): สรุปจำนวนแถวที่ล่าช้า/เสี่ยงล่าช้า "ทั่วทั้ง DATA" ไม่ผูกกับตัวกรองคนทำ/โครงการที่เลือกอยู่ตอน
+// นี้ในหน้า Timeline — ผู้ใช้ต้องการเห็น "ภาพรวมทุกโครงการ" จริงๆ เสมอ ไม่ว่าจะกำลังกรองดูอะไรอยู่บนจอ
+function computeDelaySummary(){
+  const overdueList = [], atRiskList = [];
+  DATA.forEach(pj=>pj.pkgs.forEach(pk=>pk.rows.forEach(row=>{
+    const d = computeDelayStatus(row);
+    if(!d) return;
+    const item = { label:`${pj.name} · ${pk.name} · ${row.team||row.subteam||'-'}`, reasons:d.reasons };
+    if(d.level==='overdue') overdueList.push(item); else atRiskList.push(item);
+  })));
+  return { overdue:overdueList.length, atRisk:atRiskList.length, overdueList, atRiskList };
+}
+function renderDelayDetailList(sum){
+  const section = (title, list, cls) => !list.length ? '' : `<div class="db-section"><b>${title} (${list.length})</b>${list.map(x=>`<div class="db-item ${cls}">${x.label}<br><small>${x.reasons.join(' · ')}</small></div>`).join('')}</div>`;
+  return section('🔴 ล่าช้าแล้ว', sum.overdueList, 'db-overdue') + section('🟡 เสี่ยงล่าช้า', sum.atRiskList, 'db-risk');
+}
+function toggleDelayDetail(){
+  const d = document.getElementById('delayDetail');
+  if(d) d.style.display = d.style.display==='none' ? 'block' : 'none';
+}
+function renderDelayBanner(){
+  const el = document.getElementById('delayBanner');
+  if(!el) return;
+  if(!DATA.length){ el.style.display='none'; el.innerHTML=''; return; }
+  const sum = computeDelaySummary();
+  if(!sum.overdue && !sum.atRisk){ el.style.display='none'; el.innerHTML=''; return; }
+  // เปิดรายละเอียดค้างไว้ถ้าผู้ใช้เพิ่งเปิดดูอยู่ก่อน re-render (เช่น ปิด step แล้วรีเฟรชแถว) กันปิดกลับให้เอง
+  const wasOpen = document.getElementById('delayDetail') && document.getElementById('delayDetail').style.display==='block';
+  el.style.display='flex';
+  const overdueChip = sum.overdue ? `<span class="db-chip db-overdue" onclick="toggleDelayDetail()">🔴 ล่าช้าแล้ว ${sum.overdue} งาน</span>` : '';
+  const riskChip = sum.atRisk ? `<span class="db-chip db-risk" onclick="toggleDelayDetail()">🟡 เสี่ยงล่าช้า ${sum.atRisk} งาน</span>` : '';
+  el.innerHTML = `${overdueChip}${riskChip}<span class="db-hint" onclick="toggleDelayDetail()">คลิกดูรายละเอียดว่าติดที่โครงการ/Package/Stage ไหน</span>
+    <div class="db-detail" id="delayDetail" style="display:${wasOpen?'block':'none'}">${renderDelayDetailList(sum)}</div>`;
+}
+
 function renderRows(){
   const person = document.getElementById('personFilter').value;
   const projF = document.getElementById('projFilter').value;
@@ -3494,6 +3613,7 @@ function renderRows(){
       🔒 กรุณาเข้าสู่ระบบ SharePoint (ปุ่มขวาบน) เพื่อดูข้อมูล Timeline</div>`;
     document.getElementById('rows').innerHTML = '';
     renderManpower(); // เคลียร์ตาราง Manpower ให้เป็นข้อความชวน login ด้วยเหมือนกัน ไม่งั้นจะค้าง innerHTML เดิม (ว่างเปล่า) ไว้เฉยๆ
+    renderDelayBanner(); // ยังไม่มีข้อมูล — ซ่อนแถบแจ้งเตือนไปด้วย (กันค้างแถบเก่าจากก่อน logout)
     return;
   }
   // แยกเรนเดอร์เป็น 2 ต้นไม้คู่กัน: labelHtml (ซ้าย ไม่เลื่อน → #rowLabels) กับ trackHtml (ขวา เลื่อนได้ → #rows)
@@ -3503,8 +3623,11 @@ function renderRows(){
   DATA.forEach((pj,pi)=>{
     if(projF && pj.id!==projF) return;
     const allRows = pj.pkgs.flatMap(k=>k.rows);
+    // build 2026-08-19.4: badge สรุปความล่าช้าที่แย่ที่สุดในโครงการนี้ ติดไว้ที่หัวโครงการเลย เผื่อโครงการถูกหุบอยู่
+    // (pj.open=false) จะได้ยังเห็นว่าข้างในมีงานล่าช้า/เสี่ยงล่าช้าโดยไม่ต้องเปิดดูทีละแถว
+    const projDelayBadge = delayBadgeHtml(worstDelayLevel(allRows));
     labelHtml += `<div class="lab-row proj">
-      <div class="lab" onclick="toggle(${pi})"><span class="caret ${pj.open?'':'closed'}">▾</span> ${pj.name}<small>${pj.meta}</small></div>
+      <div class="lab" onclick="toggle(${pi})"><span class="caret ${pj.open?'':'closed'}">▾</span> ${pj.name} ${projDelayBadge}<small>${pj.meta}</small></div>
       <div></div>
       <div class="svc"></div>
       <div class="due"></div></div>`;
@@ -3515,8 +3638,11 @@ function renderRows(){
     if(!pj.open) return;
 
     pj.pkgs.forEach((pk,ki)=>{
+      // build 2026-08-19.4: เหมือนหัวโครงการ — badge สรุปความล่าช้าที่แย่ที่สุดใน Package นี้ ติดที่หัว Package เผื่อถูก
+      // หุบอยู่ (pk.open=false)
+      const pkgDelayBadge = delayBadgeHtml(worstDelayLevel(pk.rows));
       labelHtml += `<div class="lab-row pkg">
-        <div class="lab" onclick="togglePkg(${pi},${ki})"><span class="caret ${pk.open?'':'closed'}">▾</span> ${pk.name} <small>· ${pk.meta}</small>${pk.desc? `<small class="pkg-desc">📝 ${pk.desc}</small>`:''}</div>
+        <div class="lab" onclick="togglePkg(${pi},${ki})"><span class="caret ${pk.open?'':'closed'}">▾</span> ${pk.name} ${pkgDelayBadge}<small>· ${pk.meta}</small>${pk.desc? `<small class="pkg-desc">📝 ${pk.desc}</small>`:''}</div>
         <div></div>
         <div class="svc" style="padding:4px"><button class="btn btn2" style="font-size:10.5px;padding:2px 6px;white-space:nowrap" onclick="event.stopPropagation(); openMarkPackageDone(${pi},${ki})" title="ปิดงาน Package นี้ (เปลี่ยน Status เป็น Done ใน BOQ Team Work Plan แล้วเอาออกจาก Timeline)">✓ ปิดงาน</button></div>
         <div class="due"></div></div>`;
@@ -3551,8 +3677,12 @@ function renderRows(){
           }
         });
 
+        // build 2026-08-19.4: badge เตือนความล่าช้า/เสี่ยงล่าช้าติดตรงแถวนี้เลย พร้อม tooltip บอกเหตุผลตรงๆ (เช่น
+        // "เลยแผนของ S3 ตรวจ+ส่ง มาแล้ว 2 วัน") ไม่ต้องเดา
+        const rowDelay = computeDelayStatus(row);
+        const rowDelayBadge = rowDelay ? delayBadgeHtml(rowDelay.level, rowDelay.reasons) : '';
         labelHtml += `<div class="lab-row leaf">
-          <div class="lab"><b>${row.team}</b><small>${people.join(' · ')}</small></div>
+          <div class="lab"><b>${row.team}</b> ${rowDelayBadge}<small>${people.join(' · ')}</small></div>
           <div class="lane-tags"><span>แผน</span><span>จริง</span></div>
           <div class="svc">${row.service||''}</div>
           <div class="due">${row.due||''}</div></div>`;
@@ -3570,6 +3700,7 @@ function renderRows(){
   document.getElementById('rows').innerHTML=trackHtml;
   syncRowHeights();
   renderManpower();
+  renderDelayBanner(); // build 2026-08-19.4: อัปเดตแถบแจ้งเตือนความล่าช้าทุกครั้งที่มีการเรนเดอร์ตาราง Timeline ใหม่
 }
 /* ================= MANPOWER (คำนวณจริงจาก DATA ที่โหลดจาก SharePoint แทนตัวอย่างตายตัวเดิม) ================= */
 const MP_WINDOW_DAYS = 14; // หน้าต่างเวลาที่ใช้คิด % Utilization (2 สัปดาห์ข้างหน้านับจากวันนี้)
