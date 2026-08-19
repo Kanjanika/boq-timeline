@@ -3688,20 +3688,32 @@ function renderRows(){
           const edge = `${sidx===0?'seg-first':''} ${sidx===row.steps.length-1?'seg-last':''}`;
           const ref = `data-r="${pi},${ki},${ri},${st.s}"`;
           const tP = `S${st.s} ${st.name || STEP_NAMES[st.s] || ''} · ${st.who} · แผน ${fmt(addD(T0,st.start))} – ${fmt(addD(T0,st.start+st.dur))} · คลิกเพื่อ Assign/แก้ไข`;
-          const planW = (sidx===row.steps.length-1) ? pct(st.dur) : `calc(${pct(st.dur)} + 1px)`;
-          plan += `<div class="seg plan ${stepClass(st.s)} ${dim} ${hi} ${edge}" style="left:${pct(st.start)};width:${planW}" title="${tP}" ${ref} onclick="openStep(this)">S${st.s}·${st.who}</div>`;
+          // build 2026-08-19.8: bridge gap ≤1 วัน ระหว่างแท่งติดกัน
+          // ผู้ใช้มักตั้ง PlanEnd S1 = วันX, PlanStart S2 = วันX+1 ("วันชนวัน") ทำให้มี 1-day gap ในข้อมูล
+          // แก้โดยยืดแท่งถึง start ของ Step ถัดไปเมื่อ gap ≤1 วัน (ไม่แตะข้อมูล — แก้ที่การแสดงผลเท่านั้น)
+          const nextSt = row.steps[sidx+1];
+          const gapToNext = nextSt ? nextSt.start - (st.start + st.dur) : 0;
+          const vizDur = nextSt && gapToNext <= 1 ? nextSt.start - st.start : st.dur;
+          plan += `<div class="seg plan ${stepClass(st.s)} ${dim} ${hi} ${edge}" style="left:${pct(st.start)};width:${pct(vizDur)}" title="${tP}" ${ref} onclick="openStep(this)">S${st.s}·${st.who}</div>`;
 
           const c=row.closed[st.s], as=row.astart[st.s];
+          // act lane: bridge gap ≤1 วันระหว่างแท่ง ok/pending ติดกัน (เหมือน plan lane ด้านบน)
+          const nextSt2 = row.steps[sidx+1];
           if(c){
             const left = as!==undefined? as : st.start;
-            const w = Math.max(c.end-left,1);
-            actParts.push(`<div class="seg act ${c.over?'over':'ok'} ${dim} ${hi}" style="left:${pct(left)};width:${pct(w)}" title="S${st.s} ${st.who} · เริ่มจริง ${fmt(addD(T0,left))} · ปิด ${fmt(addD(T0,c.end))}${c.over?' · ช้ากว่าแผน':''} · คลิกแก้ไข" ${ref} onclick="openStep(this)">S${st.s}✓</div>`);
+            const rawW = Math.max(c.end-left,1);
+            // bridge: ถ้า step ถัดไปมี astart ที่ห่างจาก c.end ≤1 วัน ให้ยืดถึง astart นั้น
+            const nextLeft = nextSt2 ? (row.astart[nextSt2.s]!==undefined ? row.astart[nextSt2.s] : nextSt2.start) : null;
+            const actW = nextLeft!==null && (nextLeft - c.end) <= 1 ? nextLeft - left : rawW;
+            actParts.push(`<div class="seg act ${c.over?'over':'ok'} ${dim} ${hi}" style="left:${pct(left)};width:${pct(Math.max(actW,1))}" title="S${st.s} ${st.who} · เริ่มจริง ${fmt(addD(T0,left))} · ปิด ${fmt(addD(T0,c.end))}${c.over?' · ช้ากว่าแผน':''} · คลิกแก้ไข" ${ref} onclick="openStep(this)">S${st.s}✓</div>`);
           } else if(st.s===row.inprog){
             const left = as!==undefined? as : st.start;
             const w = Math.max(TODAY_D-left,2);
             actParts.push(`<div class="seg act inprog ${dim} ${hi}" style="left:${pct(left)};width:${pct(w)}" title="S${st.s} กำลังทำ (${st.who}) · เริ่มจริง ${fmt(addD(T0,left))} · คลิกเพื่อปิด" ${ref} onclick="openStep(this)">S${st.s}…</div>`);
           } else if(st.s>row.inprog){
-            actParts.push(`<div class="seg act pending ${dim}" style="left:${pct(st.start)};width:${pct(st.dur)}" title="S${st.s} ยังไม่เริ่ม · คลิกเพื่อใส่วันเริ่มจริง/ปิด" ${ref} onclick="openStep(this)">S${st.s}</div>`);
+            const gapAct = nextSt2 ? nextSt2.start - (st.start + st.dur) : 0;
+            const vizDurAct = nextSt2 && gapAct <= 1 ? nextSt2.start - st.start : st.dur;
+            actParts.push(`<div class="seg act pending ${dim}" style="left:${pct(st.start)};width:${pct(vizDurAct)}" title="S${st.s} ยังไม่เริ่ม · คลิกเพื่อใส่วันเริ่มจริง/ปิด" ${ref} onclick="openStep(this)">S${st.s}</div>`);
           }
         });
         // แปะ seg-first/seg-last เข้าไปในแท่ง "จริง" ตัวแรก/ตัวสุดท้ายที่ถูกสร้างขึ้นจริง (ตำแหน่งใน actParts ไม่ใช่ sidx)
@@ -3710,9 +3722,6 @@ function renderRows(){
           const edge = `${idx===0?'seg-first':''} ${isLast?'seg-last':''}`.trim();
           let result = html;
           if(edge) result = result.replace('class="seg act', `class="seg act ${edge}`);
-          // build 2026-08-19.8: ต่อเนื่องจาก .7 — CSS % width คำนวณแยกกันทำให้ browser ปัดเศษต่างทิศ เกิด gap 1px
-          // แก้โดยยืด right-edge ของทุกแท่งที่ไม่ใช่ตัวสุดท้ายออก 1px ด้วย calc() ทั้ง plan และ act lane
-          if(!isLast) result = result.replace(/;width:([^"]+)"/, ';width:calc($1 + 1px)"');
           return result;
         }).join('');
 
