@@ -108,28 +108,34 @@ body{font-family:'Segoe UI','Sarabun','Tahoma',sans-serif;background:var(--bg);c
 .gridlines{position:absolute;inset:0;display:grid;grid-template-columns:repeat(12,1fr);pointer-events:none}
 .gridlines div{border-left:1px solid #f1f5f9}
 .lane{position:relative;height:16px}
-.seg{position:absolute;top:0;height:16px;border-radius:3px;color:#fff;font-size:9.5px;font-weight:700;display:flex;align-items:center;justify-content:center;overflow:hidden;white-space:nowrap;line-height:1;cursor:pointer}
+.seg{position:absolute;top:0;height:16px;border-radius:0;color:#fff;font-size:9.5px;font-weight:700;display:flex;align-items:center;justify-content:center;overflow:hidden;white-space:nowrap;line-height:1;cursor:pointer}
 .seg.plan{opacity:.45}
-/* build 2026-08-19.6: ผู้ใช้ชี้ว่า Stage ที่วันที่ชนกันพอดี (PlanEnd ของ Stage ก่อนหน้า = PlanStart ของ Stage ถัดไป
-   เป๊ะ) แท่ง Gantt ควรต้องแสดงต่อกันสนิท (ไม่ควรมีการ "ปรับวันที่" ใดๆ มาแก้ปัญหานี้ — ต้องแก้ที่การแสดงผลล้วนๆ: วัน
-   ชนวัน กราฟต้องชนกัน วันซ้อนกัน กราฟต้องซ้อนกัน ให้ตรงกับข้อมูลจริงเสมอ) ต้นเหตุที่แท่งดูเหมือนมีช่องว่างแม้วันที่จะ
-   ชนกันพอดี คือ border-radius:3px ที่มุมทุกด้านของทุกแท่ง (.seg ด้านบน) พอ 2 แท่งวางชนกันตรงกลาง มุมโค้งของทั้งคู่ที่
-   ขอบสัมผัสกันจะเว้าเข้าหากัน ทำให้ตาเห็นเป็นรอยหยัก/ช่องว่างเล็กๆ ทั้งที่ตำแหน่งพิกเซลจริงชนกันสนิทแล้ว — แก้โดยปิด
-   border-radius ของแท่ง "แผน" ทุกแท่งเป็นค่าเริ่มต้น (เหลี่ยมหมด) แล้วค่อยเปิดมุมโค้งกลับเฉพาะขอบนอกสุดของลำดับ Stage
-   ในแถวนั้น (Stage แรกสุด = โค้งฝั่งซ้าย, Stage สุดท้าย = โค้งฝั่งขวา) ผ่าน class seg-first/seg-last ที่แปะเพิ่มตอน
-   เรนเดอร์ (ดู renderRows) วิธีนี้ไม่แตะวันที่ใดๆ เลย เป็นการแก้ที่การแสดงผลล้วนๆ ตามที่ผู้ใช้ต้องการ
+/* build 2026-08-19.7/.7: ผู้ใช้ชี้ว่า Stage ที่วันที่ชนกันพอดี (PlanEnd ของ Stage ก่อนหน้า = PlanStart ของ Stage
+   ถัดไปเป๊ะ) แท่ง Gantt ควรต้องแสดงต่อกันสนิท (ไม่ควรมีการ "ปรับวันที่" ใดๆ มาแก้ปัญหานี้ — ต้องแก้ที่การแสดงผลล้วนๆ:
+   วันชนวัน กราฟต้องชนกัน วันซ้อนกัน กราฟต้องซ้อนกัน ให้ตรงกับข้อมูลจริงเสมอ) ต้นเหตุมี 2 จุด: (1) border-radius:3px
+   ที่มุมทุกด้านของทุกแท่ง — พอ 2 แท่งวางชนกันตรงกลาง มุมโค้งของทั้งคู่ที่ขอบสัมผัสกันจะเว้าเข้าหากันจนดูเป็นรอยหยัก/
+   ช่องว่าง ทั้งที่ตำแหน่งพิกเซลจริงชนกันสนิทแล้ว (2) เฉพาะเลน "จริง" (.seg.act/.seg.act.pending) มีเส้นขอบรอบแท่ง
+   ทั้ง 4 ด้าน พอ 2 แท่งชนกัน จะเกิดเส้นขอบซ้อนกัน 2 เส้นตรงรอยต่อ เห็นเป็นเส้นแบ่งเหมือนมีช่องว่างอีกชั้น (พบเพิ่มจาก
+   ที่ผู้ใช้ส่งภาพจริงมาหลัง build .6 — build .6 แก้ไปแค่เลน "แผน" เท่านั้น ยังไม่ได้แก้เลน "จริง") — แก้โดยปิด
+   border-radius+เส้นขอบซ้าย/ขวาของทุกแท่งเป็นค่าเริ่มต้น (เหลี่ยมหมด ไม่มีเส้นขอบด้านที่ชนกับเพื่อนบ้าน) แล้วเปิดกลับ
+   เฉพาะขอบนอกสุดจริงๆ ของลำดับแท่งในเลนนั้น (แท่งแรกสุด=ซ้าย, แท่งสุดท้าย=ขวา) ผ่าน class seg-first/seg-last ที่แปะ
+   เพิ่มตอนเรนเดอร์ (ดู renderRows — สำหรับเลน "จริง" อิงตำแหน่งที่แท่งถูกสร้างขึ้นจริง ไม่ใช่เลขลำดับ Step เพราะบาง
+   Step ไม่มีแท่ง "จริง" เลยก็ได้) วิธีนี้ไม่แตะวันที่ใดๆ เลย เป็นการแก้ที่การแสดงผลล้วนๆ ตามที่ผู้ใช้ต้องการ
 */
-.seg.plan{border-radius:0}
-.seg.plan.seg-first{border-top-left-radius:3px;border-bottom-left-radius:3px}
-.seg.plan.seg-last{border-top-right-radius:3px;border-bottom-right-radius:3px}
+.seg.seg-first{border-top-left-radius:3px;border-bottom-left-radius:3px}
+.seg.seg-last{border-top-right-radius:3px;border-bottom-right-radius:3px}
 .seg.blank{background:var(--blank)}
 .seg.pre{background:var(--pre)}
 .seg.qa{background:var(--qa)}
-.seg.act{border:1px solid rgba(0,0,0,.08)}
+.seg.act{border-top:1px solid rgba(0,0,0,.08);border-bottom:1px solid rgba(0,0,0,.08)}
+.seg.act.seg-first{border-left:1px solid rgba(0,0,0,.08)}
+.seg.act.seg-last{border-right:1px solid rgba(0,0,0,.08)}
 .seg.act.ok{background:var(--ok)}
 .seg.act.over{background:var(--bad)}
 .seg.act.inprog{background:repeating-linear-gradient(45deg,#f59e0b,#f59e0b 5px,#fbbf24 5px,#fbbf24 10px)}
-.seg.act.pending{background:#fff;border:1.5px dashed #cbd5e1;color:var(--text3)}
+.seg.act.pending{background:#fff;border-top:1.5px dashed #cbd5e1;border-bottom:1.5px dashed #cbd5e1;color:var(--text3)}
+.seg.act.pending.seg-first{border-left:1.5px dashed #cbd5e1}
+.seg.act.pending.seg-last{border-right:1.5px dashed #cbd5e1}
 .seg:hover{filter:brightness(1.08);box-shadow:0 1px 4px rgba(0,0,0,.2)}
 .seg.dim{opacity:.15!important;pointer-events:none}
 .seg.hilite{outline:2px solid #f59e0b;outline-offset:1px;z-index:2}
@@ -250,7 +256,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-19.6</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-19.7</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -643,7 +649,7 @@ tr.pick:hover td{background:var(--bg)}
 // BUILD_VERSION: เลขเวอร์ชันที่ต้องแก้คู่กับข้อความ "build ..." ใน <div class="brand"> ของ HTML ทุกครั้งที่ส่งไฟล์ใหม่
 // ให้ทีม — ใช้เช็คได้ง่ายๆ ว่าไฟล์ที่ deploy จริง (เช่น GitHub Pages) เป็นเวอร์ชันล่าสุดที่ส่งไปหรือยัง (ดูที่มุมซ้ายบน
 // ของหน้าเว็บได้เลย ไม่ต้อง login/กดปุ่มตรวจสอบอะไรก่อน) log ออก console ด้วยเผื่อสะดวกกว่าตอน debug
-const BUILD_VERSION = '2026-08-19.6';
+const BUILD_VERSION = '2026-08-19.7';
 console.log('[BOQ Timeline] BUILD_VERSION =', BUILD_VERSION);
 // หมายเหตุ: ค่าเริ่มต้นนี้ (10 ส.ค.–2 พ.ย. 2569) ใช้กับ MOCK DATA เท่านั้น พอเข้าโหมด LIVE ค่าพวกนี้จะถูก
 // คำนวณใหม่จากวันที่จริงของงานใน SharePoint โดย recalcTimelineWindow() (ดูใน bootLive()) จึงต้องเป็น let ไม่ใช่ const
@@ -3667,10 +3673,15 @@ function renderRows(){
       pk.rows.forEach((row,ri)=>{
         const people=[...new Set(row.steps.map(s=>s.who))];
         if(person && !people.includes(person)) return;
-        let plan='',act='';
-        // build 2026-08-19.6: seg-first/seg-last — ดู CSS ด้านบน (.seg.plan.seg-first/.seg-last) เปิดมุมโค้งกลับ
-        // เฉพาะขอบนอกสุดของลำดับ Stage ในแถวนี้เท่านั้น (Stage แรก=โค้งซ้าย, Stage สุดท้าย=โค้งขวา) ส่วน Stage
-        // ตรงกลางที่ชนกับ Stage ข้างเคียงเป็นเหลี่ยมหมด กันมุมโค้งบังตาทำให้ Stage ที่วันที่ชนกันพอดีดูเหมือนมีช่องว่าง
+        let plan='';
+        const actParts = []; // build 2026-08-19.7: เก็บเป็น array ก่อน แล้วค่อยแปะ seg-first/seg-last ตามตำแหน่งจริง
+        // ที่ถูก push เข้ามา (ไม่ใช้ index ของ row.steps ตรงๆ เพราะบาง Step อาจไม่มีแท่ง "จริง" เลยก็ได้ เช่น Step ที่
+        // ยังไม่ปิดและยังไม่ถึงคิว inprog — ถ้าใช้ sidx เดิมของ step loop จะนับเพี้ยนได้)
+        //
+        // seg-first/seg-last: ดู CSS ด้านบน (.seg.seg-first/.seg-last) เปิดมุมโค้ง+เส้นขอบด้านข้างกลับมาเฉพาะขอบนอก
+        // สุดของลำดับแท่งในเลนนั้น (แผน/จริง) ส่วนแท่งตรงกลางที่ชนกับแท่งข้างเคียงเป็นเหลี่ยมหมด ไม่มีเส้นขอบซ้าย/ขวา
+        // กันมุมโค้ง/เส้นประขอบซ้อนกันบังตาทำให้ Stage ที่วันที่ชนกันพอดีดูเหมือนมีช่องว่าง (ผู้ใช้ยืนยันเจอปัญหานี้ทั้ง
+        // เลน "แผน" (build .6 แก้ไปแล้ว) และเลน "จริง" ที่ยังไม่ได้แก้ — บั๊กเดียวกัน คนละเลน)
         row.steps.forEach((st,sidx)=>{
           const mine = person && st.who===person;
           const dim = person && !mine ? 'dim':'', hi = mine?'hilite':'';
@@ -3683,15 +3694,21 @@ function renderRows(){
           if(c){
             const left = as!==undefined? as : st.start;
             const w = Math.max(c.end-left,1);
-            act += `<div class="seg act ${c.over?'over':'ok'} ${dim} ${hi}" style="left:${pct(left)};width:${pct(w)}" title="S${st.s} ${st.who} · เริ่มจริง ${fmt(addD(T0,left))} · ปิด ${fmt(addD(T0,c.end))}${c.over?' · ช้ากว่าแผน':''} · คลิกแก้ไข" ${ref} onclick="openStep(this)">S${st.s}✓</div>`;
+            actParts.push(`<div class="seg act ${c.over?'over':'ok'} ${dim} ${hi}" style="left:${pct(left)};width:${pct(w)}" title="S${st.s} ${st.who} · เริ่มจริง ${fmt(addD(T0,left))} · ปิด ${fmt(addD(T0,c.end))}${c.over?' · ช้ากว่าแผน':''} · คลิกแก้ไข" ${ref} onclick="openStep(this)">S${st.s}✓</div>`);
           } else if(st.s===row.inprog){
             const left = as!==undefined? as : st.start;
             const w = Math.max(TODAY_D-left,2);
-            act += `<div class="seg act inprog ${dim} ${hi}" style="left:${pct(left)};width:${pct(w)}" title="S${st.s} กำลังทำ (${st.who}) · เริ่มจริง ${fmt(addD(T0,left))} · คลิกเพื่อปิด" ${ref} onclick="openStep(this)">S${st.s}…</div>`;
+            actParts.push(`<div class="seg act inprog ${dim} ${hi}" style="left:${pct(left)};width:${pct(w)}" title="S${st.s} กำลังทำ (${st.who}) · เริ่มจริง ${fmt(addD(T0,left))} · คลิกเพื่อปิด" ${ref} onclick="openStep(this)">S${st.s}…</div>`);
           } else if(st.s>row.inprog){
-            act += `<div class="seg act pending ${dim}" style="left:${pct(st.start)};width:${pct(st.dur)}" title="S${st.s} ยังไม่เริ่ม · คลิกเพื่อใส่วันเริ่มจริง/ปิด" ${ref} onclick="openStep(this)">S${st.s}</div>`;
+            actParts.push(`<div class="seg act pending ${dim}" style="left:${pct(st.start)};width:${pct(st.dur)}" title="S${st.s} ยังไม่เริ่ม · คลิกเพื่อใส่วันเริ่มจริง/ปิด" ${ref} onclick="openStep(this)">S${st.s}</div>`);
           }
         });
+        // แปะ seg-first/seg-last เข้าไปในแท่ง "จริง" ตัวแรก/ตัวสุดท้ายที่ถูกสร้างขึ้นจริง (ตำแหน่งใน actParts ไม่ใช่ sidx)
+        const act = actParts.map((html,idx)=>{
+          const edge = `${idx===0?'seg-first':''} ${idx===actParts.length-1?'seg-last':''}`.trim();
+          if(!edge) return html;
+          return html.replace('class="seg act', `class="seg act ${edge}`);
+        }).join('');
 
         // build 2026-08-19.4: badge เตือนความล่าช้า/เสี่ยงล่าช้าติดตรงแถวนี้เลย พร้อม tooltip บอกเหตุผลตรงๆ (เช่น
         // "เลยแผนของ S3 ตรวจ+ส่ง มาแล้ว 2 วัน") ไม่ต้องเดา
