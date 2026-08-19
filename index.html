@@ -42,6 +42,9 @@ body{font-family:'Segoe UI','Sarabun','Tahoma',sans-serif;background:var(--bg);c
 .btn2:hover{background:var(--bg);color:var(--text)}
 .btn-amber{background:var(--warn)}
 .btn-amber:hover{background:#b45309}
+.sort-btn{background:#1e293b;color:#94a3b8;border:0;padding:5px 11px;border-radius:6px;font-size:11.5px;cursor:pointer;font-family:inherit;font-weight:600;transition:background .15s,color .15s}
+.sort-btn:hover{background:#334155;color:#e2e8f0}
+.sort-btn.active{background:#0f766e;color:#fff}
 
 /* หมายเหตุ: .board ห้ามใส่ overflow:hidden/auto/scroll เด็ดขาด เพราะ overflow ใดๆ ก็ตามบน "ancestor" ของ
    .tl-headerbar จะกลายเป็น containing block ของ position:sticky แทนที่จะเป็นหน้าเว็บจริง ทำให้แถบวันที่เลื่อนหาย
@@ -277,6 +280,11 @@ tr.pick:hover td{background:var(--bg)}
     <select id="projFilter" onchange="renderRows()"><option value="">— ทั้งหมด —</option></select>
     <button class="btn btn2" onclick="expandAll(true)">▾ เปิดทั้งหมด</button>
     <button class="btn btn2" onclick="expandAll(false)">▸ หุบทั้งหมด</button>
+    <span style="display:inline-flex;gap:4px;align-items:center;background:#0f172a;border-radius:8px;padding:4px 6px">
+      <button class="sort-btn active" id="sortBtnOrder" onclick="setSortOrder('order')" title="เรียงตามลำดับที่งานเข้ามา (ค่าเริ่มต้น)">📋 ลำดับเข้า</button>
+      <button class="sort-btn" id="sortBtnDue" onclick="setSortOrder('due')" title="เรียงตาม Due Date ที่ Post ขอส่ง (น้อย→มาก)">📅 Due Date</button>
+      <button class="sort-btn" id="sortBtnAZ" onclick="setSortOrder('az')" title="เรียงชื่อโครงการ A→Z">🔤 A→Z</button>
+    </span>
     <button class="btn btn2" style="margin-left:auto" onclick="openBackfillAll()">🗄️ Backfill ข้อมูลจริงทั้งหมด</button>
     <button class="btn btn2" onclick="fixExistingReviewStepDurations()">🛠️ ปรับ Step วันคงที่ให้ตรง Template</button>
     <button class="btn btn2" onclick="openTemplateEditor()">⚙️ Step Template</button>
@@ -972,6 +980,7 @@ function getUserId(name){
 loadUserIdOverrides(); // โหลดตั้งแต่ต้น เผื่อผู้ใช้เปิดฟอร์ม "📇 กรอก User ID" ก่อน login SharePoint ด้วยซ้ำ
 
 let LIVE_MODE = false;
+let SORT_ORDER = 'order'; // 'order' | 'due' | 'az'
 let msalInstance = null;
 let graphAccount = null;
 
@@ -3622,6 +3631,31 @@ function renderDelayBanner(){
     <div class="db-detail" id="delayDetail" style="display:${wasOpen?'block':'none'}">${renderDelayDetailList(sum)}</div>`;
 }
 
+function setSortOrder(order){
+  SORT_ORDER = order;
+  const ids = {order:'sortBtnOrder', due:'sortBtnDue', az:'sortBtnAZ'};
+  Object.entries(ids).forEach(([k,id])=>{ const b=document.getElementById(id); if(b) b.classList.toggle('active',k===order); });
+  renderRows();
+}
+// sortedData: คืน shallow-copy ของ DATA เรียงตาม SORT_ORDER (ไม่แตะ DATA เดิม)
+function sortedData(){
+  if(SORT_ORDER==='az'){
+    return [...DATA].sort((a,b)=> a.name.localeCompare(b.name,'th'));
+  }
+  if(SORT_ORDER==='due'){
+    // หา dueRaw ที่เร็วที่สุดของแต่ละโครงการ (เอา min ของทุก row ทุก pkg)
+    const minDue = pj => {
+      let m = Infinity;
+      pj.pkgs.forEach(pk=> pk.rows.forEach(row=>{
+        if(row.dueRaw){ const t=new Date(row.dueRaw).getTime(); if(t<m) m=t; }
+      }));
+      return m===Infinity ? 9e15 : m;
+    };
+    return [...DATA].sort((a,b)=> minDue(a)-minDue(b));
+  }
+  return DATA; // 'order' = ลำดับเดิม
+}
+
 function renderRows(){
   const person = document.getElementById('personFilter').value;
   const projF = document.getElementById('projFilter').value;
@@ -3638,14 +3672,15 @@ function renderRows(){
   // ต้อง push เข้าคู่กันทีละแถวเสมอ ไม่งั้นแถวจะเยื้องไม่ตรงกัน (ดูหมายเหตุใน CSS ว่าทำไมไม่ใช้ sticky column แทน)
   let labelHtml='', trackHtml='';
 
-  DATA.forEach((pj,pi)=>{
+  sortedData().forEach((pj,pi)=>{
+    const realPi = DATA.indexOf(pj); // index จริงใน DATA สำหรับ toggle/togglePkg
     if(projF && pj.id!==projF) return;
     const allRows = pj.pkgs.flatMap(k=>k.rows);
     // build 2026-08-19.4: badge สรุปความล่าช้าที่แย่ที่สุดในโครงการนี้ ติดไว้ที่หัวโครงการเลย เผื่อโครงการถูกหุบอยู่
     // (pj.open=false) จะได้ยังเห็นว่าข้างในมีงานล่าช้า/เสี่ยงล่าช้าโดยไม่ต้องเปิดดูทีละแถว
     const projDelayBadge = delayBadgeHtml(worstDelayLevel(allRows));
     labelHtml += `<div class="lab-row proj">
-      <div class="lab" onclick="toggle(${pi})"><span class="caret ${pj.open?'':'closed'}">▾</span> ${pj.name} ${projDelayBadge}<small>${pj.meta}</small></div>
+      <div class="lab" onclick="toggle(${realPi})"><span class="caret ${pj.open?'':'closed'}">▾</span> ${pj.name} ${projDelayBadge}<small>${pj.meta}</small></div>
       <div></div>
       <div class="svc"></div>
       <div class="due"></div></div>`;
@@ -3660,9 +3695,9 @@ function renderRows(){
       // หุบอยู่ (pk.open=false)
       const pkgDelayBadge = delayBadgeHtml(worstDelayLevel(pk.rows));
       labelHtml += `<div class="lab-row pkg">
-        <div class="lab" onclick="togglePkg(${pi},${ki})"><span class="caret ${pk.open?'':'closed'}">▾</span> ${pk.name} ${pkgDelayBadge}<small>· ${pk.meta}</small>${pk.desc? `<small class="pkg-desc">📝 ${pk.desc}</small>`:''}</div>
+        <div class="lab" onclick="togglePkg(${realPi},${ki})"><span class="caret ${pk.open?'':'closed'}">▾</span> ${pk.name} ${pkgDelayBadge}<small>· ${pk.meta}</small>${pk.desc? `<small class="pkg-desc">📝 ${pk.desc}</small>`:''}</div>
         <div></div>
-        <div class="svc" style="padding:4px"><button class="btn btn2" style="font-size:10.5px;padding:2px 6px;white-space:nowrap" onclick="event.stopPropagation(); openMarkPackageDone(${pi},${ki})" title="ปิดงาน Package นี้ (เปลี่ยน Status เป็น Done ใน BOQ Team Work Plan แล้วเอาออกจาก Timeline)">✓ ปิดงาน</button></div>
+        <div class="svc" style="padding:4px"><button class="btn btn2" style="font-size:10.5px;padding:2px 6px;white-space:nowrap" onclick="event.stopPropagation(); openMarkPackageDone(${realPi},${ki})" title="ปิดงาน Package นี้ (เปลี่ยน Status เป็น Done ใน BOQ Team Work Plan แล้วเอาออกจาก Timeline)">✓ ปิดงาน</button></div>
         <div class="due"></div></div>`;
       trackHtml += `<div class="g-row pkg">
         <div class="track"><div class="gridlines" style="grid-template-columns:repeat(${weekCount()},1fr)">${'<div></div>'.repeat(weekCount())}</div>
@@ -3686,7 +3721,7 @@ function renderRows(){
           const mine = person && st.who===person;
           const dim = person && !mine ? 'dim':'', hi = mine?'hilite':'';
           const edge = `${sidx===0?'seg-first':''} ${sidx===row.steps.length-1?'seg-last':''}`;
-          const ref = `data-r="${pi},${ki},${ri},${st.s}"`;
+          const ref = `data-r="${realPi},${ki},${ri},${st.s}"`;
           const tP = `S${st.s} ${st.name || STEP_NAMES[st.s] || ''} · ${st.who} · แผน ${fmt(addD(T0,st.start))} – ${fmt(addD(T0,st.start+st.dur))} · คลิกเพื่อ Assign/แก้ไข`;
           // build 2026-08-19.8: bridge gap ≤1 วัน ระหว่างแท่งติดกัน
           // ผู้ใช้มักตั้ง PlanEnd S1 = วันX, PlanStart S2 = วันX+1 ("วันชนวัน") ทำให้มี 1-day gap ในข้อมูล
