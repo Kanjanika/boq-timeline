@@ -221,7 +221,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-18.10</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-18.11</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -603,7 +603,7 @@ tr.pick:hover td{background:var(--bg)}
 // BUILD_VERSION: เลขเวอร์ชันที่ต้องแก้คู่กับข้อความ "build ..." ใน <div class="brand"> ของ HTML ทุกครั้งที่ส่งไฟล์ใหม่
 // ให้ทีม — ใช้เช็คได้ง่ายๆ ว่าไฟล์ที่ deploy จริง (เช่น GitHub Pages) เป็นเวอร์ชันล่าสุดที่ส่งไปหรือยัง (ดูที่มุมซ้ายบน
 // ของหน้าเว็บได้เลย ไม่ต้อง login/กดปุ่มตรวจสอบอะไรก่อน) log ออก console ด้วยเผื่อสะดวกกว่าตอน debug
-const BUILD_VERSION = '2026-08-18.10';
+const BUILD_VERSION = '2026-08-18.11';
 console.log('[BOQ Timeline] BUILD_VERSION =', BUILD_VERSION);
 // หมายเหตุ: ค่าเริ่มต้นนี้ (10 ส.ค.–2 พ.ย. 2569) ใช้กับ MOCK DATA เท่านั้น พอเข้าโหมด LIVE ค่าพวกนี้จะถูก
 // คำนวณใหม่จากวันที่จริงของงานใน SharePoint โดย recalcTimelineWindow() (ดูใน bootLive()) จึงต้องเป็น let ไม่ใช่ const
@@ -3118,6 +3118,16 @@ async function bootLive(){
     // เดียวกันนี้เลยเพราะเป็นปัญหาเดียวกัน (ต้องแยกตาม Package ไม่ใช่ทั้งโครงการ)
     const dueDateById = {}, dueDateByKey = {}, dueDateKeyAmbiguous = {};
     const descByKey = {}, descKeyAmbiguous = {};
+    // build 2026-08-18.11: ผู้ใช้แจ้ง "PABKK service คือ Cost Exercise - Bidding Stage แต่ใน html แสดงเป็น Blank BOQ"
+    // — ตรวจโค้ดพบว่าเป็นบั๊กแบบเดียวกับ "due date ไม่ตรง" (build .8) เป๊ะ: buildServiceTypeMap (serviceTypeByProjId)
+    // เก็บ Service Type "ตัวแรกที่เจอ" ต่อ "ทั้งโครงการ" เท่านั้น ไม่แยกตาม Package/งานเลย ถ้าโครงการเดียวมีหลาย Work
+    // Plan item ที่ Service Type ไม่เหมือนกัน (เคสจริง PABKK/Main Contractor Works มี 2 รายการ: "Cost Exercise -
+    // Bidding Stage" กับ "VO - For Con VS For Tender") ค่าที่ได้จะเป็นของรายการที่บังเอิญมาก่อนในลิสต์ หรือถ้าไม่มีค่า
+    // ระดับโครงการเลยก็ตกไปที่ default 'Blank BOQ' เหมือนที่ผู้ใช้เจอ — แก้โดยเก็บ Service Type แบบเดียวกับ Due
+    // Date/Description ด้านบนเป๊ะ: svcTypeById (ตาม SharePoint item id จริง ผ่าน row.parentTaskId แม่นสุด) และ
+    // svcTypeByKey (ตาม "โครงการ+Package" เป็นตัวสำรอง ถ้าคลุมเครือ/มีมากกว่า 1 ค่าที่ไม่ตรงกัน ให้ปล่อยว่างแล้ว fallback
+    // ไปเดาระดับโครงการ (serviceTypeByProjId)/default ตามลำดับเดิม แทนที่จะเดาผิดแบบเงียบๆ)
+    const svcTypeById = {}, svcTypeByKey = {}, svcTypeKeyAmbiguous = {};
     workplanItemsAll.forEach(it=>{
       const f = it.fields||{};
       const name = f.Title || f.Project_x0020_Name || f.Project || '';
@@ -3133,6 +3143,12 @@ async function bootLive(){
       if(descRaw){
         if(key in descByKey && descByKey[key]!==descRaw) descKeyAmbiguous[key] = true;
         else descByKey[key] = descRaw;
+      }
+      const svcRaw = f.Service_x0020_Type || f.ServiceType || null;
+      if(svcRaw){
+        svcTypeById[String(it.id)] = svcRaw;
+        if(key in svcTypeByKey && svcTypeByKey[key]!==svcRaw) svcTypeKeyAmbiguous[key] = true;
+        else svcTypeByKey[key] = svcRaw;
       }
     });
     // กรองระดับ "งานเฉพาะเจาะจง" (แถวเดียว) อีกชั้น — ใช้ parentTaskId ตรงๆ ก่อน (แม่นสุด ไม่ต้องเดา/เทียบชื่อ) ถ้าไม่มี
@@ -3169,22 +3185,29 @@ async function bootLive(){
     // เป็นพิเศษก่อนเสมอ (เพราะโครงการเดียวอาจมีทั้งคู่ผสมกันในแถวเดียว ตาม Package+SubTeam เดียวกัน) แล้วค่อย fallback
     // ไปตาม serviceTypeByProjId (จาก Team Work Plan) สำหรับ Service Type อื่นที่ไม่มี offset ซ้อนกัน
     liveSteps.forEach(pj=>{
-      const hintService = serviceTypeByProjId[pj.id] || 'Blank BOQ';
       pj.pkgs.forEach(pk=>{
-        // กุญแจ "โครงการ+Package" เดียวกับที่ใช้เช็ค active ด้านบน — ใช้หา Due Date/Description ที่ตรงกับ Package
-        // นี้จริงๆ (ไม่ใช่ของทั้งโครงการเหมารวม) ถ้าคลุมเครือ ปล่อยว่าง/fallback ไปโครงการล้วนๆ ตามลำดับ
+        // กุญแจ "โครงการ+Package" เดียวกับที่ใช้เช็ค active ด้านบน — ใช้หา Due Date/Description/Service Type ที่ตรงกับ
+        // Package นี้จริงๆ (ไม่ใช่ของทั้งโครงการเหมารวม) ถ้าคลุมเครือ ปล่อยว่าง/fallback ไปโครงการล้วนๆ ตามลำดับ
         const pkgKey = canonicalProjId(pj.name) + '::' + canonicalProjId(pk.name);
         let pkgDueRaw = null;
         if(!dueDateKeyAmbiguous[pkgKey] && Object.prototype.hasOwnProperty.call(dueDateByKey, pkgKey)) pkgDueRaw = dueDateByKey[pkgKey];
         else if(!dueDateKeyAmbiguous[pkgKey]) pkgDueRaw = dueDateByProjId[pj.id] || null; // ไม่มีข้อมูลระดับ Package เลย ใช้ของโครงการแทนดีกว่าไม่มีเลย
         pk.desc = (!descKeyAmbiguous[pkgKey] && descByKey[pkgKey]) || '';
+        // build 2026-08-18.11: Service Type ก็ต้องคิดระดับ Package (ไม่ใช่ทั้งโครงการ) เหมือน Due Date/Description —
+        // ถ้าคลุมเครือระดับ Package ค่อย fallback ไปเดาระดับโครงการ (serviceTypeByProjId เดิม) ก่อนตกไป default สุดท้าย
+        let pkgSvcRaw = null;
+        if(!svcTypeKeyAmbiguous[pkgKey] && Object.prototype.hasOwnProperty.call(svcTypeByKey, pkgKey)) pkgSvcRaw = svcTypeByKey[pkgKey];
+        else if(!svcTypeKeyAmbiguous[pkgKey]) pkgSvcRaw = serviceTypeByProjId[pj.id] || null;
         pk.rows.forEach(row=>{
+          // parentTaskId ตรงๆ แม่นสุด (เจาะจงตัวงานจริงเลย ไม่ต้องพึ่งกุญแจ Package ที่อาจคลุมเครือ) ถ้ามีให้ใช้ก่อนเสมอ
+          let hintService = pkgSvcRaw;
+          if(row.parentTaskId && Object.prototype.hasOwnProperty.call(svcTypeById, row.parentTaskId)) hintService = svcTypeById[row.parentTaskId];
+          hintService = hintService || 'Blank BOQ';
           row.steps.forEach(st=>{ st.name = resolveStepName(st.s, hintService); });
           // แถวหนึ่ง (ทีม) อาจรวม Blank BOQ (S1-S4) กับ Pretender (S5-S8) เข้าด้วยกัน ถ้า commit แยกกันแต่ตกที่
           // Project+Package+SubTeam เดียวกัน — resolveRowServiceLabel เช็คจากเลข Step จริงในแถวนี้เพื่อไม่ให้เห็นแค่
           // Service แรกที่เจอ (บั๊กที่ผู้ใช้เจอ: โครงการที่มีทั้ง Blank BOQ และ Pretender แต่โชว์แค่ Blank BOQ)
           row.service = resolveRowServiceLabel(row.steps.map(s=>s.s), hintService);
-          // parentTaskId ตรงๆ แม่นสุด (แม่นกว่าระดับ Package เพราะเจาะจงตัวงานจริงเลย) ถ้ามีให้ใช้ก่อนเสมอ
           let dueRawForRow = pkgDueRaw;
           if(row.parentTaskId && Object.prototype.hasOwnProperty.call(dueDateById, row.parentTaskId)) dueRawForRow = dueDateById[row.parentTaskId];
           row.due = dueRawForRow && !isNaN(new Date(dueRawForRow)) ? fmtY(new Date(dueRawForRow)) : '';
