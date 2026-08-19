@@ -221,7 +221,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-18.11</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-19.3</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -422,7 +422,13 @@ tr.pick:hover td{background:var(--bg)}
     <div class="sub" id="mSub">—</div>
     <div class="frow">
       <div class="field"><label>👤 ผู้ทำ (Assign ได้)</label><select id="mWho"></select></div>
-      <div class="field"><label>แผน</label><div class="read" id="mPlan">—</div></div>
+      <div class="field"><label>📅 แผน (แก้ไขได้)<br><small style="color:var(--text3);font-weight:400" id="mPlanDur">—</small></label>
+        <div style="display:flex;gap:4px;align-items:center">
+          <input type="date" id="mPlanStart" style="flex:1;min-width:0" oninput="updateMPlanDurLabel()">
+          <span style="color:var(--text3)">–</span>
+          <input type="date" id="mPlanEnd" style="flex:1;min-width:0" oninput="updateMPlanDurLabel()">
+        </div>
+      </div>
     </div>
     <div class="frow">
       <div class="field"><label>▶ วันเริ่มงานจริง<br><small style="color:var(--text3);font-weight:400">เริ่มก่อน/ช้ากว่าแผนได้</small></label><input type="date" id="mStart"></div>
@@ -603,7 +609,7 @@ tr.pick:hover td{background:var(--bg)}
 // BUILD_VERSION: เลขเวอร์ชันที่ต้องแก้คู่กับข้อความ "build ..." ใน <div class="brand"> ของ HTML ทุกครั้งที่ส่งไฟล์ใหม่
 // ให้ทีม — ใช้เช็คได้ง่ายๆ ว่าไฟล์ที่ deploy จริง (เช่น GitHub Pages) เป็นเวอร์ชันล่าสุดที่ส่งไปหรือยัง (ดูที่มุมซ้ายบน
 // ของหน้าเว็บได้เลย ไม่ต้อง login/กดปุ่มตรวจสอบอะไรก่อน) log ออก console ด้วยเผื่อสะดวกกว่าตอน debug
-const BUILD_VERSION = '2026-08-18.11';
+const BUILD_VERSION = '2026-08-19.3';
 console.log('[BOQ Timeline] BUILD_VERSION =', BUILD_VERSION);
 // หมายเหตุ: ค่าเริ่มต้นนี้ (10 ส.ค.–2 พ.ย. 2569) ใช้กับ MOCK DATA เท่านั้น พอเข้าโหมด LIVE ค่าพวกนี้จะถูก
 // คำนวณใหม่จากวันที่จริงของงานใน SharePoint โดย recalcTimelineWindow() (ดูใน bootLive()) จึงต้องเป็น let ไม่ใช่ const
@@ -1079,7 +1085,17 @@ async function recalcTimelineWindow(){
   const wd = startPadded.getDay(); // 0=อาทิตย์
   const backToMonday = wd===0? 6 : wd-1;
   startPadded.setDate(startPadded.getDate()-backToMonday);
-  startPadded.setHours(0,0,0,0);
+  // build 2026-08-19.2: ผู้ใช้แจ้ง "บันทึก เริ่ม 20/8/2026 แต่พอแก้ไข วันที่กลับมาเป็น 19/8/2026" — ต้นเหตุจริงคือบั๊ก
+  // timezone ที่ฝังมานานมาก (ไม่เคยเจอตอนเทสเพราะ Playwright headless รันที่ timezone UTC โดย default พอดีไม่มี
+  // offset ให้เห็นบั๊ก): วันที่ทุกตัวที่มาจาก SharePoint/input วันที่ (เช่น "2026-08-20") ถูก parse เป็น "เที่ยงคืน UTC"
+  // เสมอ (มาตรฐาน JS) แต่ T0 (จุดอ้างอิงที่ใช้คำนวณ offset วันของทุกอย่างในแอป ผ่าน addD/toISO) เดิมถูกปัดด้วย
+  // .setHours(0,0,0,0) ซึ่งปัดเป็น "เที่ยงคืนตามเวลาท้องถิ่นของเบราว์เซอร์" ไม่ใช่ UTC — สำหรับผู้ใช้ในไทย (UTC+7) เที่ยงคืน
+  // ท้องถิ่นของวันที่ X ตรงกับเวลา 17:00 UTC ของวันที่ (X-1) ทำให้ T0 เพี้ยนไป "ถอยหลัง 1 วัน" เทียบกับเวลา UTC จริง —
+  // ทุกครั้งที่คำนวณ "วันที่ = T0 + n วัน" แล้วแปลงกลับเป็นสตริงด้วย toISO (ใช้ toISOString ซึ่งเป็น UTC) จะได้วันที่ที่
+  // ถอยหลังไป 1 วันเสมอ (ตรงกับอาการที่ผู้ใช้เจอเป๊ะ: กรอก 20/8 บันทึกแล้วเปิดใหม่กลายเป็น 19/8) — แก้โดยเปลี่ยนมาปัด T0
+  // เป็นเที่ยงคืน UTC ตรงๆ (setUTCHours แทน setHours) ให้สอดคล้องกับวิธี parse วันที่แบบ ISO ที่ใช้อยู่ทั่วทั้งแอป ไม่ว่า
+  // ผู้ใช้จะเปิดจาก timezone ไหนก็ตาม (ไม่ใช่แค่ไทย)
+  startPadded.setUTCHours(0,0,0,0);
 
   const endPadded = new Date(maxDate); endPadded.setDate(endPadded.getDate()+14); // เผื่อท้ายตาราง 2 สัปดาห์
 
@@ -1334,6 +1350,27 @@ function addBusinessDays(date, days){
   }
   return d;
 }
+// addBusinessDaysInclusive: build 2026-08-19.3 — ผู้ใช้ยืนยันชัดเจน (2 รอบ) ว่าความหมายจริงของ Stage แบบวันคงที่ เช่น
+// "ตรวจ+ส่ง" 2 วันทำการ ที่เริ่มวันพฤหัสฯ ต้องนับ "วันเริ่มเป็นวันที่ 1 เลย" (พฤหัส+ศุกร์ = ครบ 2 วันทำการ จบวันศุกร์)
+// ไม่ใช่ข้ามไปจบวันจันทร์แบบที่ addBusinessDays เดิมคำนวณ (เดิม addBusinessDays นับ N วันทำการ "ถัดจาก" date เสมอ
+// ไม่นับ date เองเป็นวันทำงานวันแรก — เหมาะกับความหมายแบบ "อีก N วันทำการนับจากนี้" เช่น SLA/turnaround แต่ไม่เหมาะกับ
+// "ระยะเวลาของ Stage ตัวมันเอง" ที่วันเริ่มควรนับเป็นวันทำงานวันแรกด้วย) ฟังก์ชันนี้แยกออกมาใช้เฉพาะกับ Stage แบบวันคงที่
+// (stage.days!=null) เท่านั้น — ไม่แตะ addBusinessDays เดิมที่ยังใช้กับ Stage แบบ ratio ปกติและ AI Suggest (ตัวประเมิน
+// วันส่งงานโดยรวมจาก Procurement Plan Reference เป็นคนละแนวคิดกัน ไม่ใช่ Stage เดียวเจาะจง) กันผลกระทบลามไปที่อื่นที่
+// ไม่ได้ขอให้แก้ — ถ้า date เองตกวันหยุด (ไม่ควรเกิดขึ้นจริงเพราะ Stage ก่อนหน้าควรจบวันทำการเสมอ) จะเลื่อนไปนับวันทำการ
+// ถัดไปเป็นวันที่ 1 แทน กันพลาด
+function addBusinessDaysInclusive(date, days){
+  let d = new Date(date), added=0;
+  const wd0 = d.getDay();
+  if(wd0!==0 && wd0!==6) added = 1;
+  const want = Math.max(days,1);
+  while(added < want){
+    d.setDate(d.getDate()+1);
+    const wd = d.getDay();
+    if(wd!==0 && wd!==6) added++;
+  }
+  return d;
+}
 /* ================= โครงการที่ commit ไปแล้วนอกแอป (มีแค่ Start/Finish Date ใน Team Work Plan) ================= */
 // โครงการที่เคย commit มาก่อนหน้านี้ (ผ่านกระบวนการเดิม ไม่ได้กด "PCM ยืนยัน Commit" ในแอปนี้) จะมีแค่
 // Start Date/Finish Date รวมของทั้งโครงการใน Team Work Plan แต่ไม่มีข้อมูลระดับ Step (S1-S8) ใน BOQ Step Tracking
@@ -1393,7 +1430,10 @@ function synthesizeStepsForRange(startDate, finishDate, template, stepSplitRatio
     const s = i + offset; // เลข Step จริงที่ใช้แสดง/เก็บ (ปรับตาม offset แล้ว)
     const dur = durations[i-1];
     const planStart = new Date(cursor);
-    const planEnd = addBusinessDays(planStart, dur);
+    // build 2026-08-19.3: Stage แบบวันคงที่ (tmpl[i-1].days!=null เช่น "ตรวจ+ส่ง") นับวันเริ่มเป็นวันทำการวันที่ 1 เลย
+    // (addBusinessDaysInclusive) ส่วน Stage แบบ ratio ปกติยังคงใช้ addBusinessDays เดิม (dur ของ ratio stage เป็น
+    // "วันปฏิทิน" ไม่ใช่ "วันทำการ" อยู่แล้ว ไม่ใช่ความหมายเดียวกัน ไม่แตะ)
+    const planEnd = tmpl[i-1] && tmpl[i-1].days!=null ? addBusinessDaysInclusive(planStart, dur) : addBusinessDays(planStart, dur);
     const startDay = Math.round((planStart-T0)/864e5);
     const durDays = Math.max(Math.round((planEnd-planStart)/864e5),1);
     steps.push({s, start:startDay, dur:durDays, who:'ประมาณการ', name: tmpl[i-1]?.name || STEP_NAMES[s] || `S${s}`});
@@ -1799,7 +1839,9 @@ async function commitAndGenerateSteps(task, sug, selectedSubs, editedStart, edit
       const stage = template[i-1];
       const dur = durations[i-1];
       const planStart = new Date(cursor);
-      const planEnd = addBusinessDays(planStart, dur);
+      // build 2026-08-19.3: เหมือน synthesizeStepsForRange — Stage แบบวันคงที่ (days!=null) นับวันเริ่มเป็นวันทำการ
+      // วันที่ 1 เลย (ผู้ใช้ยืนยันเคสจริง PABKK: เริ่มพฤหัส 2 วันทำการ ต้องจบศุกร์ ไม่ใช่ข้ามไปจบจันทร์)
+      const planEnd = stage.days!=null ? addBusinessDaysInclusive(planStart, dur) : addBusinessDays(planStart, dur);
       await graphFetch(`/sites/${SITE_ID}/lists/${STEP_LIST}/items`, {
         method:'POST',
         body: JSON.stringify({ fields:{
@@ -1938,6 +1980,12 @@ async function syncStepToGraph(row, stepNum, pj, pk){
     if(st.role) fields.RoleInStep = st.role;
     if(st.hrs!=null) fields.ActualHours = st.hrs;
     if(st.notes) fields.StepNotes = st.notes;
+    // build 2026-08-19: sync แผน (PlanStart/PlanEnd) กลับ SharePoint เสมอ ไม่ใช่แค่ตอนสร้างใหม่ครั้งแรก — เพราะตอนนี้
+    // ผู้ใช้แก้แผนเองได้จาก modal "จัดการ Step" (applyCommon จะอัปเดต st.start/st.dur ให้ตรงกับ input ที่แก้แล้ว) ถ้า
+    // ไม่ส่งค่านี้กลับทุกครั้ง แผนที่แก้จะอยู่แค่ใน DATA ของเบราว์เซอร์นี้ หายไปทันทีที่ refresh/โหลดจาก SharePoint ใหม่
+    // — ถ้าไม่ได้แก้อะไรเลย ค่าที่ส่งกลับจะเท่าของเดิมที่อ่านมา ไม่กระทบอะไร (PATCH ซ้ำค่าเดิม ปลอดภัย)
+    fields.PlanStart = toISO(addD(T0, st.start));
+    fields.PlanEnd = toISO(addD(T0, st.start + st.dur));
   }
   if(Object.keys(fields).length===0) return;
   try{
@@ -2068,15 +2116,16 @@ function getFixedStageDaysMap(){
   Object.values(STEP_TEMPLATES).forEach(tmpl=> tmpl.forEach(s=>{ if(s.days!=null) map[s.name] = Math.max(Number(s.days)||1,1); }));
   return map;
 }
-// expectedCalendarSpan: Stage แบบวันทำการตายตัว (เช่น "ตรวจ+ส่ง" 2 วันทำการ) ถ้าบังเอิญเริ่มวันที่ทำให้ addBusinessDays
-// ต้องข้ามเสาร์-อาทิตย์ ช่วงปฏิทินจริง (PlanEnd-PlanStart) จะยาวกว่า 2 เสมอ (เช่น เริ่มพฤหัส จะยาว 4 วันปฏิทิน ไม่ใช่ 2)
-// ฟังก์ชันนี้คำนวณว่า "ช่วงปฏิทินที่ถูกต้องจริงๆ" ควรเป็นเท่าไหร่ ให้เทียบกับ st.dur ตรงหน่วยเดียวกัน (ปฏิทินทั้งคู่)
-// แทนที่จะเทียบ wantDays (วันทำการ) กับ st.dur (วันปฏิทิน) ตรงๆ ซึ่งจะเข้าใจผิดว่า Stage ที่ถูกต้องอยู่แล้วแต่บังเอิญ
-// คาบเกี่ยวเสาร์-อาทิตย์ เป็น Stage ที่ต้องแก้ (ค้นพบจากการรายงานของผู้ใช้ว่า Stage "ตรวจ+ส่ง" ที่ตั้งใจให้เป็น 2 วัน
-// ยังโชว์ "4 วัน" อยู่ — ตรวจสอบแล้วว่าวันที่จริงถูกต้องแล้ว (ข้ามเสาร์-อาทิตย์ถูกต้อง) ปัญหาอยู่ที่ label เข้าใจผิดเท่านั้น)
+// expectedCalendarSpan: Stage แบบวันทำการตายตัว (เช่น "ตรวจ+ส่ง" 2 วันทำการ) ถ้าบังเอิญเริ่มวันที่ทำให้ต้องข้าม
+// เสาร์-อาทิตย์ ช่วงปฏิทินจริง (PlanEnd-PlanStart) อาจยาวกว่า wantDays ได้ ฟังก์ชันนี้คำนวณว่า "ช่วงปฏิทินที่ถูกต้อง
+// จริงๆ" ควรเป็นเท่าไหร่ ให้เทียบกับ st.dur ตรงหน่วยเดียวกัน (ปฏิทินทั้งคู่) แทนที่จะเทียบ wantDays (วันทำการ) กับ st.dur
+// (วันปฏิทิน) ตรงๆ ซึ่งจะเข้าใจผิดว่า Stage ที่ถูกต้องอยู่แล้วแต่บังเอิญคาบเกี่ยวเสาร์-อาทิตย์ เป็น Stage ที่ต้องแก้
+// (ค้นพบจากการรายงานของผู้ใช้ว่า Stage "ตรวจ+ส่ง" ที่ตั้งใจให้เป็น 2 วัน ยังโชว์ "4 วัน" อยู่)
+// build 2026-08-19.3: ผู้ใช้ยืนยันเพิ่มเติม (เคสจริง PABKK) ว่านับวันเริ่มเป็นวันทำการวันที่ 1 เลย (พฤหัส+ศุกร์ = ครบ
+// 2 วัน จบศุกร์ ไม่ใช่ข้ามไปจบจันทร์) — เปลี่ยนมาใช้ addBusinessDaysInclusive แทน addBusinessDays ให้ตรงความหมายจริง
 function expectedCalendarSpan(startDay, wantDays){
   const planStart = addD(T0, startDay);
-  const planEnd = addBusinessDays(planStart, wantDays);
+  const planEnd = addBusinessDaysInclusive(planStart, wantDays);
   return Math.max(Math.round((planEnd-planStart)/864e5),1);
 }
 function closeDiagModal(){ document.getElementById('diagMbg').classList.remove('on'); }
@@ -2104,7 +2153,7 @@ async function fixExistingReviewStepDurations(){
   for(const t of targets){
     try{
       const planStart = addD(T0, t.start);
-      const planEnd = addBusinessDays(planStart, t.wantDays);
+      const planEnd = addBusinessDaysInclusive(planStart, t.wantDays);
       await graphFetch(`/sites/${SITE_ID}/lists/${STEP_LIST}/items/${t.itemId}`, {method:'PATCH', body:JSON.stringify({fields:{PlanEnd: toISO(planEnd)}})});
       ok++;
       console.log(`[fixExistingReviewStepDurations] ${t.label}: ${t.oldDays} → ${t.wantDays} วัน`);
@@ -3692,7 +3741,14 @@ function openStep(el){
   // แค่ป้ายกำกับจำนวนวันเปลี่ยนไปแสดงเป็น "วันทำการ" แทน "วันปฏิทิน" ให้ตรงกับที่ตั้งใจไว้จริง)
   const fixedDays = getFixedStageDaysMap()[st.name];
   const daysLabel = fixedDays!=null ? fixedDays : st.dur;
-  document.getElementById('mPlan').textContent=`${fmt(addD(T0,st.start))} – ${fmt(addD(T0,st.start+st.dur))} (${daysLabel} วัน)`;
+  // build 2026-08-19: ผู้ใช้แจ้งว่าแผนที่ระบบสร้างให้ตอน Commit (คำนวณจาก Step Template ต่อจากวันที่เลือกไว้) ไม่ตรง
+  // กับที่ตั้งใจ Commit จริง (เช่น Commit ที่ 18 ส.ค. แต่ Stage นี้ดันโชว์แผน 21–25 ส.ค.) แล้วไม่มีทางแก้ไขแผนเองได้เลย
+  // เดิม "แผน" เป็นแค่ label ข้อความอ่านอย่างเดียว (mPlan) — เปลี่ยนเป็น input วันที่แก้ไขได้ 2 ช่อง (mPlanStart/mPlanEnd)
+  // เพื่อให้ PCM ปรับแผนเองได้ตรงๆ ถ้าแผนเดิมคลาดเคลื่อนจากที่ Commit จริง (applyCommon จะอ่านค่านี้กลับไปคำนวณ
+  // st.start/st.dur ใหม่ แล้ว syncStepToGraph จะ PATCH PlanStart/PlanEnd กลับ SharePoint ให้ตรงกันเสมอ)
+  document.getElementById('mPlanStart').value = toISO(addD(T0,st.start));
+  document.getElementById('mPlanEnd').value = toISO(addD(T0,st.start+st.dur));
+  document.getElementById('mPlanDur').textContent = `${daysLabel} วัน · แก้วันที่ได้ถ้าแผนเดิมไม่ตรงกับที่ Commit จริง`;
   const as=row.astart[s], c=row.closed[s];
   document.getElementById('mStart').value = as!==undefined? toISO(addD(T0,as)) : toISO(addD(T0,st.start));
   document.getElementById('mDate').value = c? toISO(addD(T0,c.end)) : '';
@@ -3705,6 +3761,18 @@ function openStep(el){
   document.getElementById('mbg').classList.add('on');
 }
 function closeModal(){document.getElementById('mbg').classList.remove('on')}
+// updateMPlanDurLabel: อัปเดตป้ายจำนวนวันแบบสดๆ ตอนแก้ไขวันที่แผน (mPlanStart/mPlanEnd) ก่อนกดบันทึก — เตือนถ้าวันจบ
+// มาก่อนวันเริ่ม (ค่าที่ผิดแบบนี้จะไม่ถูกนำไปใช้ตอน applyCommon เพื่อกันแผนพัง)
+function updateMPlanDurLabel(){
+  const sv = document.getElementById('mPlanStart').value;
+  const ev = document.getElementById('mPlanEnd').value;
+  const lbl = document.getElementById('mPlanDur');
+  if(!lbl) return;
+  if(sv && ev){
+    const days = Math.round((new Date(ev)-new Date(sv))/864e5);
+    lbl.textContent = days>=0 ? `${days} วัน · แก้วันที่ได้ถ้าแผนเดิมไม่ตรงกับที่ Commit จริง` : '⚠️ วันจบต้องไม่มาก่อนวันเริ่ม';
+  }
+}
 
 /* ============ Step Template editor (⚙️ Step Template) ============ */
 // _tmplEditStages: สำเนาที่กำลังแก้ไขอยู่ (ยังไม่ commit เข้า STEP_TEMPLATES จริงจนกว่าจะกด "บันทึก")
@@ -3823,6 +3891,17 @@ function saveTemplateEditor(){
 document.getElementById('tmplMbg').addEventListener('click', e=>{ if(e.target.id==='tmplMbg') closeTemplateEditor(); });
 function applyCommon(row,st){
   st.who=document.getElementById('mWho').value;
+  // build 2026-08-19: ผู้ใช้ขอแก้ "แผน" ที่ระบบสร้างให้เองตอน Commit ได้เอง (เคสจริง PABKK: Commit ที่ 18 ส.ค. แต่
+  // Stage นี้ดันมีแผน 21–25 ส.ค. ไม่ตรงกับที่ตั้งใจ) — อ่านค่าจาก input วันที่แผน (mPlanStart/mPlanEnd ที่เพิ่งเปลี่ยน
+  // จาก label อ่านอย่างเดียวเป็นแก้ไขได้) กลับมาคำนวณ st.start/st.dur ใหม่ ถ้ากรอกครบและวันจบไม่มาก่อนวันเริ่ม (กันแผน
+  // พัง/ค่าติดลบ) — ถ้าไม่ได้แก้อะไรเลย ค่าที่อ่านกลับมาจะเท่าของเดิมพอดี ไม่กระทบอะไร
+  const psv = document.getElementById('mPlanStart').value;
+  const pev = document.getElementById('mPlanEnd').value;
+  if(psv && pev){
+    const newStart = Math.round((new Date(psv)-T0)/864e5);
+    const newEnd = Math.round((new Date(pev)-T0)/864e5);
+    if(newEnd>=newStart){ st.start = newStart; st.dur = newEnd-newStart; }
+  }
   const sv=document.getElementById('mStart').value;
   if(sv) row.astart[cur.s]=Math.round((new Date(sv)-T0)/864e5);
   // บทบาท/ชั่วโมง/หมายเหตุ — เก็บเป็น "ประวัติ" สะสม (RoleInStep/ActualHours/StepNotes ใน BOQ Step Tracking)
