@@ -238,7 +238,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-19.4</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-19.5</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -261,6 +261,7 @@ tr.pick:hover td{background:var(--bg)}
     <button class="btn btn2" onclick="expandAll(false)">▸ หุบทั้งหมด</button>
     <button class="btn btn2" style="margin-left:auto" onclick="openBackfillAll()">🗄️ Backfill ข้อมูลจริงทั้งหมด</button>
     <button class="btn btn2" onclick="fixExistingReviewStepDurations()">🛠️ ปรับ Step วันคงที่ให้ตรง Template</button>
+    <button class="btn btn2" onclick="fixStageChainGaps()">🔗 ปิดช่องว่างระหว่าง Stage ให้ชนกัน</button>
     <button class="btn btn2" onclick="openTemplateEditor()">⚙️ Step Template</button>
   </div>
 
@@ -631,7 +632,7 @@ tr.pick:hover td{background:var(--bg)}
 // BUILD_VERSION: เลขเวอร์ชันที่ต้องแก้คู่กับข้อความ "build ..." ใน <div class="brand"> ของ HTML ทุกครั้งที่ส่งไฟล์ใหม่
 // ให้ทีม — ใช้เช็คได้ง่ายๆ ว่าไฟล์ที่ deploy จริง (เช่น GitHub Pages) เป็นเวอร์ชันล่าสุดที่ส่งไปหรือยัง (ดูที่มุมซ้ายบน
 // ของหน้าเว็บได้เลย ไม่ต้อง login/กดปุ่มตรวจสอบอะไรก่อน) log ออก console ด้วยเผื่อสะดวกกว่าตอน debug
-const BUILD_VERSION = '2026-08-19.4';
+const BUILD_VERSION = '2026-08-19.5';
 console.log('[BOQ Timeline] BUILD_VERSION =', BUILD_VERSION);
 // หมายเหตุ: ค่าเริ่มต้นนี้ (10 ส.ค.–2 พ.ย. 2569) ใช้กับ MOCK DATA เท่านั้น พอเข้าโหมด LIVE ค่าพวกนี้จะถูก
 // คำนวณใหม่จากวันที่จริงของงานใน SharePoint โดย recalcTimelineWindow() (ดูใน bootLive()) จึงต้องเป็น let ไม่ใช่ const
@@ -2182,6 +2183,53 @@ async function fixExistingReviewStepDurations(){
     }catch(e){ fail++; console.error('[fixExistingReviewStepDurations] failed', t.label, e); }
   }
   toastMsg(`✓ ปรับเสร็จแล้ว ${ok}/${targets.length}${fail?` (ล้มเหลว ${fail} — ดู Console)`:''} · กำลังโหลดหน้าใหม่...`);
+  setTimeout(()=>{ location.reload(); }, 2000);
+}
+/* ================= 🔗 ปิดช่องว่างระหว่าง Stage ให้ชนกัน (build 2026-08-19.5) =================
+   ผู้ใช้รายงาน: "แผน วันชนวัน แต่กราฟ timeline ไม่ชนติดกัน ตอนนี้ต้องวันจบซ้อนวันเริ่มงานถัดไป กราฟถึงติดกัน" —
+   ตรวจสอบแล้วพบว่า commitAndGenerateSteps ปัจจุบัน (build .3 เป็นต้นมา) chain วันที่ถูกต้องอยู่แล้วเสมอสำหรับ Step
+   ที่เพิ่ง Commit ใหม่ (cursor = planEnd ของ Stage ก่อนหน้าตรงๆ ไม่มีช่องว่าง) แต่โครงการที่ Commit ไปแล้วก่อนหน้านี้
+   (เช่น ก่อนจะมีการแก้ไข Plan เองได้ที่ build .1 หรือก่อน addBusinessDaysInclusive ที่ build .3) อาจมี Step ที่
+   PlanStart ของ Stage ถัดไป "ไม่ตรง" กับ PlanEnd ของ Stage ก่อนหน้าเป๊ะ (เช่น ห่างไป 1 วัน) ทำให้แท่ง Gantt ของ 2
+   Stage ที่ควรจะต่อกันมีช่องว่างเล็กๆ คั่นอยู่ ฟังก์ชันนี้ไล่ตรวจทุกแถวที่มี Step จริงแล้ว (row.itemIds) เรียง Stage
+   ตามลำดับ (s) แล้วเลื่อน PlanStart/PlanEnd ของ Stage ถัดไปให้เริ่มพอดีกับวันจบของ Stage ก่อนหน้าเสมอ (คงระยะเวลา
+   ของ Stage ถัดไปไว้เท่าเดิม แค่เลื่อนทั้งช่วงให้ชนกันพอดี) ไล่แก้ต่อเนื่องเป็นทอดๆ ทีละแถว (แก้ Stage ก่อนหน้าเสร็จ
+   แล้วค่อยเทียบ Stage ถัดไปกับค่าที่แก้ใหม่แล้ว กันกรณีช่องว่างสะสมหลายจุดในแถวเดียวกัน) ไม่แตะ Stage แรกของแถว (S
+   ตัวแรกไม่มี Stage ก่อนหน้าให้เทียบ)
+*/
+async function fixStageChainGaps(){
+  if(!LIVE_MODE){ toastMsg('⚠️ ต้อง login SharePoint ก่อนถึงจะปรับได้'); return; }
+  const targets = [];
+  DATA.forEach(pj=>pj.pkgs.forEach(pk=>pk.rows.forEach(row=>{
+    if(!row.itemIds) return; // เฉพาะแถวที่มี Step จริงแล้วเท่านั้น (แถวประมาณการคำนวณสดจาก template อยู่แล้วไม่มีช่องว่างค้าง)
+    const steps = [...row.steps].sort((a,b)=>a.s-b.s);
+    for(let i=1; i<steps.length; i++){
+      const prev = steps[i-1], cur = steps[i];
+      const expectedStart = prev.start + prev.dur;
+      if(cur.start === expectedStart) continue; // ชนกันพอดีอยู่แล้ว ไม่ต้องแก้
+      const itemId = row.itemIds[cur.s];
+      if(!itemId){ console.warn(`[fixStageChainGaps] ข้าม S${cur.s} ของ ${pj.name}·${pk.name}·${row.team||row.subteam||'-'} — ไม่พบ itemId ให้ PATCH`); continue; }
+      targets.push({
+        label: `${pj.name} · ${pk.name} · ${row.team||row.subteam||'-'} · S${cur.s} ${cur.name||''}`,
+        itemId, newStart: expectedStart, dur: cur.dur, oldStart: cur.start,
+      });
+      // อัปเดตในหน่วยความจำทันที เผื่อ Stage ถัดไปในแถวเดียวกัน (i+1) ต้องเทียบกับค่าที่แก้ใหม่แล้ว (กันช่องว่างสะสม)
+      cur.start = expectedStart;
+    }
+  })));
+  if(!targets.length){ toastMsg('✓ ไม่มีช่องว่างระหว่าง Stage ให้ปิด — ทุกแถวชนกันพอดีอยู่แล้ว'); return; }
+  toastMsg(`⏳ กำลังปิดช่องว่าง ${targets.length} จุด...`);
+  let ok=0, fail=0;
+  for(const t of targets){
+    try{
+      const newPlanStart = addD(T0, t.newStart);
+      const newPlanEnd = addD(T0, t.newStart + t.dur);
+      await graphFetch(`/sites/${SITE_ID}/lists/${STEP_LIST}/items/${t.itemId}`, {method:'PATCH', body:JSON.stringify({fields:{PlanStart: toISO(newPlanStart), PlanEnd: toISO(newPlanEnd)}})});
+      ok++;
+      console.log(`[fixStageChainGaps] ${t.label}: start ${t.oldStart} → ${t.newStart}`);
+    }catch(e){ fail++; console.error('[fixStageChainGaps] failed', t.label, e); }
+  }
+  toastMsg(`✓ ปิดช่องว่างเสร็จแล้ว ${ok}/${targets.length}${fail?` (ล้มเหลว ${fail} — ดู Console)`:''} · กำลังโหลดหน้าใหม่...`);
   setTimeout(()=>{ location.reload(); }, 2000);
 }
 // diagnoseStepAssigneeColumn: เช็คชนิดคอลัมน์จริงใน SharePoint ผ่าน Graph API (/lists/{id}/columns) แทนการเดา —
