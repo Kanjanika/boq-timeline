@@ -256,7 +256,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-19.7</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-19.8</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -3688,7 +3688,8 @@ function renderRows(){
           const edge = `${sidx===0?'seg-first':''} ${sidx===row.steps.length-1?'seg-last':''}`;
           const ref = `data-r="${pi},${ki},${ri},${st.s}"`;
           const tP = `S${st.s} ${st.name || STEP_NAMES[st.s] || ''} · ${st.who} · แผน ${fmt(addD(T0,st.start))} – ${fmt(addD(T0,st.start+st.dur))} · คลิกเพื่อ Assign/แก้ไข`;
-          plan += `<div class="seg plan ${stepClass(st.s)} ${dim} ${hi} ${edge}" style="left:${pct(st.start)};width:${pct(st.dur)}" title="${tP}" ${ref} onclick="openStep(this)">S${st.s}·${st.who}</div>`;
+          const planW = (sidx===row.steps.length-1) ? pct(st.dur) : `calc(${pct(st.dur)} + 1px)`;
+          plan += `<div class="seg plan ${stepClass(st.s)} ${dim} ${hi} ${edge}" style="left:${pct(st.start)};width:${planW}" title="${tP}" ${ref} onclick="openStep(this)">S${st.s}·${st.who}</div>`;
 
           const c=row.closed[st.s], as=row.astart[st.s];
           if(c){
@@ -3705,9 +3706,14 @@ function renderRows(){
         });
         // แปะ seg-first/seg-last เข้าไปในแท่ง "จริง" ตัวแรก/ตัวสุดท้ายที่ถูกสร้างขึ้นจริง (ตำแหน่งใน actParts ไม่ใช่ sidx)
         const act = actParts.map((html,idx)=>{
-          const edge = `${idx===0?'seg-first':''} ${idx===actParts.length-1?'seg-last':''}`.trim();
-          if(!edge) return html;
-          return html.replace('class="seg act', `class="seg act ${edge}`);
+          const isLast = idx===actParts.length-1;
+          const edge = `${idx===0?'seg-first':''} ${isLast?'seg-last':''}`.trim();
+          let result = html;
+          if(edge) result = result.replace('class="seg act', `class="seg act ${edge}`);
+          // build 2026-08-19.8: ต่อเนื่องจาก .7 — CSS % width คำนวณแยกกันทำให้ browser ปัดเศษต่างทิศ เกิด gap 1px
+          // แก้โดยยืด right-edge ของทุกแท่งที่ไม่ใช่ตัวสุดท้ายออก 1px ด้วย calc() ทั้ง plan และ act lane
+          if(!isLast) result = result.replace(/;width:([^"]+)"/, ';width:calc($1 + 1px)"');
+          return result;
         }).join('');
 
         // build 2026-08-19.4: badge เตือนความล่าช้า/เสี่ยงล่าช้าติดตรงแถวนี้เลย พร้อม tooltip บอกเหตุผลตรงๆ (เช่น
