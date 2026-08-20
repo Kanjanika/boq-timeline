@@ -60,9 +60,10 @@ body{font-family:'Segoe UI','Sarabun','Tahoma',sans-serif;background:var(--bg);c
    (overflow-x:auto) แทนที่จะซ่อนไว้เหมือนก่อนหน้านี้ เพื่อให้ผู้ใช้ลากเลื่อนซ้าย-ขวาได้จากด้านบนโดยไม่ต้องเลื่อนจอลง
    ไปหา scrollbar ที่อยู่ท้ายตารางแถวข้อมูล (#tlScroll) — ทั้งสองยังคง sync scrollLeft กันด้วย JS เหมือนเดิม (setupHeaderScrollSync) */
 .tl-headerbar{display:flex;position:sticky;top:0;z-index:30;box-shadow:0 1px 0 rgba(0,0,0,.06);overflow:hidden;border-top-left-radius:11px;border-top-right-radius:11px}
-.tl-labels-head{flex:0 0 476px;width:476px;background:var(--primary);color:#fff;font-size:12.5px;font-weight:600;box-sizing:border-box;display:flex}
+.tl-labels-head{flex:0 0 596px;width:596px;background:var(--primary);color:#fff;font-size:12.5px;font-weight:600;box-sizing:border-box;display:flex}
 .tl-labels-head .main{flex:0 0 286px;width:286px;padding:9px 12px;display:flex;align-items:center}
 .tl-labels-head .svc{flex:0 0 100px;width:100px;padding:9px 6px;display:flex;align-items:center;justify-content:center;text-align:center;border-left:1px solid rgba(255,255,255,.25);font-size:11.5px}
+.tl-labels-head .cmt{flex:0 0 120px;width:120px;padding:9px 4px;display:flex;align-items:center;justify-content:center;text-align:center;border-left:1px solid rgba(255,255,255,.25);font-size:11.5px}
 .tl-labels-head .due{flex:0 0 90px;width:90px;padding:9px 6px;display:flex;align-items:center;justify-content:center;text-align:center;border-left:1px solid rgba(255,255,255,.25);font-size:11.5px}
 .tl-head-scroll{flex:1 1 auto;min-width:0;overflow-x:auto;overflow-y:hidden}
 .tl-head{background:var(--primary);color:#fff}
@@ -73,12 +74,12 @@ body{font-family:'Segoe UI','Sarabun','Tahoma',sans-serif;background:var(--bg);c
 .tl-head .weeks b{display:block;font-size:10.5px}
 
 .tl-flex{display:flex;align-items:flex-start}
-.tl-labels{flex:0 0 476px;width:476px;border-right:1px solid var(--border);background:#fff;overflow:hidden}
+.tl-labels{flex:0 0 596px;width:596px;border-right:1px solid var(--border);background:#fff;overflow:hidden}
 .tl-scroll{flex:1 1 auto;min-width:0;overflow-x:auto}
 .tl{min-width:840px}
 
 /* label pane rows (ซ้าย นิ่งไม่เลื่อน) */
-.lab-row{display:grid;grid-template-columns:250px 36px 100px 90px;border-bottom:1px solid #f1f5f9}
+.lab-row{display:grid;grid-template-columns:250px 36px 100px 120px 90px;border-bottom:1px solid #f1f5f9}
 .lab-row.proj{background:var(--primary-lt)}
 .lab-row.pkg{background:#fafafa}
 .lab-row .lab{padding:8px 12px;font-size:12.5px;color:var(--text)}
@@ -98,6 +99,10 @@ body{font-family:'Segoe UI','Sarabun','Tahoma',sans-serif;background:var(--bg);c
    โครงการจะเห็นแค่ค่าแรกที่เจอ ทั้งที่บางโครงการมีมากกว่า 1 Service (เช่น S26 มีทั้ง Blank BOQ และ Pretender) */
 .lab-row .svc,.lab-row .due{padding:8px 6px;font-size:10px;color:var(--text2);display:flex;align-items:center;justify-content:center;text-align:center;line-height:1.25;border-left:1px solid #f1f5f9;word-break:break-word}
 .lab-row.leaf .svc{font-weight:700;color:var(--primary)}
+/* build 2026-08-20.1: Commit Start–End column */
+.lab-row .cmt{padding:6px 4px;font-size:9.5px;color:var(--text2);display:flex;align-items:center;justify-content:center;text-align:center;line-height:1.35;border-left:1px solid #f1f5f9;flex-direction:column;gap:1px}
+.edit-date-btn{background:none;border:none;cursor:pointer;color:var(--text3);font-size:10px;padding:1px 4px;border-radius:3px;line-height:1;margin-top:2px}
+.edit-date-btn:hover{background:#e2e8f0;color:var(--primary)}
 
 /* track pane rows (ขวา เลื่อนซ้าย-ขวาได้ผ่าน .tl-scroll) — ความสูงถูกซิงค์ให้เท่ากับแถวคู่กันฝั่ง label เสมอ */
 .g-row{border-bottom:1px solid #f1f5f9;box-sizing:border-box}
@@ -259,7 +264,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-19.8</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-20.1</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -304,6 +309,7 @@ tr.pick:hover td{background:var(--bg)}
       <div class="tl-labels-head" id="tlLabelsHead">
         <div class="main">โครงการ · Package · ทีม/ระบบ</div>
         <div class="svc">Service</div>
+        <div class="cmt">Commit<br><small style="font-weight:400">Start–End</small></div>
         <div class="due">Due Date</div>
       </div>
       <div class="tl-head-scroll" id="tlHeadScroll">
@@ -610,6 +616,26 @@ tr.pick:hover td{background:var(--bg)}
   </div>
 </div>
 
+<!-- ============ MODAL · แก้ไขวันที่ Commit / Due Date (build 2026-08-20.1) ============ -->
+<div class="mbg" id="dateEditMbg" style="display:none">
+  <div class="modal" style="max-width:420px">
+    <h3>✏️ แก้ไขวันที่</h3>
+    <div class="sub" id="dateEditInfo" style="margin-bottom:14px"></div>
+    <div class="fields">
+      <div class="field"><label>Commit Start</label><input type="date" id="deCommitStart" style="width:100%"></div>
+      <div class="field"><label>Commit End</label><input type="date" id="deCommitEnd" style="width:100%"></div>
+      <div class="field"><label>Due Date <small style="font-weight:400;color:var(--text3)">(Post ขอส่ง)</small></label><input type="date" id="deDueDate" style="width:100%"></div>
+      <div class="field"><label>เหตุผล <small style="font-weight:400;color:var(--text3)">(บันทึกใน BOQ Date History)</small></label>
+        <textarea id="deReason" rows="2" style="width:100%;font-family:inherit;font-size:13px;border:1px solid var(--border);border-radius:6px;padding:6px 8px;resize:vertical" placeholder="เช่น ลูกค้าเพิ่ม scope · แบบยังไม่ครบ · เร่งส่ง…"></textarea>
+      </div>
+    </div>
+    <div class="m-actions" style="justify-content:flex-end">
+      <button class="btn btn2" onclick="closeDateEditModal()">ยกเลิก</button>
+      <button class="btn" id="deSaveBtn" onclick="confirmDateEdit()">💾 บันทึก</button>
+    </div>
+  </div>
+</div>
+
 <!-- ============ MODAL · ตรวจสอบ Column + ข้อมูลตัวอย่างใน Procurement Plan Reference ============ -->
 <div class="mbg" id="procRefDiagMbg">
   <div class="modal" style="max-width:720px">
@@ -869,6 +895,17 @@ const WORKPLAN_LIST = '1a597455-0cf9-484b-a414-bd7b4f6df69e'; // BOQ Team Work P
 const STEP_LIST      = 'acd6ed66-f49c-4002-bb64-474bc904c91e'; // BOQ Step Tracking
 const PROCREF_LIST   = '79daccb5-6f30-4c8c-99a4-6f95ae59142a'; // Procurement Plan Reference
 const GRAPH = 'https://graph.microsoft.com/v1.0';
+// build 2026-08-20.1: BOQ Date History list — resolved dynamically by name so no GUID needs to be hardcoded
+let HISTORY_LIST = null;
+async function resolveHistoryListId(){
+  if(HISTORY_LIST) return HISTORY_LIST;
+  try{
+    const data = await graphFetch(`/sites/${SITE_ID}/lists?$filter=displayName eq 'BOQ Date History'&$select=id,displayName`);
+    HISTORY_LIST = data?.value?.[0]?.id || null;
+    if(!HISTORY_LIST) console.warn('[BOQ Date History] ไม่พบ list ใน SharePoint — ประวัติการแก้ไขวันที่จะไม่ถูกบันทึก');
+  }catch(e){ console.warn('[BOQ Date History] resolveHistoryListId failed:', e); }
+  return HISTORY_LIST;
+}
 
 // เผื่อไว้กรณี Package (BOQ Step Tracking) กับ WorkPackage (Procurement Plan Reference) ยังตั้งชื่อไม่ตรงกัน
 // ถ้าทำตาม SharePoint_UI_Fix_Guide (แก้ WorkPackage choices ให้ตรงกับ Package) แล้ว mapping นี้จะเป็นแค่ no-op safety net
@@ -1023,6 +1060,8 @@ let DATA=[
 DATA.forEach(pj=>pj.pkgs.forEach(pk=>pk.rows.forEach(row=>{
   if(row.service===undefined) row.service = 'Blank BOQ + Pretender';
   if(row.due===undefined) row.due = '2 พ.ย. 2569';
+  if(row.cmtStart===undefined) row.cmtStart = '12 ส.ค. 2569';
+  if(row.cmtEnd===undefined) row.cmtEnd = '2 พ.ย. 2569';
 })));
 
 /* ================= AUTH (MSAL) ================= */
@@ -3226,6 +3265,7 @@ async function bootLive(){
     // svcTypeByKey (ตาม "โครงการ+Package" เป็นตัวสำรอง ถ้าคลุมเครือ/มีมากกว่า 1 ค่าที่ไม่ตรงกัน ให้ปล่อยว่างแล้ว fallback
     // ไปเดาระดับโครงการ (serviceTypeByProjId)/default ตามลำดับเดิม แทนที่จะเดาผิดแบบเงียบๆ)
     const svcTypeById = {}, svcTypeByKey = {}, svcTypeKeyAmbiguous = {};
+    const cmtStartById = {}, cmtEndById = {}; // build 2026-08-20.1: Commit Start/End ต่อ Work Plan item
     workplanItemsAll.forEach(it=>{
       const f = it.fields||{};
       const name = f.Title || f.Project_x0020_Name || f.Project || '';
@@ -3248,6 +3288,11 @@ async function bootLive(){
         if(key in svcTypeByKey && svcTypeByKey[key]!==svcRaw) svcTypeKeyAmbiguous[key] = true;
         else svcTypeByKey[key] = svcRaw;
       }
+      // build 2026-08-20.1: Commit Start/End (Start_x0020_Date / Finish_x0020_Date)
+      const cmtSRaw = f.Start_x0020_Date || f.StartDate || f.Start || null;
+      const cmtERaw = f.Finish_x0020_Date || f.FinishDate || f.Finish || null;
+      if(cmtSRaw) cmtStartById[String(it.id)] = cmtSRaw;
+      if(cmtERaw) cmtEndById[String(it.id)] = cmtERaw;
     });
     // กรองระดับ "งานเฉพาะเจาะจง" (แถวเดียว) อีกชั้น — ใช้ parentTaskId ตรงๆ ก่อน (แม่นสุด ไม่ต้องเดา/เทียบชื่อ) ถ้าไม่มี
     // (กรอก Step ตรงเข้า SharePoint เอง เช่น AIES หรือ commit ไปก่อน build ที่เริ่มบันทึก ParentTaskID) ค่อย fallback ไป
@@ -3312,6 +3357,13 @@ async function bootLive(){
           // build 2026-08-19.4: เก็บค่าดิบ (ISO date string) ไว้แยกจาก row.due (ที่ format เป็นข้อความไทยแล้วเทียบวันที่
           // ต่อไม่ได้) ให้ computeDelayStatus ใช้เช็คว่าเลย Due Date ที่ Post ขอไปแล้วหรือใกล้ถึงหรือยัง
           row.dueRaw = dueRawForRow || null;
+          // build 2026-08-20.1: Commit Start/End จาก Work Plan — ใช้แสดงในช่อง Commit Start–End และ edit modal
+          const cmtSForRow = (row.parentTaskId && cmtStartById[row.parentTaskId]) || null;
+          const cmtEForRow = (row.parentTaskId && cmtEndById[row.parentTaskId]) || null;
+          row.cmtStartRaw = cmtSForRow;
+          row.cmtEndRaw = cmtEForRow;
+          row.cmtStart = cmtSForRow && !isNaN(new Date(cmtSForRow)) ? fmtY(new Date(cmtSForRow)) : '';
+          row.cmtEnd = cmtEForRow && !isNaN(new Date(cmtEForRow)) ? fmtY(new Date(cmtEForRow)) : '';
         });
       });
     });
@@ -3656,6 +3708,90 @@ function sortedData(){
   return DATA; // 'order' = ลำดับเดิม
 }
 
+/* ============ DATE EDIT MODAL (build 2026-08-20.1) ============ */
+let DATE_EDIT_PI = null, DATE_EDIT_PKI = null, DATE_EDIT_RI = null;
+
+function openDateEditModal(pi, pki, ri){
+  DATE_EDIT_PI = pi; DATE_EDIT_PKI = pki; DATE_EDIT_RI = ri;
+  const pj = DATA[pi], pk = pj.pkgs[pki], row = pk.rows[ri];
+  document.getElementById('dateEditInfo').textContent = `${pj.name} · ${pk.name} · ${row.team}`;
+  const toVal = s => s && !isNaN(new Date(s)) ? toISO(new Date(s)) : '';
+  document.getElementById('deCommitStart').value = toVal(row.cmtStartRaw);
+  document.getElementById('deCommitEnd').value = toVal(row.cmtEndRaw);
+  document.getElementById('deDueDate').value = toVal(row.dueRaw);
+  document.getElementById('deReason').value = '';
+  document.getElementById('dateEditMbg').style.display = 'flex';
+}
+
+function closeDateEditModal(){
+  document.getElementById('dateEditMbg').style.display = 'none';
+  DATE_EDIT_PI = DATE_EDIT_PKI = DATE_EDIT_RI = null;
+}
+
+async function confirmDateEdit(){
+  if(DATE_EDIT_PI === null) return;
+  const pi = DATE_EDIT_PI, pki = DATE_EDIT_PKI, ri = DATE_EDIT_RI;
+  const pj = DATA[pi], pk = pj.pkgs[pki], row = pk.rows[ri];
+  const newCS = document.getElementById('deCommitStart').value;
+  const newCE = document.getElementById('deCommitEnd').value;
+  const newDue = document.getElementById('deDueDate').value;
+  const reason = document.getElementById('deReason').value.trim();
+  const btn = document.getElementById('deSaveBtn');
+  btn.disabled = true; btn.textContent = '⏳...';
+  try{
+    const toVal = s => s && !isNaN(new Date(s)) ? toISO(new Date(s)) : '';
+    const changes = [];
+    if(newCS && newCS !== toVal(row.cmtStartRaw)) changes.push({field:'CommitStart', old:row.cmtStartRaw, nv:newCS});
+    if(newCE && newCE !== toVal(row.cmtEndRaw)) changes.push({field:'CommitEnd', old:row.cmtEndRaw, nv:newCE});
+    if(newDue && newDue !== toVal(row.dueRaw)) changes.push({field:'DueDate', old:row.dueRaw, nv:newDue});
+    if(changes.length === 0){ closeDateEditModal(); toastMsg('ℹ️ ไม่มีการเปลี่ยนแปลง'); return; }
+    // PATCH BOQ Team Work Plan
+    const patchFields = {};
+    if(changes.find(c=>c.field==='CommitStart')) patchFields.Start_x0020_Date = newCS;
+    if(changes.find(c=>c.field==='CommitEnd')) patchFields.Finish_x0020_Date = newCE;
+    if(changes.find(c=>c.field==='DueDate')) patchFields.Due_x0020_Date = newDue;
+    await graphFetch(`/sites/${SITE_ID}/lists/${WORKPLAN_LIST}/items/${row.parentTaskId}`, {
+      method:'PATCH', body: JSON.stringify({fields: patchFields})
+    });
+    // POST ประวัติไป BOQ Date History
+    const histId = await resolveHistoryListId();
+    if(histId){
+      const now = new Date().toISOString();
+      for(const ch of changes){
+        const oldD = ch.old && !isNaN(new Date(ch.old)) ? new Date(ch.old) : null;
+        const newD = new Date(ch.nv);
+        const delta = oldD ? Math.round((newD - oldD) / 864e5) : null;
+        await graphFetch(`/sites/${SITE_ID}/lists/${histId}/items`, {
+          method:'POST',
+          body: JSON.stringify({fields:{
+            Title: pj.name,
+            WorkPlanItemId: parseInt(row.parentTaskId)||0,
+            ProjectName: pj.name,
+            PackageName: pk.name,
+            ServiceType: row.service||'',
+            FieldChanged: ch.field,
+            OldValue: ch.old ? (ch.old.includes('T') ? ch.old : ch.old+'T00:00:00Z') : null,
+            NewValue: ch.nv+'T00:00:00Z',
+            DeltaDays: delta,
+            ChangeReason: reason||'',
+            ChangedAt: now,
+          }})
+        });
+      }
+    }
+    // อัปเดต row ใน memory
+    if(changes.find(c=>c.field==='CommitStart')){ row.cmtStartRaw = newCS; row.cmtStart = fmtY(new Date(newCS)); }
+    if(changes.find(c=>c.field==='CommitEnd')){ row.cmtEndRaw = newCE; row.cmtEnd = fmtY(new Date(newCE)); }
+    if(changes.find(c=>c.field==='DueDate')){ row.dueRaw = newDue; row.due = fmtY(new Date(newDue)); }
+    closeDateEditModal();
+    renderRows();
+    toastMsg(`✓ บันทึกวันที่ ${changes.length} ฟิลด์ + History เรียบร้อย`);
+  }catch(e){
+    console.error('confirmDateEdit failed', e);
+    toastMsg('⚠️ บันทึกไม่สำเร็จ: ' + e.message);
+  } finally { btn.disabled = false; btn.textContent = '💾 บันทึก'; }
+}
+
 function renderRows(){
   const person = document.getElementById('personFilter').value;
   const projF = document.getElementById('projFilter').value;
@@ -3683,6 +3819,7 @@ function renderRows(){
       <div class="lab" onclick="toggle(${realPi})"><span class="caret ${pj.open?'':'closed'}">▾</span> ${pj.name} ${projDelayBadge}<small>${pj.meta}</small></div>
       <div></div>
       <div class="svc"></div>
+      <div class="cmt"></div>
       <div class="due"></div></div>`;
     trackHtml += `<div class="g-row proj">
       <div class="track"><div class="gridlines" style="grid-template-columns:repeat(${weekCount()},1fr)">${'<div></div>'.repeat(weekCount())}</div>
@@ -3698,6 +3835,7 @@ function renderRows(){
         <div class="lab" onclick="togglePkg(${realPi},${ki})"><span class="caret ${pk.open?'':'closed'}">▾</span> ${pk.name} ${pkgDelayBadge}<small>· ${pk.meta}</small>${pk.desc? `<small class="pkg-desc">📝 ${pk.desc}</small>`:''}</div>
         <div></div>
         <div class="svc" style="padding:4px"><button class="btn btn2" style="font-size:10.5px;padding:2px 6px;white-space:nowrap" onclick="event.stopPropagation(); openMarkPackageDone(${realPi},${ki})" title="ปิดงาน Package นี้ (เปลี่ยน Status เป็น Done ใน BOQ Team Work Plan แล้วเอาออกจาก Timeline)">✓ ปิดงาน</button></div>
+        <div class="cmt"></div>
         <div class="due"></div></div>`;
       trackHtml += `<div class="g-row pkg">
         <div class="track"><div class="gridlines" style="grid-template-columns:repeat(${weekCount()},1fr)">${'<div></div>'.repeat(weekCount())}</div>
@@ -3768,6 +3906,12 @@ function renderRows(){
           <div class="lab"><b>${row.team}</b> ${rowDelayBadge}<small>${people.join(' · ')}</small></div>
           <div class="lane-tags"><span>แผน</span><span>จริง</span></div>
           <div class="svc">${row.service||''}</div>
+          <div class="cmt">${(()=>{
+            const cs = row.cmtStart||'', ce = row.cmtEnd||'';
+            const dates = cs||ce ? `<span>${cs||'?'}</span><span>${ce||'?'}</span>` : '<span style="color:#cbd5e1">—</span>';
+            const editBtn = LIVE_MODE && row.parentTaskId ? `<button class="edit-date-btn" onclick="event.stopPropagation();openDateEditModal(${realPi},${ki},${ri})" title="แก้ไขวันที่ Commit / Due Date">✏️</button>` : '';
+            return dates + editBtn;
+          })()}</div>
           <div class="due">${row.due||''}</div></div>`;
         trackHtml += `<div class="g-row leaf">
           <div class="track">
