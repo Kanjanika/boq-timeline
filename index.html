@@ -389,8 +389,9 @@ tr.pick:hover td{background:var(--bg)}
       <div class="ai-suggest">
         <b style="color:var(--primary)">🤖 AI แนะนำกำหนดการ <small style="font-weight:normal;color:var(--text2)">(ปรับวันที่ได้ก่อน Commit จริง)</small></b>
         <div class="dates">
-          <div><small>Start</small><input type="date" id="ciStartInput" style="font-weight:600;font-size:14px"></div>
-          <div><small>Finish</small><input type="date" id="ciFinishInput" style="font-weight:600;font-size:14px"></div>
+          <div><small>Start</small><input type="date" id="ciStartInput" style="font-weight:600;font-size:14px" oninput="updateAIDurationDisplay()"></div>
+          <div><small>Finish</small><input type="date" id="ciFinishInput" style="font-weight:600;font-size:14px" oninput="updateAIDurationDisplay()"></div>
+          <div><small>ระยะเวลา</small><b id="aiDuration" style="font-size:13px">—</b></div>
           <div><small>ผู้ทำที่แนะนำ</small><b id="aiWho" style="font-size:13px">—</b></div>
         </div>
       </div>
@@ -1746,14 +1747,28 @@ async function computeAISuggest(task){
   // เดิมเอา POOLS[pool][0] ตรงๆ เสมอ (คนแรกในรายชื่อของ pool นั้น ไม่เคยดูเลยว่าใครว่างจริง) เปลี่ยนมาใช้
   // pickLeastBusyPerson (ดูฟังก์ชันด้านล่าง computeAISuggest) แทน เพื่อหมุนเวียนแนะนำคนที่ Step ค้างอยู่น้อย/ว่างจริงๆ
   // — dedupe ตาม pool กันเรียกซ้ำถ้ามีหลาย subteam ชี้ pool เดียวกัน (เช่น EE/AC/SN/FP ล้วน map ไป MEP)
-  const poolsSeenForWho = new Set();
+  // build 2026-08-20.4: คำนวณ whoBySubteam สำหรับ ALL_SUBTEAMS (ไม่ใช่แค่ subs ของ task นี้)
+  // เพื่อให้ checkbox เพิ่มทีมแล้ว aiWho อัปเดตได้ทันที โดยไม่ต้องเรียก API ใหม่
+  // dedupe ตาม pool เหมือนเดิม (EE/AC/SN/FP → MEP pool เดียวกัน = คนเดียวกัน)
+  const whoByPool = new Map();
+  const whoBySubteam = {};
+  for(const allSt of ALL_SUBTEAMS){
+    const pool = subToPool(allSt);
+    if(!whoByPool.has(pool)){
+      const person = await pickLeastBusyPerson(allSt, pool);
+      whoByPool.set(pool, person || null);
+    }
+    whoBySubteam[allSt] = whoByPool.get(pool);
+  }
+  // who สำหรับแสดงตอนเปิด = คนจาก subs ของ task (ตาม Package จริง) dedupe by pool
+  const displayPoolsSeen = new Set();
   const whoParts = [];
   for(const st of subs){
     const pool = subToPool(st);
-    if(poolsSeenForWho.has(pool)) continue;
-    poolsSeenForWho.add(pool);
-    const person = await pickLeastBusyPerson(st, pool);
-    if(person) whoParts.push(person);
+    if(displayPoolsSeen.has(pool)) continue;
+    displayPoolsSeen.add(pool);
+    const p = whoBySubteam[st];
+    if(p) whoParts.push(p);
   }
   const who = whoParts.join(' + ');
   for(const st of subs){
@@ -1770,7 +1785,7 @@ async function computeAISuggest(task){
   }
   const start = earliestFree;
   const finish = addBusinessDays(start, needDays);
-  return { start, finish, who: who||'-', needDays, refRow, matchLevel };
+  return { start, finish, who: who||'-', whoBySubteam, needDays, refRow, matchLevel };
 }
 function buildIntakeEntry(task, sug){
   const dueDate = task.due && task.due!=='-'? new Date(task.due) : null;
@@ -1928,7 +1943,12 @@ async function commitAndGenerateSteps(task, sug, selectedSubs, editedStart, edit
   const stepSplit = sug.refRow && sug.refRow.StepSplit ? JSON.parse(sug.refRow.StepSplit) : null;
   const totalDays = Math.max(Math.round((finish - start)/864e5),8);
   const durations = computeStageDurations(template, totalDays, stepSplit, offset);
+  // build 2026-08-20.4: whoBySubteam — pre-assigned persons จาก AI Suggest (คำนวณไว้แล้วตอน loadIntake)
+  // ใช้ pre-fill StepAssignee ให้ทันทีตอนสร้าง Step — ไม่ต้องไปเลือกผู้ทำอีกครั้งที่ Timeline
+  const whoBySubteam = (sug && sug.whoBySubteam) || {};
   for(const st of subs){
+    const stepWho = whoBySubteam[st] || null;
+    const stepUid = stepWho ? getUserId(stepWho) : null;
     let cursor = new Date(start);
     for(let i=1; i<=template.length; i++){
       const s = i + offset; // เลข Step จริงที่ใช้เก็บ/แสดง (ปรับ offset แล้ว)
@@ -1938,13 +1958,16 @@ async function commitAndGenerateSteps(task, sug, selectedSubs, editedStart, edit
       // build 2026-08-19.3: เหมือน synthesizeStepsForRange — Stage แบบวันคงที่ (days!=null) นับวันเริ่มเป็นวันทำการ
       // วันที่ 1 เลย (ผู้ใช้ยืนยันเคสจริง PABKK: เริ่มพฤหัส 2 วันทำการ ต้องจบศุกร์ ไม่ใช่ข้ามไปจบจันทร์)
       const planEnd = stage.days!=null ? addBusinessDaysInclusive(planStart, dur) : addBusinessDays(planStart, dur);
+      const stepFields = {
+        Title:`${task.name} · S${s} ${stage.name}`, ParentTaskID:String(task.itemId), Project:task.name,
+        Package:task.packageName, SubTeam:st, WBSStep:`S${s}`,
+        PlanStart: toISO(planStart), PlanEnd: toISO(planEnd)
+      };
+      if(stepWho) stepFields.StepAssignee = stepWho;
+      if(stepUid) stepFields.StepAssigneeLookupId = stepUid;
       await graphFetch(`/sites/${SITE_ID}/lists/${STEP_LIST}/items`, {
         method:'POST',
-        body: JSON.stringify({ fields:{
-          Title:`${task.name} · S${s} ${stage.name}`, ParentTaskID:String(task.itemId), Project:task.name,
-          Package:task.packageName, SubTeam:st, WBSStep:`S${s}`,
-          PlanStart: toISO(planStart), PlanEnd: toISO(planEnd)
-        }})
+        body: JSON.stringify({ fields: stepFields })
       });
       cursor = planEnd;
     }
@@ -4154,11 +4177,48 @@ function renderCoAssignChips(){
     return `<label style="display:inline-flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;background:${bg};border:1px solid ${bc};border-radius:5px;padding:3px 9px;transition:background .1s,border-color .1s"><input type="checkbox" ${chk?'checked':''} data-name="${n}" style="width:auto;margin:0" onchange="this.closest('label').style.background=this.checked?'#f0fdfa':'#fff';this.closest('label').style.borderColor=this.checked?'var(--primary)':'var(--border)'"> ${n}</label>`;
   }).join('');
 }
-// countWorkingDays: นับวันทำการ (จันทร์–ศุกร์) จาก startStr ถึง endStr (end exclusive)
+// updateAIDurationDisplay: อัปเดต aiDuration เมื่อ PCM แก้ Start/Finish ที่หน้า Commit Check
+function updateAIDurationDisplay(){
+  const sv = document.getElementById('ciStartInput')?.value;
+  const ev = document.getElementById('ciFinishInput')?.value;
+  const el = document.getElementById('aiDuration');
+  if(!el) return;
+  if(sv && ev){
+    const wd = countWorkingDays(sv, ev);
+    const calDiff = Math.round((new Date(ev+' 00:00:00') - new Date(sv+' 00:00:00'))/864e5);
+    if(calDiff < 0){ el.textContent = '⚠️ วันจบก่อนวันเริ่ม'; return; }
+    const wk = (wd/5).toFixed(1).replace(/\.0$/,'');
+    el.textContent = `${wd} วันทำการ (${wk} สัปดาห์)`;
+  }
+}
+// updateAIWhoDisplay: อัปเดต aiWho เมื่อ PCM ติ๊ก/เอาทีมออกที่หน้า Commit Check — ดึง
+// whoBySubteam (pre-computed ใน computeAISuggest สำหรับทุกทีม) มาแสดงรวมกันตาม pool
+function updateAIWhoDisplay(){
+  const it = INTAKE[curIntake];
+  if(!it || !it._liveSug) return;
+  const ws = it._liveSug.whoBySubteam || {};
+  const checkedSubs = ALL_SUBTEAMS.filter(s=>{ const el=document.getElementById(subteamDomId(s)); return el&&el.checked; });
+  const poolsSeen = new Set();
+  const parts = [];
+  for(const st of checkedSubs){
+    const pool = subToPool(st);
+    if(poolsSeen.has(pool)) continue;
+    poolsSeen.add(pool);
+    const p = ws[st];
+    if(p) parts.push(p);
+  }
+  const el = document.getElementById('aiWho');
+  if(el) el.textContent = parts.join(' + ') || '—';
+}
+// countWorkingDays: นับวันทำการ (จันทร์–ศุกร์) จาก start ถึง end (end exclusive)
+// รับได้ทั้ง Date object และ string "YYYY-MM-DD"
+// — Date object: ใช้ตรง (local time) กัน off-by-1 timezone ที่เกิดจาก toISO=toISOString()=UTC
+// — String: ต่อ T00:00:00 เพื่อบังคับ parse เป็น local time (ไม่ใช่ midnight UTC ที่อาจถอยหลัง 1 วันใน UTC+7)
 // เช่น 18/8/2026–30/8/2026 = 10 วันทำการ (18-22 + 25-29 ส.ค.)
-function countWorkingDays(startStr, endStr){
-  if(!startStr || !endStr) return 0;
-  const s = new Date(startStr), e = new Date(endStr);
+function countWorkingDays(start, end){
+  if(!start || !end) return 0;
+  const s = (start instanceof Date) ? new Date(start) : new Date(start + 'T00:00:00');
+  const e = (end instanceof Date)   ? new Date(end)   : new Date(end   + 'T00:00:00');
   if(e <= s) return 0;
   let count = 0;
   const cur = new Date(s);
@@ -4397,6 +4457,14 @@ function renderIntake(){
   ciType.textContent=it.type; ciDue.textContent=it.due;
   aiStd.textContent=it.std; aiHist.textContent=it.hist; aiFree.textContent=it.free;
   aiWho.textContent=it.who;
+  // build 2026-08-20.4: แสดงระยะเวลา (วันทำการ / สัปดาห์) ระหว่าง Finish กับ ผู้ทำที่แนะนำ
+  { const durEl = document.getElementById('aiDuration');
+    if(durEl && it._liveSug && it._liveSug.start instanceof Date && it._liveSug.finish instanceof Date){
+      const wd = countWorkingDays(it._liveSug.start, it._liveSug.finish);
+      const wk = (wd/5).toFixed(1).replace(/\.0$/,'');
+      durEl.textContent = `${wd} วันทำการ (${wk} สัปดาห์)`;
+    } else if(durEl){ durEl.textContent = '—'; }
+  }
   // ช่องวันที่ Start/Finish: build .13 เปลี่ยนจาก <b> ข้อความอย่างเดียว (แก้ไม่ได้) เป็น <input type="date"> ที่ PCM
   // แก้เองได้ก่อนกด Commit จริง (ตามที่ผู้ใช้ขอ) — โหมด LIVE มี it._liveSug.start/finish เป็น Date object จริง แปลง
   // เป็น yyyy-mm-dd ด้วย toISO ได้ตรงๆ ส่วนโหมด MOCK (ยังไม่ login) ไม่มี Date object ให้แปลง ปล่อยว่างไว้เฉยๆ
@@ -4415,7 +4483,7 @@ function renderIntake(){
     checksEl.innerHTML = ALL_SUBTEAMS.map(code=>{
       const id = subteamDomId(code);
       const checked = defaultChecked.includes(code) ? 'checked' : '';
-      return `<label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:13px"><input type="checkbox" id="${id}" ${checked}>${code}</label>`;
+      return `<label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:13px"><input type="checkbox" id="${id}" ${checked} onchange="updateAIWhoDisplay()">${code}</label>`;
     }).join('');
   }
   const v=document.getElementById('ciVerdict');
