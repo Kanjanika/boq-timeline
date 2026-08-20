@@ -4113,16 +4113,18 @@ function openStep(el){
   // stageDaysLabel: ถ้า Stage นี้เป็นแบบวันทำการตายตัว (เช่น "ตรวจ+ส่ง" 2 วัน) โชว์จำนวนวันทำการที่ตั้งใจไว้แทน
   // ช่วงปฏิทินดิบ (st.dur) — กันสับสนตอน Stage บังเอิญเริ่มวันที่ทำให้ต้องข้ามเสาร์-อาทิตย์ (ช่วงวันที่ยังถูกต้องเสมอ
   // แค่ป้ายกำกับจำนวนวันเปลี่ยนไปแสดงเป็น "วันทำการ" แทน "วันปฏิทิน" ให้ตรงกับที่ตั้งใจไว้จริง)
-  const fixedDays = getFixedStageDaysMap()[st.name];
-  const daysLabel = fixedDays!=null ? fixedDays : st.dur;
+  // build 2026-08-20.3: แสดง "วันทำการ" (จันทร์–ศุกร์) แทนวันปฏิทิน — countWorkingDays ใช้ช่วงวันที่จริงของ Stage
+  const planStartISO = toISO(addD(T0,st.start));
+  const planEndISO   = toISO(addD(T0,st.start+st.dur));
+  const wdaysLabel   = countWorkingDays(planStartISO, planEndISO);
   // build 2026-08-19: ผู้ใช้แจ้งว่าแผนที่ระบบสร้างให้ตอน Commit (คำนวณจาก Step Template ต่อจากวันที่เลือกไว้) ไม่ตรง
   // กับที่ตั้งใจ Commit จริง (เช่น Commit ที่ 18 ส.ค. แต่ Stage นี้ดันโชว์แผน 21–25 ส.ค.) แล้วไม่มีทางแก้ไขแผนเองได้เลย
   // เดิม "แผน" เป็นแค่ label ข้อความอ่านอย่างเดียว (mPlan) — เปลี่ยนเป็น input วันที่แก้ไขได้ 2 ช่อง (mPlanStart/mPlanEnd)
   // เพื่อให้ PCM ปรับแผนเองได้ตรงๆ ถ้าแผนเดิมคลาดเคลื่อนจากที่ Commit จริง (applyCommon จะอ่านค่านี้กลับไปคำนวณ
   // st.start/st.dur ใหม่ แล้ว syncStepToGraph จะ PATCH PlanStart/PlanEnd กลับ SharePoint ให้ตรงกันเสมอ)
-  document.getElementById('mPlanStart').value = toISO(addD(T0,st.start));
-  document.getElementById('mPlanEnd').value = toISO(addD(T0,st.start+st.dur));
-  document.getElementById('mPlanDur').textContent = `${daysLabel} วัน · แก้วันที่ได้ถ้าแผนเดิมไม่ตรงกับที่ Commit จริง`;
+  document.getElementById('mPlanStart').value = planStartISO;
+  document.getElementById('mPlanEnd').value   = planEndISO;
+  document.getElementById('mPlanDur').textContent = `${wdaysLabel} วันทำการ · แก้วันที่ได้ถ้าแผนเดิมไม่ตรงกับที่ Commit จริง`;
   const as=row.astart[s], c=row.closed[s];
   document.getElementById('mStart').value = as!==undefined? toISO(addD(T0,as)) : toISO(addD(T0,st.start));
   document.getElementById('mDate').value = c? toISO(addD(T0,c.end)) : '';
@@ -4152,7 +4154,22 @@ function renderCoAssignChips(){
     return `<label style="display:inline-flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;background:${bg};border:1px solid ${bc};border-radius:5px;padding:3px 9px;transition:background .1s,border-color .1s"><input type="checkbox" ${chk?'checked':''} data-name="${n}" style="width:auto;margin:0" onchange="this.closest('label').style.background=this.checked?'#f0fdfa':'#fff';this.closest('label').style.borderColor=this.checked?'var(--primary)':'var(--border)'"> ${n}</label>`;
   }).join('');
 }
-// updateMPlanDurLabel: อัปเดตป้ายจำนวนวันแบบสดๆ ตอนแก้ไขวันที่แผน (mPlanStart/mPlanEnd) ก่อนกดบันทึก — เตือนถ้าวันจบ
+// countWorkingDays: นับวันทำการ (จันทร์–ศุกร์) จาก startStr ถึง endStr (end exclusive)
+// เช่น 18/8/2026–30/8/2026 = 10 วันทำการ (18-22 + 25-29 ส.ค.)
+function countWorkingDays(startStr, endStr){
+  if(!startStr || !endStr) return 0;
+  const s = new Date(startStr), e = new Date(endStr);
+  if(e <= s) return 0;
+  let count = 0;
+  const cur = new Date(s);
+  while(cur < e){
+    const d = cur.getDay();
+    if(d !== 0 && d !== 6) count++;
+    cur.setDate(cur.getDate() + 1);
+  }
+  return count;
+}
+// updateMPlanDurLabel: อัปเดตป้ายจำนวนวันทำการแบบสดๆ ตอนแก้ไขวันที่แผน (mPlanStart/mPlanEnd) ก่อนกดบันทึก — เตือนถ้าวันจบ
 // มาก่อนวันเริ่ม (ค่าที่ผิดแบบนี้จะไม่ถูกนำไปใช้ตอน applyCommon เพื่อกันแผนพัง)
 function updateMPlanDurLabel(){
   const sv = document.getElementById('mPlanStart').value;
@@ -4160,8 +4177,10 @@ function updateMPlanDurLabel(){
   const lbl = document.getElementById('mPlanDur');
   if(!lbl) return;
   if(sv && ev){
-    const days = Math.round((new Date(ev)-new Date(sv))/864e5);
-    lbl.textContent = days>=0 ? `${days} วัน · แก้วันที่ได้ถ้าแผนเดิมไม่ตรงกับที่ Commit จริง` : '⚠️ วันจบต้องไม่มาก่อนวันเริ่ม';
+    const calDays = Math.round((new Date(ev)-new Date(sv))/864e5);
+    if(calDays < 0){ lbl.textContent = '⚠️ วันจบต้องไม่มาก่อนวันเริ่ม'; return; }
+    const wdays = countWorkingDays(sv, ev);
+    lbl.textContent = `${wdays} วันทำการ · แก้วันที่ได้ถ้าแผนเดิมไม่ตรงกับที่ Commit จริง`;
   }
 }
 
