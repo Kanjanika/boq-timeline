@@ -42,9 +42,9 @@ body{font-family:'Segoe UI','Sarabun','Tahoma',sans-serif;background:var(--bg);c
 .btn2:hover{background:var(--bg);color:var(--text)}
 .btn-amber{background:var(--warn)}
 .btn-amber:hover{background:#b45309}
-.sort-btn{background:#1e293b;color:#94a3b8;border:0;padding:5px 11px;border-radius:6px;font-size:11.5px;cursor:pointer;font-family:inherit;font-weight:600;transition:background .15s,color .15s}
-.sort-btn:hover{background:#334155;color:#e2e8f0}
-.sort-btn.active{background:#0f766e;color:#fff}
+.sort-btn{background:#fff;color:var(--text2);border:1px solid var(--border);padding:5px 11px;border-radius:6px;font-size:11.5px;cursor:pointer;font-family:inherit;font-weight:600;transition:background .15s,color .15s,border-color .15s}
+.sort-btn:hover{background:var(--bg);color:var(--text)}
+.sort-btn.active{background:#0f766e;color:#fff;border-color:#0f766e}
 
 /* หมายเหตุ: .board ห้ามใส่ overflow:hidden/auto/scroll เด็ดขาด เพราะ overflow ใดๆ ก็ตามบน "ancestor" ของ
    .tl-headerbar จะกลายเป็น containing block ของ position:sticky แทนที่จะเป็นหน้าเว็บจริง ทำให้แถบวันที่เลื่อนหาย
@@ -285,7 +285,7 @@ tr.pick:hover td{background:var(--bg)}
     <select id="projFilter" onchange="renderRows()"><option value="">— ทั้งหมด —</option></select>
     <button class="btn btn2" onclick="expandAll(true)">▾ เปิดทั้งหมด</button>
     <button class="btn btn2" onclick="expandAll(false)">▸ หุบทั้งหมด</button>
-    <span style="display:inline-flex;gap:4px;align-items:center;background:#0f172a;border-radius:8px;padding:4px 6px">
+    <span style="display:inline-flex;gap:4px;align-items:center">
       <button class="sort-btn active" id="sortBtnOrder" onclick="setSortOrder('order')" title="เรียงตามลำดับที่งานเข้ามา (ค่าเริ่มต้น)">📋 ลำดับเข้า</button>
       <button class="sort-btn" id="sortBtnDue" onclick="setSortOrder('due')" title="เรียงตาม Due Date ที่ Post ขอส่ง (น้อย→มาก)">📅 Due Date</button>
       <button class="sort-btn" id="sortBtnAZ" onclick="setSortOrder('az')" title="เรียงชื่อโครงการ A→Z">🔤 A→Z</button>
@@ -475,7 +475,7 @@ tr.pick:hover td{background:var(--bg)}
     <h3>⚙️ จัดการ Step</h3>
     <div class="sub" id="mSub">—</div>
     <div class="frow">
-      <div class="field"><label>👤 ผู้ทำ (Assign ได้)</label><select id="mWho"></select></div>
+      <div class="field"><label>👤 ผู้ทำหลัก</label><select id="mWho"></select></div>
       <div class="field"><label>📅 แผน (แก้ไขได้)<br><small style="color:var(--text3);font-weight:400" id="mPlanDur">—</small></label>
         <div style="display:flex;gap:4px;align-items:center">
           <input type="date" id="mPlanStart" style="flex:1;min-width:0" oninput="updateMPlanDurLabel()">
@@ -483,6 +483,10 @@ tr.pick:hover td{background:var(--bg)}
           <input type="date" id="mPlanEnd" style="flex:1;min-width:0" oninput="updateMPlanDurLabel()">
         </div>
       </div>
+    </div>
+    <div class="field" id="mCoAssignField">
+      <label>👥 ผู้ร่วมทีม <small style="color:var(--text3);font-weight:400">(เลือกเพิ่มได้ เพราะอาจวัดร่วมกัน)</small></label>
+      <div id="mCoAssign" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:5px;padding:6px 8px;background:var(--bg);border-radius:7px;border:1px solid var(--border);min-height:34px"></div>
     </div>
     <div class="frow">
       <div class="field"><label>▶ วันเริ่มงานจริง<br><small style="color:var(--text3);font-weight:400">เริ่มก่อน/ช้ากว่าแผนได้</small></label><input type="date" id="mStart"></div>
@@ -1271,7 +1275,11 @@ const projId   = canonicalProjId(projName);
     // role/hrs/notes: มาจาก column RoleInStep/ActualHours/StepNotes ใน BOQ Step Tracking (สร้างไว้แล้วใน SharePoint)
     // hrs เก็บเป็น "ชั่วโมงสะสม" ของ step นี้ (ทุกครั้งที่บันทึกจะบวกเพิ่มจากที่มีอยู่ ไม่ใช่ทับค่าเดิม)
     // notes เก็บเป็น log ข้อความสะสม (บรรทัดใหม่ต่อท้ายทุกครั้งที่บันทึก) ใช้เป็น "ประวัติ" ว่าใครทำ/รีวิว/อนุมัติเมื่อไหร่
-    row.steps.push({s:stepNum, start:planStart, dur:Math.max(planEnd-planStart,1), who:resolveAssigneeName(f.StepAssignee, f.StepAssigneeLookupId), role:f.RoleInStep||'', hrs:f.ActualHours!=null && f.ActualHours!==''? Number(f.ActualHours):0, notes:f.StepNotes||''});
+    const primaryWho = resolveAssigneeName(f.StepAssignee, f.StepAssigneeLookupId);
+    // build 2026-08-20.2: coAssignees — อ่านจาก StepCoAssignees (Text column ใหม่ใน BOQ Step Tracking — ถ้าไม่มีก็ไม่ error)
+    const coRaw = typeof f.StepCoAssignees==='string' ? f.StepCoAssignees : '';
+    const coAssignees = coRaw ? coRaw.split(',').map(n=>n.trim()).filter(n=>n && n!==primaryWho && ALL_TEAM_MEMBERS.has(n)) : [];
+    row.steps.push({s:stepNum, start:planStart, dur:Math.max(planEnd-planStart,1), who:primaryWho, coAssignees, role:f.RoleInStep||'', hrs:f.ActualHours!=null && f.ActualHours!==''? Number(f.ActualHours):0, notes:f.StepNotes||''});
     row.itemIds[stepNum] = it.id;
     // parentTaskId: SharePoint item ID (ตัวเลขจริง ไม่ใช่ชื่อ) ของ BOQ Team Work Plan ที่ commitAndGenerateSteps สร้าง
     // Step ชุดนี้มาจาก (ดู ParentTaskID ตอน POST) — ใช้เป็นกุญแจตรงๆ เทียบ Status ของ "งานชิ้นนี้โดยเฉพาะ" (ไม่ใช่ทั้ง
@@ -2062,6 +2070,9 @@ async function syncStepToGraph(row, stepNum, pj, pk){
   if(st && st.who) fields.StepAssignee = st.who;
   const uid = st && getUserId(st.who);
   if(uid) fields.StepAssigneeLookupId = uid; // ต้องกรอก USER_ID_MAP/USER_ID_OVERRIDES ให้คนนี้ไว้ก่อน ถึงจะได้ค่านี้
+  // build 2026-08-20.2: บันทึก co-assignees ลง StepCoAssignees (Text column) — ต้องสร้างคอลัมน์นี้ใน BOQ Step Tracking ก่อน
+  // ถ้ายังไม่มีคอลัมน์นี้ SharePoint จะเพิกเฉยค่าที่ส่งไป (ไม่ error) — co-assignees จะยังทำงานได้ใน session นี้
+  fields.StepCoAssignees = (st && st.coAssignees && st.coAssignees.length) ? st.coAssignees.join(',') : '';
   // RoleInStep/ActualHours/StepNotes: column ที่มีอยู่แล้วใน BOQ Step Tracking — เก็บบทบาทล่าสุด/ชั่วโมงสะสม/
   // ประวัติสะสม (ว่าใครทำ/รีวิว/อนุมัติ เมื่อไหร่) ให้ตรงกับที่คำนวณไว้แล้วใน applyCommon()
   if(st){
@@ -3856,18 +3867,19 @@ function renderRows(){
         // กันมุมโค้ง/เส้นประขอบซ้อนกันบังตาทำให้ Stage ที่วันที่ชนกันพอดีดูเหมือนมีช่องว่าง (ผู้ใช้ยืนยันเจอปัญหานี้ทั้ง
         // เลน "แผน" (build .6 แก้ไปแล้ว) และเลน "จริง" ที่ยังไม่ได้แก้ — บั๊กเดียวกัน คนละเลน)
         row.steps.forEach((st,sidx)=>{
-          const mine = person && st.who===person;
+          const mine = person && (st.who===person || (st.coAssignees||[]).includes(person));
           const dim = person && !mine ? 'dim':'', hi = mine?'hilite':'';
           const edge = `${sidx===0?'seg-first':''} ${sidx===row.steps.length-1?'seg-last':''}`;
           const ref = `data-r="${realPi},${ki},${ri},${st.s}"`;
-          const tP = `S${st.s} ${st.name || STEP_NAMES[st.s] || ''} · ${st.who} · แผน ${fmt(addD(T0,st.start))} – ${fmt(addD(T0,st.start+st.dur))} · คลิกเพื่อ Assign/แก้ไข`;
+          const whoTxt=[st.who,...(st.coAssignees||[])].filter(Boolean).join('+');
+          const tP = `S${st.s} ${st.name || STEP_NAMES[st.s] || ''} · ${whoTxt} · แผน ${fmt(addD(T0,st.start))} – ${fmt(addD(T0,st.start+st.dur))} · คลิกเพื่อ Assign/แก้ไข`;
           // build 2026-08-19.8: bridge gap ≤1 วัน ระหว่างแท่งติดกัน
           // ผู้ใช้มักตั้ง PlanEnd S1 = วันX, PlanStart S2 = วันX+1 ("วันชนวัน") ทำให้มี 1-day gap ในข้อมูล
           // แก้โดยยืดแท่งถึง start ของ Step ถัดไปเมื่อ gap ≤1 วัน (ไม่แตะข้อมูล — แก้ที่การแสดงผลเท่านั้น)
           const nextSt = row.steps[sidx+1];
           const gapToNext = nextSt ? nextSt.start - (st.start + st.dur) : 0;
           const vizDur = nextSt && gapToNext <= 1 ? nextSt.start - st.start : st.dur;
-          plan += `<div class="seg plan ${stepClass(st.s)} ${dim} ${hi} ${edge}" style="left:${pct(st.start)};width:${pct(vizDur)}" title="${tP}" ${ref} onclick="openStep(this)">S${st.s}·${st.who}</div>`;
+          plan += `<div class="seg plan ${stepClass(st.s)} ${dim} ${hi} ${edge}" style="left:${pct(st.start)};width:${pct(vizDur)}" title="${tP}" ${ref} onclick="openStep(this)">S${st.s}·${whoTxt}</div>`;
 
           const c=row.closed[st.s], as=row.astart[st.s];
           // act lane: bridge gap ≤1 วันระหว่างแท่ง ok/pending ติดกัน (เหมือน plan lane ด้านบน)
@@ -3878,11 +3890,11 @@ function renderRows(){
             // bridge: ถ้า step ถัดไปมี astart ที่ห่างจาก c.end ≤1 วัน ให้ยืดถึง astart นั้น
             const nextLeft = nextSt2 ? (row.astart[nextSt2.s]!==undefined ? row.astart[nextSt2.s] : nextSt2.start) : null;
             const actW = nextLeft!==null && (nextLeft - c.end) <= 1 ? nextLeft - left : rawW;
-            actParts.push(`<div class="seg act ${c.over?'over':'ok'} ${dim} ${hi}" style="left:${pct(left)};width:${pct(Math.max(actW,1))}" title="S${st.s} ${st.who} · เริ่มจริง ${fmt(addD(T0,left))} · ปิด ${fmt(addD(T0,c.end))}${c.over?' · ช้ากว่าแผน':''} · คลิกแก้ไข" ${ref} onclick="openStep(this)">S${st.s}✓</div>`);
+            actParts.push(`<div class="seg act ${c.over?'over':'ok'} ${dim} ${hi}" style="left:${pct(left)};width:${pct(Math.max(actW,1))}" title="S${st.s} ${whoTxt} · เริ่มจริง ${fmt(addD(T0,left))} · ปิด ${fmt(addD(T0,c.end))}${c.over?' · ช้ากว่าแผน':''} · คลิกแก้ไข" ${ref} onclick="openStep(this)">S${st.s}✓</div>`);
           } else if(st.s===row.inprog){
             const left = as!==undefined? as : st.start;
             const w = Math.max(TODAY_D-left,2);
-            actParts.push(`<div class="seg act inprog ${dim} ${hi}" style="left:${pct(left)};width:${pct(w)}" title="S${st.s} กำลังทำ (${st.who}) · เริ่มจริง ${fmt(addD(T0,left))} · คลิกเพื่อปิด" ${ref} onclick="openStep(this)">S${st.s}…</div>`);
+            actParts.push(`<div class="seg act inprog ${dim} ${hi}" style="left:${pct(left)};width:${pct(w)}" title="S${st.s} กำลังทำ (${whoTxt}) · เริ่มจริง ${fmt(addD(T0,left))} · คลิกเพื่อปิด" ${ref} onclick="openStep(this)">S${st.s}…</div>`);
           } else if(st.s>row.inprog){
             const gapAct = nextSt2 ? nextSt2.start - (st.start + st.dur) : 0;
             const vizDurAct = nextSt2 && gapAct <= 1 ? nextSt2.start - st.start : st.dur;
@@ -3937,16 +3949,19 @@ function computeManpower(){
   const perPerson = {};
   DATA.forEach(pj=>pj.pkgs.forEach(pk=>pk.rows.forEach(row=>{
     row.steps.forEach(st=>{
-      // เอาแค่คนที่อยู่ใน POOLS จริง (ตัวเลือกในช่อง Assign ก็ดึงจาก POOLS เหมือนกัน) กันแถวประมาณการ
-      // (who:'ประมาณการ') หรือชื่อแปลกๆ หลุดเข้ามาปนในตาราง
-      if(!st.who || !ALL_TEAM_MEMBERS.has(st.who)) return;
+      // เอาแค่คนที่อยู่ใน POOLS จริง กันแถวประมาณการ (who:'ประมาณการ') หรือชื่อแปลกๆ หลุดเข้ามา
+      // build 2026-08-20.2: นับทั้ง primary (st.who) และ co-assignees (st.coAssignees)
+      const allWhoMP=[st.who,...(st.coAssignees||[])].filter(x=>x&&ALL_TEAM_MEMBERS.has(x));
+      if(!allWhoMP.length) return;
       if(row.closed[st.s]) return; // ปิดงานแล้ว ไม่ถือว่าถือครองอยู่แล้ว ไม่นับ
-      if(!perPerson[st.who]) perPerson[st.who] = {occupiedDays:0, maxEnd:null};
-      const p = perPerson[st.who];
       const s0 = st.start, e0 = st.start + st.dur;
-      const overlapStart = Math.max(s0, TODAY_D), overlapEnd = Math.min(e0, TODAY_D+MP_WINDOW_DAYS);
-      if(overlapEnd > overlapStart) p.occupiedDays += (overlapEnd - overlapStart);
-      if(e0 > TODAY_D && (p.maxEnd===null || e0 > p.maxEnd)) p.maxEnd = e0;
+      allWhoMP.forEach(w=>{
+        if(!perPerson[w]) perPerson[w] = {occupiedDays:0, maxEnd:null};
+        const p = perPerson[w];
+        const overlapStart = Math.max(s0, TODAY_D), overlapEnd = Math.min(e0, TODAY_D+MP_WINDOW_DAYS);
+        if(overlapEnd > overlapStart) p.occupiedDays += (overlapEnd - overlapStart);
+        if(e0 > TODAY_D && (p.maxEnd===null || e0 > p.maxEnd)) p.maxEnd = e0;
+      });
     });
   })));
   return perPerson;
@@ -4094,6 +4109,7 @@ function openStep(el){
   const poolNames = POOLS[row.pool] || [];
   const options = (st.who && !poolNames.includes(st.who)) ? [st.who, ...poolNames] : poolNames.slice();
   sel.innerHTML=options.map(n=>`<option ${n===st.who?'selected':''}>${n}</option>`).join('');
+  renderCoAssignChips(); // build 2026-08-20.2: แสดง checkboxes ผู้ร่วมทีม
   // stageDaysLabel: ถ้า Stage นี้เป็นแบบวันทำการตายตัว (เช่น "ตรวจ+ส่ง" 2 วัน) โชว์จำนวนวันทำการที่ตั้งใจไว้แทน
   // ช่วงปฏิทินดิบ (st.dur) — กันสับสนตอน Stage บังเอิญเริ่มวันที่ทำให้ต้องข้ามเสาร์-อาทิตย์ (ช่วงวันที่ยังถูกต้องเสมอ
   // แค่ป้ายกำกับจำนวนวันเปลี่ยนไปแสดงเป็น "วันทำการ" แทน "วันปฏิทิน" ให้ตรงกับที่ตั้งใจไว้จริง)
@@ -4119,6 +4135,23 @@ function openStep(el){
   document.getElementById('mbg').classList.add('on');
 }
 function closeModal(){document.getElementById('mbg').classList.remove('on')}
+// build 2026-08-20.2: renderCoAssignChips — สร้าง chip checkboxes ผู้ร่วมทีมตาม pool ของ row
+// เรียกตอนเปิด modal และตอนเปลี่ยนผู้ทำหลัก (mWho onchange) เพื่ออัปเดตรายชื่อที่เลือกได้
+function renderCoAssignChips(){
+  if(!cur) return;
+  const row=DATA[cur.pi].pkgs[cur.ki].rows[cur.ri];
+  const st=row.steps.find(x=>x.s===cur.s);
+  if(!st) return;
+  const coArr=st.coAssignees||[];
+  const poolNames=POOLS[row.pool]||[];
+  const wrap=document.getElementById('mCoAssign');
+  if(!wrap) return;
+  wrap.innerHTML=poolNames.map(n=>{
+    const chk=coArr.includes(n);
+    const bg=chk?'#f0fdfa':'#fff', bc=chk?'var(--primary)':'var(--border)';
+    return `<label style="display:inline-flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;background:${bg};border:1px solid ${bc};border-radius:5px;padding:3px 9px;transition:background .1s,border-color .1s"><input type="checkbox" ${chk?'checked':''} data-name="${n}" style="width:auto;margin:0" onchange="this.closest('label').style.background=this.checked?'#f0fdfa':'#fff';this.closest('label').style.borderColor=this.checked?'var(--primary)':'var(--border)'"> ${n}</label>`;
+  }).join('');
+}
 // updateMPlanDurLabel: อัปเดตป้ายจำนวนวันแบบสดๆ ตอนแก้ไขวันที่แผน (mPlanStart/mPlanEnd) ก่อนกดบันทึก — เตือนถ้าวันจบ
 // มาก่อนวันเริ่ม (ค่าที่ผิดแบบนี้จะไม่ถูกนำไปใช้ตอน applyCommon เพื่อกันแผนพัง)
 function updateMPlanDurLabel(){
@@ -4249,6 +4282,8 @@ function saveTemplateEditor(){
 document.getElementById('tmplMbg').addEventListener('click', e=>{ if(e.target.id==='tmplMbg') closeTemplateEditor(); });
 function applyCommon(row,st){
   st.who=document.getElementById('mWho').value;
+  // build 2026-08-20.2: เก็บ co-assignees จาก checkboxes (กรอง primary ออกเพื่อไม่ซ้ำ)
+  st.coAssignees=[...(document.querySelectorAll('#mCoAssign input[type=checkbox]:checked')||[])].map(c=>c.dataset.name).filter(n=>n&&n!==st.who);
   // build 2026-08-19: ผู้ใช้ขอแก้ "แผน" ที่ระบบสร้างให้เองตอน Commit ได้เอง (เคสจริง PABKK: Commit ที่ 18 ส.ค. แต่
   // Stage นี้ดันมีแผน 21–25 ส.ค. ไม่ตรงกับที่ตั้งใจ) — อ่านค่าจาก input วันที่แผน (mPlanStart/mPlanEnd ที่เพิ่งเปลี่ยน
   // จาก label อ่านอย่างเดียวเป็นแก้ไขได้) กลับมาคำนวณ st.start/st.dur ใหม่ ถ้ากรอกครบและวันจบไม่มาก่อนวันเริ่ม (กันแผน
@@ -4272,7 +4307,8 @@ function applyCommon(row,st){
     const add = Number(hrsVal)||0;
     st.hrs = (Number(st.hrs)||0) + add; // ชั่วโมงสะสม ไม่ใช่ทับค่าเดิม
   }
-  const stamp = `[${fmtY(new Date())}] ${roleVal}: ${st.who}${hrsVal!==''? ' · '+hrsVal+' ชม.':''}${noteVal? ' · '+noteVal:''}`;
+  const allWhoStamp=[st.who,...(st.coAssignees||[])].filter(Boolean);
+  const stamp = `[${fmtY(new Date())}] ${roleVal}: ${allWhoStamp.join('+')}${hrsVal!==''? ' · '+hrsVal+' ชม.':''}${noteVal? ' · '+noteVal:''}`;
   st.notes = st.notes ? `${st.notes}\n${stamp}` : stamp;
 }
 async function saveOnly(){
