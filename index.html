@@ -264,7 +264,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-20.4</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-20.6</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -402,6 +402,9 @@ tr.pick:hover td{background:var(--bg)}
           <div id="subteamChecks" style="display:flex;flex-wrap:wrap;gap:12px;margin-top:6px"></div>
         </div>
       </div>
+
+      <!-- build 2026-08-20.6: MEP assignment — PCM เลือกว่าใครรับผิดชอบระบบไหน (EE/AC/SN/FP) -->
+      <div id="mepAssignSection" style="margin-top:8px;display:none"></div>
 
       <div class="verdict" id="ciVerdict"></div>
 
@@ -815,6 +818,14 @@ const POOLS = {
   MEP:['Jack','Pari','Hongyok','Fah','Wim','Stamp'],
   BUDGET:['Best','Yo','Stamp','Jack']
 };
+// build 2026-08-20.6: QA/ผู้ตรวจ = หัวหน้าทีม ต่อ subteam — เขียนลง StepQA ทุก step ตอน Commit อัตโนมัติ
+// (ต้องสร้าง column "StepQA" ชนิด Text และ "StepQALookupId" ชนิด Number ใน BOQ Step Tracking ก่อน)
+const QA_LEADS = {
+  ST:'May', 'AR&ID':'Yim',
+  EE:'Stamp', AC:'Stamp', SN:'Stamp', FP:'Stamp',
+  Budget:'Yo'
+};
+const MEP_SUBTEAMS = ['EE','AC','SN','FP'];
 // รายชื่อทีมทั้งหมด (unique) รวมจากทุก pool — ใช้เป็น roster หลักของตาราง Manpower เพื่อให้เห็นครบทุกคน
 // แม้ตอนนี้ไม่มีงานถือครองอยู่เลยก็ตาม (ไม่ใช่แค่คนที่บังเอิญมีชื่อโผล่ในข้อมูลปัจจุบัน) — คนหนึ่งอาจอยู่หลาย pool
 // (เช่น 'Su' อยู่ทั้ง ST/AR/MEP, 'Best'/'Yo'/'Stamp'/'Jack' อยู่ทั้ง pool เดิมของตัวเองและ BUDGET) เก็บเป็น Map ชื่อ ->
@@ -1688,7 +1699,9 @@ const projId = canonicalProjId(name);
 // roster แล้วเลือกคนที่ว่างเร็วที่สุด (PlanEnd น้อยที่สุด/ยังไม่เคยมีงานเลย) แทนการหยิบคนแรกตายตัว — ใช้
 // resolveAssigneeName แบบเดียวกับที่ใช้อ่าน StepAssignee ทุกที่ในไฟล์นี้ (เพราะ tenant นี้ตอบกลับมาเป็น
 // StepAssigneeLookupId ดิบๆ ไม่ใช่อ็อบเจกต์ ดู resolveAssigneeName ด้านบนสำหรับรายละเอียด)
-async function pickLeastBusyPerson(subteam, pool){
+// build 2026-08-20.5: เพิ่ม excludeNames — ถ้า subteam อื่นใน pool เดียวกัน assign ไปแล้ว จะข้ามคนนั้น
+// ทำให้ EE/AC/SN/FP (ล้วน MEP pool) ได้คนละคนกันแทนที่จะซ้ำกันหมด
+async function pickLeastBusyPerson(subteam, pool, excludeNames=[]){
   const roster = POOLS[pool] || [];
   if(!roster.length) return null;
   try{
@@ -1705,11 +1718,14 @@ async function pickLeastBusyPerson(subteam, pool){
       if(!(name in maxEndByPerson) || end > maxEndByPerson[name]) maxEndByPerson[name] = end;
     });
     // คนที่ไม่เคยมี Step เลย (maxEndByPerson ไม่มี key) ถือว่าว่างที่สุด (0) — เรียงจากว่างเร็วสุด/ว่างอยู่แล้วก่อน
-    const sorted = [...roster].sort((a,b)=> (maxEndByPerson[a]||0) - (maxEndByPerson[b]||0));
-    return sorted[0];
+    // กรอง excludeNames ออกก่อนเรียง (กันซ้ำข้ามทีม)
+    const available = roster.filter(n => !excludeNames.includes(n));
+    const sorted = available.sort((a,b)=> (maxEndByPerson[a]||0) - (maxEndByPerson[b]||0));
+    return sorted[0] || null;
   }catch(e){
     console.warn('[pickLeastBusyPerson] ดึงข้อมูลไม่สำเร็จ ใช้คนแรกในรายชื่อแทน', subteam, e);
-    return roster[0] || null;
+    const fallback = roster.filter(n => !excludeNames.includes(n));
+    return fallback[0] || null;
   }
 }
 async function computeAISuggest(task){
@@ -1747,28 +1763,26 @@ async function computeAISuggest(task){
   // เดิมเอา POOLS[pool][0] ตรงๆ เสมอ (คนแรกในรายชื่อของ pool นั้น ไม่เคยดูเลยว่าใครว่างจริง) เปลี่ยนมาใช้
   // pickLeastBusyPerson (ดูฟังก์ชันด้านล่าง computeAISuggest) แทน เพื่อหมุนเวียนแนะนำคนที่ Step ค้างอยู่น้อย/ว่างจริงๆ
   // — dedupe ตาม pool กันเรียกซ้ำถ้ามีหลาย subteam ชี้ pool เดียวกัน (เช่น EE/AC/SN/FP ล้วน map ไป MEP)
-  // build 2026-08-20.4: คำนวณ whoBySubteam สำหรับ ALL_SUBTEAMS (ไม่ใช่แค่ subs ของ task นี้)
-  // เพื่อให้ checkbox เพิ่มทีมแล้ว aiWho อัปเดตได้ทันที โดยไม่ต้องเรียก API ใหม่
-  // dedupe ตาม pool เหมือนเดิม (EE/AC/SN/FP → MEP pool เดียวกัน = คนเดียวกัน)
-  const whoByPool = new Map();
+  // build 2026-08-20.5: เรียก pickLeastBusyPerson ทีละ subteam พร้อม excludeNames
+  // ทำให้ EE/AC/SN/FP (pool เดียวกัน = MEP) ได้คนละคนกัน ไม่ซ้ำกัน
+  // (pool เดิมมี 6 คน: Jack/Pari/Hongyok/Fah/Wim/Stamp — เพียงพอสำหรับ 4 ทีม)
   const whoBySubteam = {};
+  const assignedPeople = [];
   for(const allSt of ALL_SUBTEAMS){
     const pool = subToPool(allSt);
-    if(!whoByPool.has(pool)){
-      const person = await pickLeastBusyPerson(allSt, pool);
-      whoByPool.set(pool, person || null);
-    }
-    whoBySubteam[allSt] = whoByPool.get(pool);
+    const person = await pickLeastBusyPerson(allSt, pool, assignedPeople);
+    whoBySubteam[allSt] = person || null;
+    if(person) assignedPeople.push(person);
   }
-  // who สำหรับแสดงตอนเปิด = คนจาก subs ของ task (ตาม Package จริง) dedupe by pool
-  const displayPoolsSeen = new Set();
+  // who สำหรับแสดงตอนเปิด = คนจาก subs ของ task (ตาม Package จริง) dedupe by name
+  const displayNamesSeen = new Set();
   const whoParts = [];
   for(const st of subs){
-    const pool = subToPool(st);
-    if(displayPoolsSeen.has(pool)) continue;
-    displayPoolsSeen.add(pool);
     const p = whoBySubteam[st];
-    if(p) whoParts.push(p);
+    if(p && !displayNamesSeen.has(p)){
+      displayNamesSeen.add(p);
+      whoParts.push(p);
+    }
   }
   const who = whoParts.join(' + ');
   for(const st of subs){
@@ -1944,11 +1958,19 @@ async function commitAndGenerateSteps(task, sug, selectedSubs, editedStart, edit
   const totalDays = Math.max(Math.round((finish - start)/864e5),8);
   const durations = computeStageDurations(template, totalDays, stepSplit, offset);
   // build 2026-08-20.4: whoBySubteam — pre-assigned persons จาก AI Suggest (คำนวณไว้แล้วตอน loadIntake)
-  // ใช้ pre-fill StepAssignee ให้ทันทีตอนสร้าง Step — ไม่ต้องไปเลือกผู้ทำอีกครั้งที่ Timeline
+  // build 2026-08-20.6: MEP teams (EE/AC/SN/FP) อ่านจาก dropdown ที่ PCM เลือกแทน; QA = หัวหน้าทีม (QA_LEADS)
   const whoBySubteam = (sug && sug.whoBySubteam) || {};
   for(const st of subs){
-    const stepWho = whoBySubteam[st] || null;
+    // MEP: อ่านจาก dropdown ที่ PCM เลือกเอง; ทีมอื่น: ใช้ AI suggest
+    let stepWho = whoBySubteam[st] || null;
+    if(MEP_SUBTEAMS.includes(st)){
+      const sel = document.getElementById(`mepAssign_${st}`);
+      if(sel && sel.value) stepWho = sel.value;
+    }
     const stepUid = stepWho ? getUserId(stepWho) : null;
+    // QA = หัวหน้าทีม (ตาม QA_LEADS) — กรอกอัตโนมัติทุก step
+    const stepQA = QA_LEADS[st] || null;
+    const stepQAUid = stepQA ? getUserId(stepQA) : null;
     let cursor = new Date(start);
     for(let i=1; i<=template.length; i++){
       const s = i + offset; // เลข Step จริงที่ใช้เก็บ/แสดง (ปรับ offset แล้ว)
@@ -1965,6 +1987,8 @@ async function commitAndGenerateSteps(task, sug, selectedSubs, editedStart, edit
       };
       if(stepWho) stepFields.StepAssignee = stepWho;
       if(stepUid) stepFields.StepAssigneeLookupId = stepUid;
+      if(stepQA) stepFields.StepQA = stepQA;
+      if(stepQAUid) stepFields.StepQALookupId = stepQAUid;
       await graphFetch(`/sites/${SITE_ID}/lists/${STEP_LIST}/items`, {
         method:'POST',
         body: JSON.stringify({ fields: stepFields })
@@ -4191,21 +4215,59 @@ function updateAIDurationDisplay(){
     el.textContent = `${wd} วันทำการ (${wk} สัปดาห์)`;
   }
 }
-// updateAIWhoDisplay: อัปเดต aiWho เมื่อ PCM ติ๊ก/เอาทีมออกที่หน้า Commit Check — ดึง
-// whoBySubteam (pre-computed ใน computeAISuggest สำหรับทุกทีม) มาแสดงรวมกันตาม pool
+/// build 2026-08-20.6: updateAIWhoDisplay → render MEP dropdowns ก่อน แล้วค่อย refresh ข้อความ aiWho
 function updateAIWhoDisplay(){
+  renderMEPAssignDropdowns();
+  _refreshAIWhoText();
+}
+// renderMEPAssignDropdowns: สร้าง dropdown per MEP subteam ที่ติ๊กไว้ ให้ PCM เลือกเองว่าใครทำระบบไหน
+// dropdown มี default = คนที่ AI แนะนำไว้ (whoBySubteam) แต่แก้ได้ก่อน Commit
+function renderMEPAssignDropdowns(){
+  const section = document.getElementById('mepAssignSection');
+  if(!section) return;
+  const it = INTAKE[curIntake];
+  const ws = it?._liveSug?.whoBySubteam || {};
+  const checkedMEP = MEP_SUBTEAMS.filter(s=>{ const el=document.getElementById(subteamDomId(s)); return el&&el.checked; });
+  if(!checkedMEP.length){ section.style.display='none'; section.innerHTML=''; return; }
+  const mepPool = POOLS['MEP'] || [];
+  // เก็บค่าที่เคยเลือกไว้ก่อนสร้าง DOM ใหม่ (กัน reset เมื่อ checkbox อื่นถูกติ๊ก)
+  const prev = {};
+  MEP_SUBTEAMS.forEach(s=>{ const sel=document.getElementById(`mepAssign_${s}`); if(sel) prev[s]=sel.value; });
+  section.style.display='block';
+  const rows = checkedMEP.map(st=>{
+    const suggested = prev[st] || ws[st] || (mepPool[0]||'');
+    const opts = mepPool.map(n=>`<option value="${n}" ${n===suggested?'selected':''}>${n}</option>`).join('');
+    return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
+      <span style="min-width:34px;font-size:13px;font-weight:600;color:var(--primary)">${st}</span>
+      <select id="mepAssign_${st}" onchange="_refreshAIWhoText()" style="font-size:13px;padding:3px 8px;border:1px solid var(--border);border-radius:5px">${opts}</select>
+      <small style="color:var(--text2)">QA: Stamp</small>
+    </div>`;
+  }).join('');
+  section.innerHTML = `<div style="padding:8px 12px;background:#f0fdfa;border:1px solid #99f6e4;border-radius:7px">
+    <div style="font-size:12px;color:var(--text2);margin-bottom:7px">🔧 มอบหมายทีมระบบ MEP — PCM เลือกว่าใครทำระบบไหน (แก้ได้ก่อน Commit)</div>
+    ${rows}
+  </div>`;
+}
+// _refreshAIWhoText: อ่านค่าจาก MEP dropdowns (ถ้ามี) + whoBySubteam สำหรับทีมอื่น แล้วแสดงที่ aiWho
+function _refreshAIWhoText(){
   const it = INTAKE[curIntake];
   if(!it || !it._liveSug) return;
   const ws = it._liveSug.whoBySubteam || {};
   const checkedSubs = ALL_SUBTEAMS.filter(s=>{ const el=document.getElementById(subteamDomId(s)); return el&&el.checked; });
-  const poolsSeen = new Set();
+  const namesSeen = new Set();
   const parts = [];
   for(const st of checkedSubs){
-    const pool = subToPool(st);
-    if(poolsSeen.has(pool)) continue;
-    poolsSeen.add(pool);
-    const p = ws[st];
-    if(p) parts.push(p);
+    let p;
+    if(MEP_SUBTEAMS.includes(st)){
+      const sel = document.getElementById(`mepAssign_${st}`);
+      p = sel ? sel.value : ws[st];
+    } else {
+      p = ws[st];
+    }
+    if(p && !namesSeen.has(p)){
+      namesSeen.add(p);
+      parts.push(p);
+    }
   }
   const el = document.getElementById('aiWho');
   if(el) el.textContent = parts.join(' + ') || '—';
@@ -4485,6 +4547,8 @@ function renderIntake(){
       const checked = defaultChecked.includes(code) ? 'checked' : '';
       return `<label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:13px"><input type="checkbox" id="${id}" ${checked} onchange="updateAIWhoDisplay()">${code}</label>`;
     }).join('');
+    renderMEPAssignDropdowns(); // build 2026-08-20.6: แสดง MEP dropdown ตามทีมที่ default-checked
+    _refreshAIWhoText();
   }
   const v=document.getElementById('ciVerdict');
   const btnS=document.getElementById('btnScen');
