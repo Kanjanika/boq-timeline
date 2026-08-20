@@ -264,7 +264,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-20.6</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-20.7</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -376,6 +376,7 @@ tr.pick:hover td{background:var(--bg)}
       <div class="frow">
         <div class="field"><label>โครงการ</label><div class="read" id="ciName">—</div></div>
         <div class="field"><label>งาน</label><div class="read" id="ciService">—</div></div>
+        <div class="field" style="max-width:110px"><label>Version</label><div class="read" id="ciVersion" style="font-size:13px">—</div></div>
       </div>
       <div class="frow">
         <div class="field"><label>ประเภท · GFA (จาก SharePoint)</label><div class="read" id="ciType">—</div></div>
@@ -813,7 +814,7 @@ function resolveRowServiceLabel(stepNums, hintServiceType){
 // ต่างหาก (Best/Yo มาจาก ST, Stamp/Jack มาจาก MEP อยู่แล้ว — คนคนเดียวอยู่ได้หลาย pool ตามที่ ALL_TEAM_MEMBERS ด้านล่าง
 // รองรับอยู่แล้ว) ตามที่ผู้ใช้ยืนยันรายชื่อจริงของทีม Budget มา
 const POOLS = {
-  ST:['P','Ize','May','Yo','Best'],
+  ST:['P','Ize','May'],  // build 2026-08-20.7: ตัด Yo/Best ออก — ทั้งสองคนอยู่ใน BUDGET ไม่ได้รับผิดชอบงาน ST
   AR:['June','Si','Pang','Memie','Mai','Yim','Su'],
   MEP:['Jack','Pari','Hongyok','Fah','Wim','Stamp'],
   BUDGET:['Best','Yo','Stamp','Jack']
@@ -1252,6 +1253,15 @@ function parseTeamField(raw){
 }
 // subteamDomId: id ของ checkbox แต่ละทีมย่อยที่หน้า Commit (ตัด "&"/ช่องว่างออกเพราะใช้ใน HTML id ตรงๆ ไม่ได้)
 function subteamDomId(code){ return 'sub_' + code.replace(/[^A-Za-z]/g,''); }
+// build 2026-08-20.7: ตรวจว่าเวอร์ชันเอกสารเป็นงาน Revise/Re-work — ถ้าใช่จะลด needDays เหลือ ≤ 2 สัปดาห์
+// เกณฑ์: มีคำว่า Rev/Revise ในชื่อ หรือเลข Version > 2 (เช่น No.3, No.4 ขึ้นไป)
+function isRevisionVersion(v){
+  if(!v) return false;
+  const s = String(v).trim();
+  if(/rev/i.test(s)) return true;           // "Rev.1", "Revise", "Revised" ฯลฯ
+  const num = parseInt(s.replace(/[^0-9]/g,'')) || 0;
+  return num > 2;                            // No.3, No.4, ... — ถือว่าทำซ้ำหลายรอบแล้ว
+}
 async function loadStepsFromGraph(){
   // build 2026-08-18.6: เดิมใช้ graphFetch เฉยๆ (ดึงมาแค่หน้าแรกหน้าเดียว) ทั้งที่ผู้ใช้ถามตรงๆ ว่า "ใช้ graph เข้าไป
   // อ่าน all item ทุก list ด้วยไหม" — เช็คแล้วพบว่า "ไม่" จริงๆ สำหรับ list นี้ (BOQ Step Tracking) Graph มักตัด
@@ -1756,7 +1766,10 @@ async function computeAISuggest(task){
     targetWeeks = refRow? Number(refRow.TargetWeeks)||4 : 4;
     histMult = refRow? Number(refRow.HistMultiplier)||1.2 : 1.2;
   }
-  const needDays = Math.round(targetWeeks*histMult*5); // สัปดาห์ → วันทำการโดยประมาณ
+  let needDays = Math.round(targetWeeks*histMult*5); // สัปดาห์ → วันทำการโดยประมาณ
+  // build 2026-08-20.7: งาน Revise (Version > 2 หรือมีคำว่า Rev) ลด needDays เหลือ ≤ 2 สัปดาห์
+  const revisionReduced = isRevisionVersion(task.version);
+  if(revisionReduced) needDays = Math.min(needDays, 10);
   const subs = subteamsForRawPackage(task.packageName);
   let earliestFree = new Date();
   // build 2026-08-18.10: ผู้ใช้แจ้งว่า "ผู้ทำที่แนะนำ" ในหน้า AI Suggest ขึ้นแค่ชื่อ P/June/Jack ซ้ำๆ ตลอด — ต้นเหตุคือ
@@ -1799,15 +1812,19 @@ async function computeAISuggest(task){
   }
   const start = earliestFree;
   const finish = addBusinessDays(start, needDays);
-  return { start, finish, who: who||'-', whoBySubteam, needDays, refRow, matchLevel };
+  return { start, finish, who: who||'-', whoBySubteam, needDays, refRow, matchLevel, revisionReduced };
 }
 function buildIntakeEntry(task, sug){
   const dueDate = task.due && task.due!=='-'? new Date(task.due) : null;
   const gapWeeks = dueDate? Number((((dueDate - sug.finish)/6048e5)).toFixed(1)) : 0;
+  const stdLabel = sug.revisionReduced
+    ? `⚡ Revision/Re-work: ลดเหลือ ≤ 2 สัปดาห์ (เกณฑ์ standard ${sug.refRow? sug.refRow.TargetWeeks : '—'} สัปดาห์)`
+    : `เกณฑ์มาตรฐาน${sug.refRow? ' '+sug.refRow.TargetWeeks+' สัปดาห์'+matchLevelLabel(sug.matchLevel) : ' — ไม่พบข้อมูลอ้างอิง (ใช้ default 4 สัปดาห์)'}`;
   return {
     name: task.name, service: `${task.service} · ${task.packageName}`,
+    version: task.version || null,
     type: task.type,
-    std: `เกณฑ์มาตรฐาน${sug.refRow? ' '+sug.refRow.TargetWeeks+' สัปดาห์'+matchLevelLabel(sug.matchLevel) : ' — ไม่พบข้อมูลอ้างอิง (ใช้ default 4 สัปดาห์)'}`,
+    std: stdLabel,
     hist: `ปรับด้วย Historical Multiplier ${sug.refRow? sug.refRow.HistMultiplier : '—'}`,
     free: `ทีมว่างจริงตั้งแต่ ${fmtY(sug.start)}`,
     start: fmtY(sug.start), finish: fmtY(sug.finish), who: sug.who,
@@ -1903,7 +1920,9 @@ async function loadIntakeFromGraph(){
       type: `${f.ProjectType||'-'} · ${f.ProjectSize||'-'}`,
       // field จริงคือ Due_x0020_Date (แปลว่า "Due Date") ไม่ใช่ DueDate/PostDueDate
       due: f.Due_x0020_Date || f.DueDate || f.PostDueDate || null,
-      dueLabel: f.Due_x0020_Date? fmtY(new Date(f.Due_x0020_Date)) : (f.DueDate? fmtY(new Date(f.DueDate)) : (f.PostDueDate? fmtY(new Date(f.PostDueDate)) : null))
+      dueLabel: f.Due_x0020_Date? fmtY(new Date(f.Due_x0020_Date)) : (f.DueDate? fmtY(new Date(f.DueDate)) : (f.PostDueDate? fmtY(new Date(f.PostDueDate)) : null)),
+      // build 2026-08-20.7: Version เอกสาร (เช่น "No.1 Rev.1", "No.3") — ใช้ตรวจ isRevisionVersion
+      version: f.Version || null
     };
     console.log('[DEBUG due]', task.name, '| raw Due_x0020_Date:', f.Due_x0020_Date, '| task.due:', task.due, '| task.dueLabel:', task.dueLabel);
     try{
@@ -4516,6 +4535,8 @@ function renderIntake(){
   // อย่าเข้าถึง it.xxx ต่อ เพราะ it จะเป็น undefined แล้ว throw ทำให้ initApp() หยุดทำงานกลางทาง (login/bootLive ไม่ทำงานเลย)
   if(!it) return;
   ciName.textContent=it.name; ciService.textContent=it.service;
+  const ciVersionEl = document.getElementById('ciVersion');
+  if(ciVersionEl) ciVersionEl.textContent = it.version || '—';
   ciType.textContent=it.type; ciDue.textContent=it.due;
   aiStd.textContent=it.std; aiHist.textContent=it.hist; aiFree.textContent=it.free;
   aiWho.textContent=it.who;
