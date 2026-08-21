@@ -116,7 +116,8 @@ body{font-family:'Segoe UI','Sarabun','Tahoma',sans-serif;background:var(--bg);c
 .gridlines{position:absolute;inset:0;display:grid;grid-template-columns:repeat(12,1fr);pointer-events:none}
 .gridlines div{border-left:1px solid #f1f5f9}
 .lane{position:relative;height:16px}
-.seg{position:absolute;top:0;height:16px;border-radius:0;color:#fff;font-size:9.5px;font-weight:700;display:flex;align-items:center;justify-content:center;overflow:hidden;white-space:nowrap;line-height:1;cursor:pointer}
+/* build 2026-08-20.8: Issue 2+3 — min-width 14px กัน bar หายเมื่อ stage แคบมาก (เช่น ครึ่งวัน หรือ commit < 1 สัปดาห์) */
+.seg{position:absolute;top:0;height:16px;border-radius:0;color:#fff;font-size:9.5px;font-weight:700;display:flex;align-items:center;justify-content:center;overflow:hidden;white-space:nowrap;line-height:1;cursor:pointer;min-width:14px}
 .seg.plan{opacity:.45}
 /* build 2026-08-19.7/.7: ผู้ใช้ชี้ว่า Stage ที่วันที่ชนกันพอดี (PlanEnd ของ Stage ก่อนหน้า = PlanStart ของ Stage
    ถัดไปเป๊ะ) แท่ง Gantt ควรต้องแสดงต่อกันสนิท (ไม่ควรมีการ "ปรับวันที่" ใดๆ มาแก้ปัญหานี้ — ต้องแก้ที่การแสดงผลล้วนๆ:
@@ -264,7 +265,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-20.7</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-20.8</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -1516,6 +1517,11 @@ function computeStageDurations(tmpl, totalDays, stepSplitRatios, offset){
   const hasFixedStage = tmpl.some(s=> s.days!=null);
   const ratioStages = tmpl.filter(s=> s.days==null);
   const rawTotalRatio = ratioStages.reduce((a,s)=> a+(Number(s.ratio)||0), 0);
+  // build 2026-08-20.8: Issue 3 — ถ้า totalDays น้อยกว่าจำนวน ratio stage (เช่น commit <1 สัปดาห์)
+  // ทุก stage ยังได้ Math.max(...,1)=1 วันเสมอ (floor-at-1 ด้านล่าง) ซึ่งเป็น 2-stage fallback แบบ in-place:
+  // stage ที่คำนวณ ratio*totalDays<1 ได้ 1 วัน, stage ที่ใหญ่กว่าได้ ratio*totalDays ตามปกติ
+  // caller ทั้งสองรายการ (synthesizeStepsForRange + commitAndGenerateSteps) floor totalDays≥8 แล้ว
+  // ดังนั้นใน practice จะไม่เกิดกรณีนี้ แต่ floor-at-1 ป้องกันไว้เป็น safety net
   return tmpl.map((stage,i)=>{
     const s = i+1+offset; // เลข Step จริงที่ใช้เก็บ/แสดง (ปรับ offset แล้ว) — ใช้เป็น key หา stepSplitRatios.S{s}
     if(stage.days!=null) return Math.max(Math.round(Number(stage.days)||1),1);
@@ -1532,7 +1538,7 @@ function computeStageDurations(tmpl, totalDays, stepSplitRatios, offset){
     // (ที่ปรับ offset แล้ว) ตรงกับ key เดิมพอดี เช่น Pretender stage แรก s=5 จะไปหยิบ StepSplit.S5 เดิมได้ถูกต้อง —
     // ไม่มีผลกับ Stage แบบ days เพราะวันตายตัวอยู่แล้ว ไม่สนใจ StepSplit
     const finalRatio = (stepSplitRatios && stepSplitRatios[`S${s}`]) ? stepSplitRatios[`S${s}`] : ratio;
-    return Math.max(Math.round(totalDays*finalRatio),1);
+    return Math.max(Math.round(totalDays*finalRatio),1); // floor-at-1: Issue 3 safety net
   });
 }
 function synthesizeStepsForRange(startDate, finishDate, template, stepSplitRatios, offset){
@@ -3944,7 +3950,8 @@ function renderRows(){
           // แก้โดยยืดแท่งถึง start ของ Step ถัดไปเมื่อ gap ≤1 วัน (ไม่แตะข้อมูล — แก้ที่การแสดงผลเท่านั้น)
           const nextSt = row.steps[sidx+1];
           const gapToNext = nextSt ? nextSt.start - (st.start + st.dur) : 0;
-          const vizDur = nextSt && gapToNext <= 1 ? nextSt.start - st.start : st.dur;
+          // build 2026-08-20.8: Issue 1 — Math.max(...,1) กัน vizDur=0 เมื่อ 2 step อยู่วันเดียวกัน (gapToNext≤1 แต่ nextSt.start=st.start)
+          const vizDur = Math.max(nextSt && gapToNext <= 1 ? nextSt.start - st.start : st.dur, 1);
           plan += `<div class="seg plan ${stepClass(st.s)} ${dim} ${hi} ${edge}" style="left:${pct(st.start)};width:${pct(vizDur)}" title="${tP}" ${ref} onclick="openStep(this)">S${st.s}·${whoTxt}</div>`;
 
           const c=row.closed[st.s], as=row.astart[st.s];
@@ -3963,7 +3970,8 @@ function renderRows(){
             actParts.push(`<div class="seg act inprog ${dim} ${hi}" style="left:${pct(left)};width:${pct(w)}" title="S${st.s} กำลังทำ (${whoTxt}) · เริ่มจริง ${fmt(addD(T0,left))} · คลิกเพื่อปิด" ${ref} onclick="openStep(this)">S${st.s}…</div>`);
           } else if(st.s>row.inprog){
             const gapAct = nextSt2 ? nextSt2.start - (st.start + st.dur) : 0;
-            const vizDurAct = nextSt2 && gapAct <= 1 ? nextSt2.start - st.start : st.dur;
+            // build 2026-08-20.8: Issue 1 — Math.max(...,1) เช่นเดียวกับ plan bar
+            const vizDurAct = Math.max(nextSt2 && gapAct <= 1 ? nextSt2.start - st.start : st.dur, 1);
             actParts.push(`<div class="seg act pending ${dim}" style="left:${pct(st.start)};width:${pct(vizDurAct)}" title="S${st.s} ยังไม่เริ่ม · คลิกเพื่อใส่วันเริ่มจริง/ปิด" ${ref} onclick="openStep(this)">S${st.s}</div>`);
           }
         });
@@ -4190,7 +4198,10 @@ function openStep(el){
   // st.start/st.dur ใหม่ แล้ว syncStepToGraph จะ PATCH PlanStart/PlanEnd กลับ SharePoint ให้ตรงกันเสมอ)
   document.getElementById('mPlanStart').value = planStartISO;
   document.getElementById('mPlanEnd').value   = planEndISO;
-  document.getElementById('mPlanDur').textContent = `${wdaysLabel} วันทำการ · แก้วันที่ได้ถ้าแผนเดิมไม่ตรงกับที่ Commit จริง`;
+  // build 2026-08-20.8: Issue 1+2 — wdaysLabel<1 แสดง "ครึ่งวัน" แทน "0 วันทำการ" (countWorkingDays นับ end exclusive ดังนั้น same-day=0)
+  document.getElementById('mPlanDur').textContent = wdaysLabel < 1
+    ? 'ครึ่งวัน (< 1 วันทำการ) · แก้วันที่ได้ถ้าแผนเดิมไม่ตรงกับที่ Commit จริง'
+    : `${wdaysLabel} วันทำการ · แก้วันที่ได้ถ้าแผนเดิมไม่ตรงกับที่ Commit จริง`;
   const as=row.astart[s], c=row.closed[s];
   document.getElementById('mStart').value = as!==undefined? toISO(addD(T0,as)) : toISO(addD(T0,st.start));
   document.getElementById('mDate').value = c? toISO(addD(T0,c.end)) : '';
@@ -4321,7 +4332,10 @@ function updateMPlanDurLabel(){
     const calDays = Math.round((new Date(ev)-new Date(sv))/864e5);
     if(calDays < 0){ lbl.textContent = '⚠️ วันจบต้องไม่มาก่อนวันเริ่ม'; return; }
     const wdays = countWorkingDays(sv, ev);
-    lbl.textContent = `${wdays} วันทำการ · แก้วันที่ได้ถ้าแผนเดิมไม่ตรงกับที่ Commit จริง`;
+    // build 2026-08-20.8: Issue 1+2 — same-day หรือช่วง weekend ล้วน → wdays=0 → แสดง "ครึ่งวัน" แทน "0 วันทำการ"
+    lbl.textContent = wdays < 1
+      ? 'ครึ่งวัน (< 1 วันทำการ) · แก้วันที่ได้ถ้าแผนเดิมไม่ตรงกับที่ Commit จริง'
+      : `${wdays} วันทำการ · แก้วันที่ได้ถ้าแผนเดิมไม่ตรงกับที่ Commit จริง`;
   }
 }
 
