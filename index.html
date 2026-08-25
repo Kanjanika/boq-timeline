@@ -291,7 +291,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-25.6</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-25.7</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -4462,7 +4462,7 @@ function openStep(el){
       ? 'ครึ่งวัน · แก้วันที่ได้ถ้าแผนเดิมไม่ตรงกับที่ Commit จริง'
       : `${wdaysLabel + 1} วันทำการ · แก้วันที่ได้ถ้าแผนเดิมไม่ตรงกับที่ Commit จริง`;
   const as=row.astart[s], c=row.closed[s];
-  document.getElementById('mStart').value = as!==undefined? toISO(addD(T0,as)) : toISO(addD(T0,st.start));
+  document.getElementById('mStart').value = as!==undefined? toISO(addD(T0,as)) : '';
   document.getElementById('mDate').value = c? toISO(addD(T0,c.end)) : '';
   // mHrs/mNote เว้นว่างเสมอตอนเปิด เพราะเป็นช่องกรอก "รายการใหม่" ที่จะบวกเพิ่ม/ต่อท้ายประวัติ ไม่ใช่ค่ารวมเดิม
   document.getElementById('mHrs').value=''; document.getElementById('mNote').value='';
