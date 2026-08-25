@@ -291,7 +291,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-25.8</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-25.9</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -1383,8 +1383,13 @@ const projId   = canonicalProjId(projName);
     const pj = projMap[projId];
     if(!pj.pkgs[pkgName]) pj.pkgs[pkgName] = {name:pkgName,meta:'',open:true,rowsMap:{}};
     const pk = pj.pkgs[pkgName];
-    if(!pk.rowsMap[sub]) pk.rowsMap[sub] = {team:sub,pool:subToPool(sub),steps:[],closed:{},astart:{},inprog:1,itemIds:{},rowClosedCount:0,rowItemCount:0};
-    const row = pk.rowsMap[sub];
+    // build 2026-08-25.9: key = sub|parentTaskId เพื่อแยก Blank BOQ vs Pretender ออกเป็นแถวแยกกัน
+    // Blank BOQ และ Pretender commit คนละ Work Plan item → parentTaskId ต่างกัน → Due Date ของตัวเอง
+    // legacy item ที่ไม่มี ParentTaskID (กรอกตรง / commit ก่อน build ที่บันทึก ParentTaskID) ยังรวมกันเหมือนเดิม
+    const _rowParentId = f.ParentTaskID ? String(f.ParentTaskID).trim() : null;
+    const _rowKey = _rowParentId ? `${sub}|${_rowParentId}` : sub;
+    if(!pk.rowsMap[_rowKey]) pk.rowsMap[_rowKey] = {team:sub,pool:subToPool(sub),steps:[],closed:{},astart:{},inprog:1,itemIds:{},rowClosedCount:0,rowItemCount:0};
+    const row = pk.rowsMap[_rowKey];
     const stepNum = parseInt(String(f.WBSStep||'S0').replace('S',''))||0;
     const planStart = f.PlanStart? Math.round((new Date(f.PlanStart)-T0)/864e5) : 0;
     const planEnd   = f.PlanEnd? Math.round((new Date(f.PlanEnd)-T0)/864e5) : planStart;
