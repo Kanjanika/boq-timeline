@@ -291,7 +291,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-25.1</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-25.2</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -4340,7 +4340,7 @@ async function confirmMarkPackageDone(){
 }
 function expandAll(v){DATA.forEach(p=>{p.open=v;p.pkgs.forEach(k=>k.open=v)});renderRows()}
 
-/* ============ TEAM CHECKLIST HELPERS (build 2026-08-25.1) ============ */
+/* ============ TEAM CHECKLIST HELPERS (build 2026-08-25.2) ============ */
 function getCheckedTeams(){
   return new Set([...document.querySelectorAll('.team-chk:checked')].map(c=>c.value));
 }
@@ -4455,12 +4455,12 @@ function openStep(el){
   document.getElementById('mPlanStart').value = planStartISO;
   document.getElementById('mPlanEnd').value   = planEndISO;
   // build 2026-08-20.8: Issue 1+2 — wdaysLabel<1 แสดง "ครึ่งวัน" แทน "0 วันทำการ" (countWorkingDays นับ end exclusive ดังนั้น same-day=0)
-  // build 2026-08-25.1: same-day = 1 วันเต็ม
+  // build 2026-08-25.2: same-day = 1 วันเต็ม
   document.getElementById('mPlanDur').textContent = planStartISO === planEndISO
     ? '1 วันเต็ม · แก้วันที่ได้ถ้าแผนเดิมไม่ตรงกับที่ Commit จริง'
-    : wdaysLabel < 1
-      ? 'ครึ่งวัน (< 1 วันทำการ) · แก้วันที่ได้ถ้าแผนเดิมไม่ตรงกับที่ Commit จริง'
-      : `${wdaysLabel} วันทำการ · แก้วันที่ได้ถ้าแผนเดิมไม่ตรงกับที่ Commit จริง`;
+    : (wdaysLabel + 1) < 2
+      ? 'ครึ่งวัน · แก้วันที่ได้ถ้าแผนเดิมไม่ตรงกับที่ Commit จริง'
+      : `${wdaysLabel + 1} วันทำการ · แก้วันที่ได้ถ้าแผนเดิมไม่ตรงกับที่ Commit จริง`;
   const as=row.astart[s], c=row.closed[s];
   document.getElementById('mStart').value = as!==undefined? toISO(addD(T0,as)) : toISO(addD(T0,st.start));
   document.getElementById('mDate').value = c? toISO(addD(T0,c.end)) : '';
@@ -4591,12 +4591,12 @@ function updateMPlanDurLabel(){
     const calDays = Math.round((new Date(ev)-new Date(sv))/864e5);
     if(calDays < 0){ lbl.textContent = '⚠️ วันจบต้องไม่มาก่อนวันเริ่ม'; return; }
     const wdays = countWorkingDays(sv, ev);
-    // build 2026-08-25.1: same-day = 1 วันเต็ม
+    // build 2026-08-25.2: same-day = 1 วันเต็ม
     lbl.textContent = sv === ev
       ? '1 วันเต็ม · แก้วันที่ได้ถ้าแผนเดิมไม่ตรงกับที่ Commit จริง'
-      : wdays < 1
-        ? 'ครึ่งวัน (< 1 วันทำการ) · แก้วันที่ได้ถ้าแผนเดิมไม่ตรงกับที่ Commit จริง'
-        : `${wdays} วันทำการ · แก้วันที่ได้ถ้าแผนเดิมไม่ตรงกับที่ Commit จริง`;
+      : (wdays + 1) < 2
+        ? 'ครึ่งวัน · แก้วันที่ได้ถ้าแผนเดิมไม่ตรงกับที่ Commit จริง'
+        : `${wdays + 1} วันทำการ · แก้วันที่ได้ถ้าแผนเดิมไม่ตรงกับที่ Commit จริง`;
   }
 }
 
