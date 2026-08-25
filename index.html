@@ -291,7 +291,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-25.3</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-25.4</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -3603,9 +3603,9 @@ async function bootLive(){
     document.getElementById('projFilter').innerHTML='<option value="">— ทั้งหมด —</option>';
     renderHead(); // วาดหัวตารางสัปดาห์ใหม่ตามช่วงวันที่จริง (เดิมค้างค่า MOCK เพราะไม่เคยเรียกซ้ำหลังโหลด LIVE)
     initFilters();
+    LIVE_MODE = true; // build 2026-08-25.4: ต้องเซ็ตก่อน renderRows() ไม่งั้น onclick Status/edit ไม่ติดตอน render ครั้งแรก
     renderRows();
     scrollTimelineToToday(); // ให้ "วันนี้" อยู่กึ่งกลางจอตั้งแต่โหลดข้อมูลจริงเสร็จครั้งแรก
-    LIVE_MODE = true;
     renderIntakeTable();
     if(INTAKE.length){
       document.querySelectorAll('#pgCommit tr.pick').forEach(x=>x.classList.remove('sel'));
@@ -4340,7 +4340,7 @@ async function confirmMarkPackageDone(){
 }
 function expandAll(v){DATA.forEach(p=>{p.open=v;p.pkgs.forEach(k=>k.open=v)});renderRows()}
 
-/* ============ TEAM CHECKLIST HELPERS (build 2026-08-25.3) ============ */
+/* ============ TEAM CHECKLIST HELPERS (build 2026-08-25.4) ============ */
 function getCheckedTeams(){
   return new Set([...document.querySelectorAll('.team-chk:checked')].map(c=>c.value));
 }
@@ -4455,7 +4455,7 @@ function openStep(el){
   document.getElementById('mPlanStart').value = planStartISO;
   document.getElementById('mPlanEnd').value   = planEndISO;
   // build 2026-08-20.8: Issue 1+2 — wdaysLabel<1 แสดง "ครึ่งวัน" แทน "0 วันทำการ" (countWorkingDays นับ end exclusive ดังนั้น same-day=0)
-  // build 2026-08-25.3: same-day = 1 วันเต็ม
+  // build 2026-08-25.4: same-day = 1 วันเต็ม
   document.getElementById('mPlanDur').textContent = planStartISO === planEndISO
     ? '1 วันเต็ม · แก้วันที่ได้ถ้าแผนเดิมไม่ตรงกับที่ Commit จริง'
     : (wdaysLabel + 1) < 2
@@ -4591,7 +4591,7 @@ function updateMPlanDurLabel(){
     const calDays = Math.round((new Date(ev)-new Date(sv))/864e5);
     if(calDays < 0){ lbl.textContent = '⚠️ วันจบต้องไม่มาก่อนวันเริ่ม'; return; }
     const wdays = countWorkingDays(sv, ev);
-    // build 2026-08-25.3: same-day = 1 วันเต็ม
+    // build 2026-08-25.4: same-day = 1 วันเต็ม
     lbl.textContent = sv === ev
       ? '1 วันเต็ม · แก้วันที่ได้ถ้าแผนเดิมไม่ตรงกับที่ Commit จริง'
       : (wdays + 1) < 2
