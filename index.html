@@ -60,11 +60,13 @@ body{font-family:'Segoe UI','Sarabun','Tahoma',sans-serif;background:var(--bg);c
    (overflow-x:auto) แทนที่จะซ่อนไว้เหมือนก่อนหน้านี้ เพื่อให้ผู้ใช้ลากเลื่อนซ้าย-ขวาได้จากด้านบนโดยไม่ต้องเลื่อนจอลง
    ไปหา scrollbar ที่อยู่ท้ายตารางแถวข้อมูล (#tlScroll) — ทั้งสองยังคง sync scrollLeft กันด้วย JS เหมือนเดิม (setupHeaderScrollSync) */
 .tl-headerbar{display:flex;position:sticky;top:0;z-index:30;box-shadow:0 1px 0 rgba(0,0,0,.06);overflow:hidden;border-top-left-radius:11px;border-top-right-radius:11px}
-.tl-labels-head{flex:0 0 596px;width:596px;background:var(--primary);color:#fff;font-size:12.5px;font-weight:600;box-sizing:border-box;display:flex}
+.tl-labels-head{flex:0 0 736px;width:736px;background:var(--primary);color:#fff;font-size:12.5px;font-weight:600;box-sizing:border-box;display:flex}
 .tl-labels-head .main{flex:0 0 286px;width:286px;padding:9px 12px;display:flex;align-items:center}
 .tl-labels-head .svc{flex:0 0 100px;width:100px;padding:9px 6px;display:flex;align-items:center;justify-content:center;text-align:center;border-left:1px solid rgba(255,255,255,.25);font-size:11.5px}
+.tl-labels-head .ver{flex:0 0 64px;width:64px;padding:9px 4px;display:flex;align-items:center;justify-content:center;text-align:center;border-left:1px solid rgba(255,255,255,.25);font-size:11px}
 .tl-labels-head .cmt{flex:0 0 120px;width:120px;padding:9px 4px;display:flex;align-items:center;justify-content:center;text-align:center;border-left:1px solid rgba(255,255,255,.25);font-size:11.5px}
 .tl-labels-head .due{flex:0 0 90px;width:90px;padding:9px 6px;display:flex;align-items:center;justify-content:center;text-align:center;border-left:1px solid rgba(255,255,255,.25);font-size:11.5px}
+.tl-labels-head .sts{flex:0 0 76px;width:76px;padding:9px 4px;display:flex;align-items:center;justify-content:center;text-align:center;border-left:1px solid rgba(255,255,255,.25);font-size:11px}
 .tl-head-scroll{flex:1 1 auto;min-width:0;overflow-x:auto;overflow-y:hidden}
 .tl-head{background:var(--primary);color:#fff}
 .tl-head .weeks{display:grid;grid-template-columns:repeat(12,1fr)}
@@ -74,12 +76,12 @@ body{font-family:'Segoe UI','Sarabun','Tahoma',sans-serif;background:var(--bg);c
 .tl-head .weeks b{display:block;font-size:10.5px}
 
 .tl-flex{display:flex;align-items:flex-start}
-.tl-labels{flex:0 0 596px;width:596px;border-right:1px solid var(--border);background:#fff;overflow:hidden}
+.tl-labels{flex:0 0 736px;width:736px;border-right:1px solid var(--border);background:#fff;overflow:hidden}
 .tl-scroll{flex:1 1 auto;min-width:0;overflow-x:auto}
 .tl{min-width:840px}
 
 /* label pane rows (ซ้าย นิ่งไม่เลื่อน) */
-.lab-row{display:grid;grid-template-columns:250px 36px 100px 120px 90px;border-bottom:1px solid #f1f5f9}
+.lab-row{display:grid;grid-template-columns:250px 36px 100px 64px 120px 90px 76px;border-bottom:1px solid #f1f5f9}
 .lab-row.proj{background:var(--primary-lt)}
 .lab-row.pkg{background:#fafafa}
 .lab-row .lab{padding:8px 12px;font-size:12.5px;color:var(--text)}
@@ -99,6 +101,17 @@ body{font-family:'Segoe UI','Sarabun','Tahoma',sans-serif;background:var(--bg);c
    โครงการจะเห็นแค่ค่าแรกที่เจอ ทั้งที่บางโครงการมีมากกว่า 1 Service (เช่น S26 มีทั้ง Blank BOQ และ Pretender) */
 .lab-row .svc,.lab-row .due{padding:8px 6px;font-size:10px;color:var(--text2);display:flex;align-items:center;justify-content:center;text-align:center;line-height:1.25;border-left:1px solid #f1f5f9;word-break:break-word}
 .lab-row.leaf .svc{font-weight:700;color:var(--primary)}
+/* Version column */
+.lab-row .ver{padding:6px 4px;font-size:9.5px;color:var(--text2);display:flex;align-items:center;justify-content:center;text-align:center;line-height:1.25;border-left:1px solid #f1f5f9;flex-direction:column;gap:2px;word-break:break-word}
+.ver-rev{display:inline-block;border-radius:3px;padding:1px 3px;font-size:8px;font-weight:700;background:#fef3c7;color:#92400e;border:1px solid #fbbf24}
+/* Status column */
+.lab-row .sts{padding:6px 4px;font-size:9px;color:var(--text2);display:flex;align-items:center;justify-content:center;text-align:center;border-left:1px solid #f1f5f9}
+.sts-badge{display:inline-block;border-radius:3px;padding:2px 4px;font-size:8.5px;font-weight:700;color:#fff;white-space:nowrap;line-height:1.3}
+.sts-badge.ns{background:#94a3b8}.sts-badge.review{background:#f59e0b}.sts-badge.inprog{background:#3b82f6}
+.sts-badge.check{background:#a855f7}.sts-badge.done{background:#22c55e}.sts-badge.hold{background:#f97316}
+.sts-badge.reject{background:#ef4444}.sts-badge.replace{background:#6366f1}
+/* WP Team/Assignee small label */
+.wp-info{font-size:9.5px;color:#64748b;margin-top:1px;display:block;line-height:1.3}
 /* build 2026-08-20.1: Commit Start–End column */
 .lab-row .cmt{padding:6px 4px;font-size:9.5px;color:var(--text2);display:flex;align-items:center;justify-content:center;text-align:center;line-height:1.35;border-left:1px solid #f1f5f9;flex-direction:column;gap:1px}
 .edit-date-btn{background:none;border:none;cursor:pointer;color:var(--text3);font-size:10px;padding:1px 4px;border-radius:3px;line-height:1;margin-top:2px}
@@ -282,6 +295,8 @@ tr.pick:hover td{background:var(--bg)}
   <div class="tools" id="toolsBar">
     <span class="lbl">👤 ดูงานของ:</span>
     <select id="personFilter" onchange="renderRows()"><option value="">— ทุกคน —</option></select>
+    <span class="lbl">ทีม:</span>
+    <select id="teamFilter" onchange="renderRows()"><option value="">— ทุกทีม —</option></select>
     <span class="lbl">โครงการ:</span>
     <select id="projFilter" onchange="renderRows()"><option value="">— ทั้งหมด —</option></select>
     <button class="btn btn2" onclick="expandAll(true)">▾ เปิดทั้งหมด</button>
@@ -310,8 +325,10 @@ tr.pick:hover td{background:var(--bg)}
       <div class="tl-labels-head" id="tlLabelsHead">
         <div class="main">โครงการ · Package · ทีม/ระบบ</div>
         <div class="svc">Service</div>
+        <div class="ver">Version</div>
         <div class="cmt">Commit<br><small style="font-weight:400">Start–End</small></div>
         <div class="due">Due Date</div>
+        <div class="sts">Status</div>
       </div>
       <div class="tl-head-scroll" id="tlHeadScroll">
         <div class="tl-head" id="tlHead">
@@ -1263,6 +1280,18 @@ function isRevisionVersion(v){
   const num = parseInt(s.replace(/[^0-9]/g,'')) || 0;
   return num > 2;                            // No.3, No.4, ... — ถือว่าทำซ้ำหลายรอบแล้ว
 }
+// statusBadgeHtml: สร้าง badge แสดง Status จาก BOQ Team Work Plan
+function statusBadgeHtml(status){
+  if(!status) return '<span style="color:#cbd5e1;font-size:9px">—</span>';
+  const s = status.trim();
+  const map = {
+    'not started':'ns','review เอกสาร':'review','review':'review',
+    'in progress':'inprog','ตรวจก่อนส่งออก':'check','done':'done',
+    'on hold':'hold','reject':'reject','replace':'replace'
+  };
+  const cls = map[s.toLowerCase()] || 'ns';
+  return `<span class="sts-badge ${cls}">${s}</span>`;
+}
 async function loadStepsFromGraph(){
   // build 2026-08-18.6: เดิมใช้ graphFetch เฉยๆ (ดึงมาแค่หน้าแรกหน้าเดียว) ทั้งที่ผู้ใช้ถามตรงๆ ว่า "ใช้ graph เข้าไป
   // อ่าน all item ทุก list ด้วยไหม" — เช็คแล้วพบว่า "ไม่" จริงๆ สำหรับ list นี้ (BOQ Step Tracking) Graph มักตัด
@@ -1956,23 +1985,35 @@ async function commitAndGenerateSteps(task, sug, selectedSubs, editedStart, edit
       AISuggestStart: toISO(start), AISuggestFinish: toISO(finish), AISuggestAssignee: sug.who
     }})
   });
-  // build 2026-08-18.9: ผู้ใช้ยืนยันชัดเจน (หลังรับทราบความเสี่ยงแล้ว) ว่าต้องการ "ลบ Step เก่าทิ้ง สร้างใหม่ผ่าน
-  // Commit เสมอ" — เพราะงานที่เพิ่งจะ Commit ตอนนี้ (CommitStatus เดิมยังไม่ใช่ Committed) อาจมี Step จริงที่กรอกตรงเข้า
-  // SharePoint เอง/มาจากตอนที่ยังคลุมเครือ (ไม่มี ParentTaskID ผูกแน่ชัด) ค้างอยู่แล้วจริง (เช่น VOCO/MEP ที่มีหลายงาน
-  // ชนกัน Package เดียวกัน) ข้อมูลนั้นเชื่อถือไม่ได้ ก่อนสร้าง Step ชุดใหม่ที่ผูก ParentTaskID ถูกต้อง ต้องลบของเก่าที่
-  // ตรง Project+Package เดียวกัน (ทุก SubTeam ไม่ใช่แค่ทีมที่เลือกรอบนี้ กันเศษข้อมูลเก่าค้าง) ทิ้งก่อนเสมอ — จะเสีย
-  // ประวัติ Step ที่เคยปิดไปแล้ว/ผู้ทำที่เคยบันทึกไว้ของชุดเก่า (ผู้ใช้เลือกแบบนี้เองหลังได้รับคำเตือนแล้ว)
+  // build 2026-08-25 BugFix: เดิมลบ Step ด้วย Project+Package ครอบคลุมทั้งหมด ทำให้ Commit Pretender ลบ Blank BOQ
+  // ของ Package เดียวกันทิ้งด้วย เพราะ Blank BOQ กับ Pretender ใช้ Project+Package เดียวกัน แต่เป็น Work Plan item คนละชิ้น
+  // Fix: ลบเฉพาะ Step ที่ ParentTaskID ตรงกับ task.itemId (เจาะจง Work Plan item นี้เท่านั้น) — กันไม่ให้ Commit งาน
+  // ชิ้นหนึ่งลบ Step ที่เป็นของงานชิ้นอื่น (Blank BOQ vs Pretender / หลาย Service Type ใน Package เดียวกัน)
+  // Legacy cleanup: ถ้า item ไม่มี ParentTaskID (กรอก Step ตรง/commit ก่อน build ที่เริ่มบันทึก ParentTaskID) ให้ลบ
+  // เฉพาะที่ Project+Package+ServiceType hint ตรงกัน (ป้องกัน Blank BOQ ลบ Pretender เก่าที่ไม่มี ParentTaskID)
   try{
     const oldItems = await graphFetchAllItems(`/sites/${SITE_ID}/lists/${STEP_LIST}/items?$expand=fields&$top=200`);
     const targetProjId = canonicalProjId(task.name), targetPkgId = canonicalProjId(task.packageName);
+    const taskItemIdStr = String(task.itemId);
+    // เลขช่วง Step ของ Service นี้ (ใช้เช็ค legacy item ที่ไม่มี ParentTaskID)
+    const tmplLen = getTemplateForService(task.service).length;
+    const stepOffset = getStepOffset(task.service);
+    const myStepMin = stepOffset + 1, myStepMax = stepOffset + tmplLen;
     const toDelete = oldItems.filter(it=>{
       const f = it.fields||{};
-      return canonicalProjId(f.Project||'')===targetProjId && canonicalProjId(f.Package||f.WorkPackage||'')===targetPkgId;
+      if(canonicalProjId(f.Project||'')!==targetProjId) return false;
+      if(canonicalProjId(f.Package||f.WorkPackage||'')!==targetPkgId) return false;
+      const pid = f.ParentTaskID ? String(f.ParentTaskID).trim() : null;
+      if(pid) return pid === taskItemIdStr;          // มี ParentTaskID → ลบเฉพาะที่เป็นของงานชิ้นนี้
+      // ไม่มี ParentTaskID (legacy) → เช็คช่วงเลข Step ว่าอยู่ในช่วงของ Service นี้ไหม
+      const stepRaw = String(f.WBSStep||'').replace(/[^0-9]/g,'');
+      const stepNum = parseInt(stepRaw)||0;
+      return stepNum >= myStepMin && stepNum <= myStepMax;
     });
     for(const old of toDelete){
       await graphFetch(`/sites/${SITE_ID}/lists/${STEP_LIST}/items/${old.id}`, { method:'DELETE' });
     }
-    if(toDelete.length) console.log(`[commitAndGenerateSteps] ลบ Step เก่า ${toDelete.length} รายการของ "${task.name} · ${task.packageName}" ก่อนสร้างชุดใหม่`);
+    if(toDelete.length) console.log(`[commitAndGenerateSteps] ลบ Step เก่า ${toDelete.length} รายการของ "${task.name} · ${task.packageName} · ${task.service}" ก่อนสร้างชุดใหม่`);
   }catch(e){ console.warn('[commitAndGenerateSteps] ลบ Step เก่าไม่สำเร็จ (เสี่ยงมี Step ซ้ำ) — ดำเนินการสร้างชุดใหม่ต่อ', e); }
   // ใช้ Step Template ตาม Service Type ของงานนี้ (task.service) แทนค่าตายตัว 8 Step เดิม — ถ้าไม่รู้จัก Service Type
   // เลย getTemplateForService จะ fallback เป็น Blank BOQ ให้เอง (พฤติกรรมเดิมสำหรับงานที่ไม่ระบุ Service Type)
@@ -3349,6 +3390,8 @@ async function bootLive(){
     // ไปเดาระดับโครงการ (serviceTypeByProjId)/default ตามลำดับเดิม แทนที่จะเดาผิดแบบเงียบๆ)
     const svcTypeById = {}, svcTypeByKey = {}, svcTypeKeyAmbiguous = {};
     const cmtStartById = {}, cmtEndById = {}; // build 2026-08-20.1: Commit Start/End ต่อ Work Plan item
+    // build 2026-08-25: Version, Status, WP Team/Assignee จาก BOQ Team Work Plan
+    const versionById = {}, wpStatusById = {}, wpTeamById = {}, wpAssigneeById = {};
     workplanItemsAll.forEach(it=>{
       const f = it.fields||{};
       const name = f.Title || f.Project_x0020_Name || f.Project || '';
@@ -3376,6 +3419,16 @@ async function bootLive(){
       const cmtERaw = f.Finish_x0020_Date || f.FinishDate || f.Finish || null;
       if(cmtSRaw) cmtStartById[String(it.id)] = cmtSRaw;
       if(cmtERaw) cmtEndById[String(it.id)] = cmtERaw;
+      // build 2026-08-25: Version, Status, WP Team, WP Assignee
+      const verRaw = (f.Version||'').toString().trim();
+      if(verRaw) versionById[String(it.id)] = verRaw;
+      const stRaw = (f.Status||'').toString().trim();
+      if(stRaw) wpStatusById[String(it.id)] = stRaw;
+      const teamRaw = (f.Team||'').toString().trim();
+      if(teamRaw) wpTeamById[String(it.id)] = teamRaw;
+      // Assignee: ลองหลาย field name (ขึ้นอยู่กับชื่อ internal ใน SharePoint จริง)
+      const assigneeRaw = (f.Assignee || f.AISuggestAssignee || f.AssignedTo || f.Responsible || '').toString().trim();
+      if(assigneeRaw) wpAssigneeById[String(it.id)] = assigneeRaw;
     });
     // กรองระดับ "งานเฉพาะเจาะจง" (แถวเดียว) อีกชั้น — ใช้ parentTaskId ตรงๆ ก่อน (แม่นสุด ไม่ต้องเดา/เทียบชื่อ) ถ้าไม่มี
     // (กรอก Step ตรงเข้า SharePoint เอง เช่น AIES หรือ commit ไปก่อน build ที่เริ่มบันทึก ParentTaskID) ค่อย fallback ไป
@@ -3447,6 +3500,12 @@ async function bootLive(){
           row.cmtEndRaw = cmtEForRow;
           row.cmtStart = cmtSForRow && !isNaN(new Date(cmtSForRow)) ? fmtY(new Date(cmtSForRow)) : '';
           row.cmtEnd = cmtEForRow && !isNaN(new Date(cmtEForRow)) ? fmtY(new Date(cmtEForRow)) : '';
+          // build 2026-08-25: Version, Status, WP Team/Assignee จาก BOQ Team Work Plan
+          row.version = (row.parentTaskId && versionById[row.parentTaskId]) || null;
+          row.isRevision = isRevisionVersion(row.version);
+          row.wpStatus = (row.parentTaskId && wpStatusById[row.parentTaskId]) || null;
+          row.wpTeam = (row.parentTaskId && wpTeamById[row.parentTaskId]) || null;
+          row.wpAssignee = (row.parentTaskId && wpAssigneeById[row.parentTaskId]) || null;
         });
       });
     });
@@ -3877,6 +3936,7 @@ async function confirmDateEdit(){
 
 function renderRows(){
   const person = document.getElementById('personFilter').value;
+  const teamF = document.getElementById('teamFilter').value;
   const projF = document.getElementById('projFilter').value;
   // DATA ว่าง (ยังไม่ login ในโหมด LIVE ที่ตั้งค่าไว้แล้ว) — โชว์ข้อความชวน login แทนตารางเปล่าเฉยๆ
   if(!DATA.length){
@@ -3902,8 +3962,10 @@ function renderRows(){
       <div class="lab" onclick="toggle(${realPi})"><span class="caret ${pj.open?'':'closed'}">▾</span> ${pj.name} ${projDelayBadge}<small>${pj.meta}</small></div>
       <div></div>
       <div class="svc"></div>
+      <div class="ver"></div>
       <div class="cmt"></div>
-      <div class="due"></div></div>`;
+      <div class="due"></div>
+      <div class="sts"></div></div>`;
     trackHtml += `<div class="g-row proj">
       <div class="track"><div class="gridlines" style="grid-template-columns:repeat(${weekCount()},1fr)">${'<div></div>'.repeat(weekCount())}</div>
       ${sumBar(allRows)}
@@ -3917,9 +3979,11 @@ function renderRows(){
       labelHtml += `<div class="lab-row pkg">
         <div class="lab" onclick="togglePkg(${realPi},${ki})"><span class="caret ${pk.open?'':'closed'}">▾</span> ${pk.name} ${pkgDelayBadge}<small>· ${pk.meta}</small>${pk.desc? `<small class="pkg-desc">📝 ${pk.desc}</small>`:''}</div>
         <div></div>
-        <div class="svc" style="padding:4px"><button class="btn btn2" style="font-size:10.5px;padding:2px 6px;white-space:nowrap" onclick="event.stopPropagation(); openMarkPackageDone(${realPi},${ki})" title="ปิดงาน Package นี้ (เปลี่ยน Status เป็น Done ใน BOQ Team Work Plan แล้วเอาออกจาก Timeline)">✓ ปิดงาน</button></div>
+        <div class="svc"></div>
+        <div class="ver"></div>
         <div class="cmt"></div>
-        <div class="due"></div></div>`;
+        <div class="due"></div>
+        <div class="sts"></div></div>`;
       trackHtml += `<div class="g-row pkg">
         <div class="track"><div class="gridlines" style="grid-template-columns:repeat(${weekCount()},1fr)">${'<div></div>'.repeat(weekCount())}</div>
         ${sumBar(pk.rows)}
@@ -3929,6 +3993,7 @@ function renderRows(){
       pk.rows.forEach((row,ri)=>{
         const people=[...new Set(row.steps.map(s=>s.who))];
         if(person && !people.includes(person)) return;
+        if(teamF && row.subteam!==teamF) return;
         let plan='';
         const actParts = []; // build 2026-08-19.7: เก็บเป็น array ก่อน แล้วค่อยแปะ seg-first/seg-last ตามตำแหน่งจริง
         // ที่ถูก push เข้ามา (ไม่ใช้ index ของ row.steps ตรงๆ เพราะบาง Step อาจไม่มีแท่ง "จริง" เลยก็ได้ เช่น Step ที่
@@ -3988,17 +4053,30 @@ function renderRows(){
         // "เลยแผนของ S3 ตรวจ+ส่ง มาแล้ว 2 วัน") ไม่ต้องเดา
         const rowDelay = computeDelayStatus(row);
         const rowDelayBadge = rowDelay ? delayBadgeHtml(rowDelay.level, rowDelay.reasons) : '';
+        // WP Team/Assignee info: แสดงข้อมูลจาก BOQ Team Work Plan ถ้ามีและต่างจากที่ Step Tracking แสดงอยู่แล้ว
+        const wpInfoParts = [];
+        if(row.wpTeam && row.wpTeam !== row.subteam) wpInfoParts.push(`👥 ${row.wpTeam}`);
+        if(row.wpAssignee && !people.includes(row.wpAssignee)) wpInfoParts.push(`📌 ${row.wpAssignee}`);
+        const wpInfoHtml = wpInfoParts.length ? `<span class="wp-info">${wpInfoParts.join(' · ')}</span>` : '';
+        // Version: แสดง version string + badge "Rev" ถ้าเป็น revision (ลดระยะเวลา)
+        const verHtml = (()=>{
+          if(!row.version) return '<span style="color:#cbd5e1;font-size:9px">—</span>';
+          const revBadge = row.isRevision ? `<span class="ver-rev">↓Rev</span>` : '';
+          return `<span style="font-size:9.5px">${row.version}</span>${revBadge}`;
+        })();
         labelHtml += `<div class="lab-row leaf">
-          <div class="lab"><b>${row.team}</b> ${rowDelayBadge}<small>${people.join(' · ')}</small></div>
+          <div class="lab"><b>${row.team}</b> ${rowDelayBadge}<small>${people.join(' · ')}</small>${wpInfoHtml}</div>
           <div class="lane-tags"><span>แผน</span><span>จริง</span></div>
           <div class="svc">${row.service||''}</div>
+          <div class="ver">${verHtml}</div>
           <div class="cmt">${(()=>{
             const cs = row.cmtStart||'', ce = row.cmtEnd||'';
             const dates = cs||ce ? `<span>${cs||'?'}</span><span>${ce||'?'}</span>` : '<span style="color:#cbd5e1">—</span>';
             const editBtn = LIVE_MODE && row.parentTaskId ? `<button class="edit-date-btn" onclick="event.stopPropagation();openDateEditModal(${realPi},${ki},${ri})" title="แก้ไขวันที่ Commit / Due Date">✏️</button>` : '';
             return dates + editBtn;
           })()}</div>
-          <div class="due">${row.due||''}</div></div>`;
+          <div class="due">${row.due||''}</div>
+          <div class="sts">${statusBadgeHtml(row.wpStatus)}</div></div>`;
         trackHtml += `<div class="g-row leaf">
           <div class="track">
             <div class="gridlines" style="grid-template-columns:repeat(${weekCount()},1fr)">${'<div></div>'.repeat(weekCount())}</div>
@@ -4155,6 +4233,14 @@ function initFilters(){
   DATA.forEach(p=>p.pkgs.forEach(k=>k.rows.forEach(r=>r.steps.forEach(s=>names.add(s.who)))));
   const pf=document.getElementById('personFilter');
   [...names].sort().forEach(n=>pf.insertAdjacentHTML('beforeend',`<option>${n}</option>`));
+  // Team filter: ดึง subteam จริงจากทุกแถวใน DATA (ไม่ซ้ำ เรียงตามลำดับ ALL_SUBTEAMS)
+  const tf=document.getElementById('teamFilter');
+  tf.innerHTML='<option value="">— ทุกทีม —</option>';
+  const teamSet=new Set();
+  DATA.forEach(p=>p.pkgs.forEach(k=>k.rows.forEach(r=>{ if(r.subteam) teamSet.add(r.subteam); })));
+  ALL_SUBTEAMS.filter(t=>teamSet.has(t)).forEach(t=>tf.insertAdjacentHTML('beforeend',`<option>${t}</option>`));
+  // ทีมที่ไม่ได้อยู่ใน ALL_SUBTEAMS (เช่น ชื่อเต็มที่ SharePoint เก็บ) เพิ่มต่อท้าย
+  [...teamSet].filter(t=>!ALL_SUBTEAMS.includes(t)).sort().forEach(t=>tf.insertAdjacentHTML('beforeend',`<option>${t}</option>`));
   const jf=document.getElementById('projFilter');
   DATA.forEach(p=>jf.insertAdjacentHTML('beforeend',`<option value="${p.id}">${p.name}</option>`));
 }
