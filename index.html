@@ -291,7 +291,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-25.2</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-25.3</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -1395,7 +1395,7 @@ const projId   = canonicalProjId(projName);
     // build 2026-08-20.2: coAssignees — อ่านจาก StepCoAssignees (Text column ใหม่ใน BOQ Step Tracking — ถ้าไม่มีก็ไม่ error)
     const coRaw = typeof f.StepCoAssignees==='string' ? f.StepCoAssignees : '';
     const coAssignees = coRaw ? coRaw.split(',').map(n=>n.trim()).filter(n=>n && n!==primaryWho && ALL_TEAM_MEMBERS.has(n)) : [];
-    row.steps.push({s:stepNum, start:planStart, dur:Math.max(planEnd-planStart,1), who:primaryWho, coAssignees, role:f.RoleInStep||'', hrs:f.ActualHours!=null && f.ActualHours!==''? Number(f.ActualHours):0, notes:f.StepNotes||''});
+    row.steps.push({s:stepNum, start:planStart, dur:Math.max(planEnd-planStart,0), who:primaryWho, coAssignees, role:f.RoleInStep||'', hrs:f.ActualHours!=null && f.ActualHours!==''? Number(f.ActualHours):0, notes:f.StepNotes||''});
     row.itemIds[stepNum] = it.id;
     // parentTaskId: SharePoint item ID (ตัวเลขจริง ไม่ใช่ชื่อ) ของ BOQ Team Work Plan ที่ commitAndGenerateSteps สร้าง
     // Step ชุดนี้มาจาก (ดู ParentTaskID ตอน POST) — ใช้เป็นกุญแจตรงๆ เทียบ Status ของ "งานชิ้นนี้โดยเฉพาะ" (ไม่ใช่ทั้ง
@@ -4340,7 +4340,7 @@ async function confirmMarkPackageDone(){
 }
 function expandAll(v){DATA.forEach(p=>{p.open=v;p.pkgs.forEach(k=>k.open=v)});renderRows()}
 
-/* ============ TEAM CHECKLIST HELPERS (build 2026-08-25.2) ============ */
+/* ============ TEAM CHECKLIST HELPERS (build 2026-08-25.3) ============ */
 function getCheckedTeams(){
   return new Set([...document.querySelectorAll('.team-chk:checked')].map(c=>c.value));
 }
@@ -4455,7 +4455,7 @@ function openStep(el){
   document.getElementById('mPlanStart').value = planStartISO;
   document.getElementById('mPlanEnd').value   = planEndISO;
   // build 2026-08-20.8: Issue 1+2 — wdaysLabel<1 แสดง "ครึ่งวัน" แทน "0 วันทำการ" (countWorkingDays นับ end exclusive ดังนั้น same-day=0)
-  // build 2026-08-25.2: same-day = 1 วันเต็ม
+  // build 2026-08-25.3: same-day = 1 วันเต็ม
   document.getElementById('mPlanDur').textContent = planStartISO === planEndISO
     ? '1 วันเต็ม · แก้วันที่ได้ถ้าแผนเดิมไม่ตรงกับที่ Commit จริง'
     : (wdaysLabel + 1) < 2
@@ -4591,7 +4591,7 @@ function updateMPlanDurLabel(){
     const calDays = Math.round((new Date(ev)-new Date(sv))/864e5);
     if(calDays < 0){ lbl.textContent = '⚠️ วันจบต้องไม่มาก่อนวันเริ่ม'; return; }
     const wdays = countWorkingDays(sv, ev);
-    // build 2026-08-25.2: same-day = 1 วันเต็ม
+    // build 2026-08-25.3: same-day = 1 วันเต็ม
     lbl.textContent = sv === ev
       ? '1 วันเต็ม · แก้วันที่ได้ถ้าแผนเดิมไม่ตรงกับที่ Commit จริง'
       : (wdays + 1) < 2
