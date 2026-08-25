@@ -112,8 +112,19 @@ body{font-family:'Segoe UI','Sarabun','Tahoma',sans-serif;background:var(--bg);c
 .sts-badge.ns{background:#94a3b8}.sts-badge.review{background:#f59e0b}.sts-badge.inprog{background:#3b82f6}
 .sts-badge.check{background:#a855f7}.sts-badge.done{background:#22c55e}.sts-badge.hold{background:#f97316}
 .sts-badge.reject{background:#ef4444}.sts-badge.replace{background:#6366f1}
-/* WP Team/Assignee small label */
+/* WP Assignee small label */
 .wp-info{font-size:9.5px;color:#64748b;margin-top:1px;display:block;line-height:1.3}
+/* Team filter checklist dropdown */
+.team-filter-wrap{position:relative;display:inline-block}
+.team-filter-btn{background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:4px 10px 4px 10px;font-size:12px;cursor:pointer;color:var(--text1);white-space:nowrap;min-width:110px;text-align:left;line-height:1.5}
+.team-filter-btn:hover{border-color:var(--accent)}
+.team-filter-panel{position:absolute;top:calc(100% + 4px);left:0;background:var(--bg);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.18);z-index:300;min-width:160px;padding:6px 0}
+.team-check-item{display:flex;align-items:center;gap:7px;padding:5px 14px;font-size:12px;cursor:pointer;color:var(--text1);white-space:nowrap;user-select:none}
+.team-check-item:hover{background:var(--bg2)}
+.team-check-item input[type=checkbox]{cursor:pointer;accent-color:var(--accent);width:14px;height:14px;flex-shrink:0}
+.team-check-item.mep-group{font-weight:600}
+.team-check-sub{padding-left:30px!important}
+.team-divider{border:none;border-top:1px solid var(--border);margin:4px 0}
 /* build 2026-08-20.1: Commit Start–End column */
 .lab-row .cmt{padding:6px 4px;font-size:9.5px;color:var(--text2);display:flex;align-items:center;justify-content:center;text-align:center;line-height:1.35;border-left:1px solid #f1f5f9;flex-direction:column;gap:1px}
 .edit-date-btn{background:none;border:none;cursor:pointer;color:var(--text3);font-size:10px;padding:1px 4px;border-radius:3px;line-height:1;margin-top:2px}
@@ -280,7 +291,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-20.8</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-25.1</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -298,7 +309,22 @@ tr.pick:hover td{background:var(--bg)}
     <span class="lbl">👤 ดูงานของ:</span>
     <select id="personFilter" onchange="renderRows()"><option value="">— ทุกคน —</option></select>
     <span class="lbl">ทีม:</span>
-    <select id="teamFilter" onchange="renderRows()"><option value="">— ทุกทีม —</option></select>
+    <div class="team-filter-wrap" id="teamFilterWrap">
+      <button class="team-filter-btn" id="teamFilterBtn" onclick="toggleTeamDropdown()"><span id="teamFilterLabel">— ทุกทีม —</span> ▾</button>
+      <div class="team-filter-panel" id="teamFilterPanel" style="display:none">
+        <label class="team-check-item"><input type="checkbox" id="teamChkAll" checked onchange="teamCheckAll(this)"> ทุกทีม</label>
+        <hr class="team-divider">
+        <label class="team-check-item mep-group"><input type="checkbox" id="teamChkMEP" onchange="teamCheckMEP(this)"> 📦 MEP ทั้งหมด</label>
+        <label class="team-check-item team-check-sub"><input type="checkbox" class="team-chk" value="EE" onchange="teamChkChange()"> EE</label>
+        <label class="team-check-item team-check-sub"><input type="checkbox" class="team-chk" value="AC" onchange="teamChkChange()"> AC</label>
+        <label class="team-check-item team-check-sub"><input type="checkbox" class="team-chk" value="SN" onchange="teamChkChange()"> SN</label>
+        <label class="team-check-item team-check-sub"><input type="checkbox" class="team-chk" value="FP" onchange="teamChkChange()"> FP</label>
+        <hr class="team-divider">
+        <label class="team-check-item"><input type="checkbox" class="team-chk" value="ST" onchange="teamChkChange()"> ST</label>
+        <label class="team-check-item"><input type="checkbox" class="team-chk" value="AR&ID" onchange="teamChkChange()"> AR&ID</label>
+        <label class="team-check-item"><input type="checkbox" class="team-chk" value="Budget" onchange="teamChkChange()"> Budget</label>
+      </div>
+    </div>
     <span class="lbl">โครงการ:</span>
     <select id="projFilter" onchange="renderRows()"><option value="">— ทั้งหมด —</option></select>
     <button class="btn btn2" onclick="expandAll(true)">▾ เปิดทั้งหมด</button>
@@ -4025,7 +4051,7 @@ async function confirmStatusEdit(){
 
 function renderRows(){
   const person = document.getElementById('personFilter').value;
-  const teamF = document.getElementById('teamFilter').value;
+  const checkedTeams = getCheckedTeams();
   const projF = document.getElementById('projFilter').value;
   // DATA ว่าง (ยังไม่ login ในโหมด LIVE ที่ตั้งค่าไว้แล้ว) — โชว์ข้อความชวน login แทนตารางเปล่าเฉยๆ
   if(!DATA.length){
@@ -4083,7 +4109,7 @@ function renderRows(){
         const people=[...new Set(row.steps.map(s=>s.who))];
         if(person && !people.includes(person)) return;
         const rowTeam = row.subteam || (row.team||'').replace(/\s*[·•]\s*ประมาณการ\s*$/,'').trim();
-        if(teamF && rowTeam!==teamF) return;
+        if(checkedTeams.size > 0 && !checkedTeams.has(rowTeam)) return;
         let plan='';
         const actParts = []; // build 2026-08-19.7: เก็บเป็น array ก่อน แล้วค่อยแปะ seg-first/seg-last ตามตำแหน่งจริง
         // ที่ถูก push เข้ามา (ไม่ใช้ index ของ row.steps ตรงๆ เพราะบาง Step อาจไม่มีแท่ง "จริง" เลยก็ได้ เช่น Step ที่
@@ -4143,10 +4169,7 @@ function renderRows(){
         // "เลยแผนของ S3 ตรวจ+ส่ง มาแล้ว 2 วัน") ไม่ต้องเดา
         const rowDelay = computeDelayStatus(row);
         const rowDelayBadge = rowDelay ? delayBadgeHtml(rowDelay.level, rowDelay.reasons) : '';
-        // WP Assignee info: แสดง Assignee จาก BOQ Team Work Plan ถ้ามี (ไม่แสดง WP Team แยกเพราะ Team filter cover แล้ว)
-        const wpInfoParts = [];
-        if(row.wpAssignee && !people.includes(row.wpAssignee)) wpInfoParts.push(`📌 ${row.wpAssignee}`);
-        const wpInfoHtml = wpInfoParts.length ? `<span class="wp-info">${wpInfoParts.join(' · ')}</span>` : '';
+        const wpInfoHtml = '';
         // Version: แสดง version string + badge "Rev" ถ้าเป็น revision (ลดระยะเวลา)
         const verHtml = (()=>{
           if(!row.version) return '<span style="color:#cbd5e1;font-size:9px">—</span>';
@@ -4317,24 +4340,77 @@ async function confirmMarkPackageDone(){
 }
 function expandAll(v){DATA.forEach(p=>{p.open=v;p.pkgs.forEach(k=>k.open=v)});renderRows()}
 
+/* ============ TEAM CHECKLIST HELPERS (build 2026-08-25.1) ============ */
+function getCheckedTeams(){
+  return new Set([...document.querySelectorAll('.team-chk:checked')].map(c=>c.value));
+}
+function toggleTeamDropdown(){
+  const p=document.getElementById('teamFilterPanel');
+  p.style.display=p.style.display==='none'?'block':'none';
+}
+function updateTeamFilterLabel(){
+  const checked=[...document.querySelectorAll('.team-chk:checked')];
+  const lbl=document.getElementById('teamFilterLabel');
+  if(!lbl) return;
+  if(checked.length===0) lbl.textContent='— ทุกทีม —';
+  else if(checked.length===1) lbl.textContent=checked[0].value;
+  else lbl.textContent=`${checked.length} ทีม`;
+  // sync MEP master checkbox (checked/indeterminate)
+  const MEP=['EE','AC','SN','FP'];
+  const mepEl=document.getElementById('teamChkMEP');
+  if(mepEl){
+    const n=MEP.filter(t=>document.querySelector(`.team-chk[value="${t}"]`)?.checked).length;
+    mepEl.checked=n===MEP.length; mepEl.indeterminate=n>0&&n<MEP.length;
+  }
+  // uncheck "ทุกทีม" ถ้ามีทีมถูกเลือก
+  const allEl=document.getElementById('teamChkAll');
+  if(allEl) allEl.checked=checked.length===0;
+}
+function teamChkChange(){ updateTeamFilterLabel(); renderRows(); }
+function teamCheckAll(cb){
+  document.querySelectorAll('.team-chk').forEach(c=>c.checked=false);
+  const m=document.getElementById('teamChkMEP');
+  if(m){ m.checked=false; m.indeterminate=false; }
+  const lbl=document.getElementById('teamFilterLabel');
+  if(lbl) lbl.textContent='— ทุกทีม —';
+  renderRows();
+}
+function teamCheckMEP(cb){
+  ['EE','AC','SN','FP'].forEach(t=>{
+    const el=document.querySelector(`.team-chk[value="${t}"]`);
+    if(el) el.checked=cb.checked;
+  });
+  updateTeamFilterLabel(); renderRows();
+}
+
 function initFilters(){
   const names=new Set();
   DATA.forEach(p=>p.pkgs.forEach(k=>k.rows.forEach(r=>r.steps.forEach(s=>names.add(s.who)))));
   const pf=document.getElementById('personFilter');
   [...names].sort().forEach(n=>pf.insertAdjacentHTML('beforeend',`<option>${n}</option>`));
-  // Team filter: ดึง subteam จริงจากทุกแถวใน DATA (ไม่ซ้ำ เรียงตามลำดับ ALL_SUBTEAMS)
-  const tf=document.getElementById('teamFilter');
-  tf.innerHTML='<option value="">— ทุกทีม —</option>';
+  // Team checklist: หา subteam จริงที่มีข้อมูล แล้ว show/hide checkbox ของแต่ละทีม
   const teamSet=new Set();
-  // row.subteam = SubTeam จาก Step Tracking (มีค่าเฉพาะแถว Live ที่มีข้อมูลจริง)
-  // row.team อาจมีค่าเป็น "ST · ประมาณการ" ฯลฯ — ตัด suffix "· ประมาณการ" ออกก่อนใช้เป็น fallback
   DATA.forEach(p=>p.pkgs.forEach(k=>k.rows.forEach(r=>{
     const t = r.subteam || (r.team||'').replace(/\s*[·•]\s*ประมาณการ\s*$/,'').trim();
     if(t) teamSet.add(t);
   })));
-  ALL_SUBTEAMS.filter(t=>teamSet.has(t)).forEach(t=>tf.insertAdjacentHTML('beforeend',`<option>${t}</option>`));
-  // ทีมที่ไม่ได้อยู่ใน ALL_SUBTEAMS (เช่น ชื่อเต็มที่ SharePoint เก็บ) เพิ่มต่อท้าย
-  [...teamSet].filter(t=>!ALL_SUBTEAMS.includes(t)).sort().forEach(t=>tf.insertAdjacentHTML('beforeend',`<option>${t}</option>`));
+  document.querySelectorAll('.team-chk').forEach(chk=>{
+    const item=chk.closest('.team-check-item');
+    if(item) item.style.display=teamSet.has(chk.value)?'':'none';
+  });
+  const hasMEP=['EE','AC','SN','FP'].some(t=>teamSet.has(t));
+  const mepLabel=document.getElementById('teamChkMEP')?.closest('.team-check-item');
+  if(mepLabel) mepLabel.style.display=hasMEP?'':'none';
+  // close-outside listener (ผูกครั้งเดียว)
+  if(!window._teamDropdownListenerBound){
+    window._teamDropdownListenerBound=true;
+    document.addEventListener('click',e=>{
+      if(!e.target.closest('#teamFilterWrap')){
+        const p=document.getElementById('teamFilterPanel');
+        if(p) p.style.display='none';
+      }
+    });
+  }
   const jf=document.getElementById('projFilter');
   DATA.forEach(p=>jf.insertAdjacentHTML('beforeend',`<option value="${p.id}">${p.name}</option>`));
 }
