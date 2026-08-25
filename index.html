@@ -291,7 +291,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-25.7</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-25.8</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -4444,23 +4444,23 @@ function openStep(el){
   // ช่วงปฏิทินดิบ (st.dur) — กันสับสนตอน Stage บังเอิญเริ่มวันที่ทำให้ต้องข้ามเสาร์-อาทิตย์ (ช่วงวันที่ยังถูกต้องเสมอ
   // แค่ป้ายกำกับจำนวนวันเปลี่ยนไปแสดงเป็น "วันทำการ" แทน "วันปฏิทิน" ให้ตรงกับที่ตั้งใจไว้จริง)
   // build 2026-08-20.3: แสดง "วันทำการ" (จันทร์–ศุกร์) แทนวันปฏิทิน — countWorkingDays ใช้ช่วงวันที่จริงของ Stage
-  const planStartISO = toISO(addD(T0,st.start));
-  const planEndISO   = toISO(addD(T0,st.start+st.dur));
-  const wdaysLabel   = countWorkingDays(planStartISO, planEndISO);
+  const planStartISO   = toISO(addD(T0,st.start));
+  const planEndExclISO = toISO(addD(T0,st.start+st.dur));                              // exclusive — ใช้คำนวณ wdays
+  const planEndISO     = st.dur>0 ? toISO(addD(T0,st.start+st.dur-1)) : planStartISO; // inclusive — แสดงในฟอร์ม (build 2026-08-25.8)
+  const wdaysLabel     = countWorkingDays(planStartISO, planEndExclISO);
   // build 2026-08-19: ผู้ใช้แจ้งว่าแผนที่ระบบสร้างให้ตอน Commit (คำนวณจาก Step Template ต่อจากวันที่เลือกไว้) ไม่ตรง
   // กับที่ตั้งใจ Commit จริง (เช่น Commit ที่ 18 ส.ค. แต่ Stage นี้ดันโชว์แผน 21–25 ส.ค.) แล้วไม่มีทางแก้ไขแผนเองได้เลย
   // เดิม "แผน" เป็นแค่ label ข้อความอ่านอย่างเดียว (mPlan) — เปลี่ยนเป็น input วันที่แก้ไขได้ 2 ช่อง (mPlanStart/mPlanEnd)
   // เพื่อให้ PCM ปรับแผนเองได้ตรงๆ ถ้าแผนเดิมคลาดเคลื่อนจากที่ Commit จริง (applyCommon จะอ่านค่านี้กลับไปคำนวณ
   // st.start/st.dur ใหม่ แล้ว syncStepToGraph จะ PATCH PlanStart/PlanEnd กลับ SharePoint ให้ตรงกันเสมอ)
   document.getElementById('mPlanStart').value = planStartISO;
-  document.getElementById('mPlanEnd').value   = planEndISO;
-  // build 2026-08-20.8: Issue 1+2 — wdaysLabel<1 แสดง "ครึ่งวัน" แทน "0 วันทำการ" (countWorkingDays นับ end exclusive ดังนั้น same-day=0)
-  // build 2026-08-25.4: same-day = 1 วันเต็ม
+  document.getElementById('mPlanEnd').value   = planEndISO;   // build 2026-08-25.8: แสดง inclusive end (วันทำงานสุดท้ายจริง ไม่ใช่ exclusive)
+  // build 2026-08-25.8: เปลี่ยนจาก exclusive → inclusive display → ไม่ต้อง +1 อีกต่อไป wdays นับถูกต้องโดยตรง
   document.getElementById('mPlanDur').textContent = planStartISO === planEndISO
-    ? '1 วันเต็ม · แก้วันที่ได้ถ้าแผนเดิมไม่ตรงกับที่ Commit จริง'
-    : (wdaysLabel + 1) < 2
+    ? '1 วันทำการ · แก้วันที่ได้ถ้าแผนเดิมไม่ตรงกับที่ Commit จริง'
+    : wdaysLabel < 2
       ? 'ครึ่งวัน · แก้วันที่ได้ถ้าแผนเดิมไม่ตรงกับที่ Commit จริง'
-      : `${wdaysLabel + 1} วันทำการ · แก้วันที่ได้ถ้าแผนเดิมไม่ตรงกับที่ Commit จริง`;
+      : `${wdaysLabel} วันทำการ · แก้วันที่ได้ถ้าแผนเดิมไม่ตรงกับที่ Commit จริง`;
   const as=row.astart[s], c=row.closed[s];
   document.getElementById('mStart').value = as!==undefined? toISO(addD(T0,as)) : '';
   document.getElementById('mDate').value = c? toISO(addD(T0,c.end)) : '';
@@ -4469,6 +4469,19 @@ function openStep(el){
   document.getElementById('mHrsTotal').textContent = `สะสม ${Number(st.hrs)||0} ชม.`;
   const roleSel = document.getElementById('mRole');
   roleSel.value = st.role && [...roleSel.options].some(o=>o.value===st.role) ? st.role : roleSel.options[0].value;
+  // build 2026-08-25.8: S4/S8 = ขั้นตรวจ QA → auto-fill ผู้ตรวจตามทีม และตั้งบทบาทเป็น Review
+  if(s===4||s===8){
+    const qaMap={'Budget':'Yo','MEP':'Stamp','AR&ID':'Yim','ST':'May'};
+    const teamKey=Object.keys(qaMap).find(k=>(row.team||'').includes(k));
+    if(teamKey){
+      const qaName=qaMap[teamKey];
+      if(![...sel.options].some(o=>o.value===qaName)){
+        const opt=document.createElement('option');opt.text=opt.value=qaName;sel.prepend(opt);
+      }
+      sel.value=qaName;
+    }
+    roleSel.value='Review';
+  }
   document.getElementById('mHistory').textContent = st.notes || 'ยังไม่มีประวัติ';
   document.getElementById('mbg').classList.add('on');
 }
@@ -4590,13 +4603,15 @@ function updateMPlanDurLabel(){
   if(sv && ev){
     const calDays = Math.round((new Date(ev)-new Date(sv))/864e5);
     if(calDays < 0){ lbl.textContent = '⚠️ วันจบต้องไม่มาก่อนวันเริ่ม'; return; }
-    const wdays = countWorkingDays(sv, ev);
-    // build 2026-08-25.4: same-day = 1 วันเต็ม
+    // build 2026-08-25.8: ev = inclusive end → +1 วัน (local Date) ก่อนส่งเป็น exclusive end ให้ countWorkingDays
+    const evExclDate = new Date(ev + 'T00:00:00');
+    evExclDate.setDate(evExclDate.getDate() + 1);
+    const wdays = countWorkingDays(sv, evExclDate);
     lbl.textContent = sv === ev
-      ? '1 วันเต็ม · แก้วันที่ได้ถ้าแผนเดิมไม่ตรงกับที่ Commit จริง'
-      : (wdays + 1) < 2
+      ? '1 วันทำการ · แก้วันที่ได้ถ้าแผนเดิมไม่ตรงกับที่ Commit จริง'
+      : wdays < 2
         ? 'ครึ่งวัน · แก้วันที่ได้ถ้าแผนเดิมไม่ตรงกับที่ Commit จริง'
-        : `${wdays + 1} วันทำการ · แก้วันที่ได้ถ้าแผนเดิมไม่ตรงกับที่ Commit จริง`;
+        : `${wdays} วันทำการ · แก้วันที่ได้ถ้าแผนเดิมไม่ตรงกับที่ Commit จริง`;
   }
 }
 
@@ -4728,7 +4743,7 @@ function applyCommon(row,st){
   if(psv && pev){
     const newStart = Math.round((new Date(psv)-T0)/864e5);
     const newEnd = Math.round((new Date(pev)-T0)/864e5);
-    if(newEnd>=newStart){ st.start = newStart; st.dur = newEnd-newStart; }
+    if(newEnd>=newStart){ st.start = newStart; st.dur = newEnd-newStart+1; } // +1: pev = inclusive end (build 2026-08-25.8)
   }
   const sv=document.getElementById('mStart').value;
   if(sv) row.astart[cur.s]=Math.round((new Date(sv)-T0)/864e5);
