@@ -291,7 +291,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-25.9</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-25.10</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -887,9 +887,9 @@ function resolveRowServiceLabel(stepNums, hintServiceType){
 // ต่างหาก (Best/Yo มาจาก ST, Stamp/Jack มาจาก MEP อยู่แล้ว — คนคนเดียวอยู่ได้หลาย pool ตามที่ ALL_TEAM_MEMBERS ด้านล่าง
 // รองรับอยู่แล้ว) ตามที่ผู้ใช้ยืนยันรายชื่อจริงของทีม Budget มา
 const POOLS = {
-  ST:['P','Ize','May'],  // build 2026-08-20.7: ตัด Yo/Best ออก — ทั้งสองคนอยู่ใน BUDGET ไม่ได้รับผิดชอบงาน ST
-  AR:['June','Si','Pang','Memie','Mai','Yim','Su'],
-  MEP:['Jack','Pari','Hongyok','Fah','Wim','Stamp'],
+  ST:['P','Ize','May','Yo'],  // build 2026-08-25.10: เพิ่ม Yo ในทุกทีม ตามที่ผู้ใช้ขอ
+  AR:['June','Si','Pang','Memie','Mai','Yim','Su','Yo'],
+  MEP:['Jack','Pari','Hongyok','Fah','Wim','Stamp','Yo'],
   BUDGET:['Best','Yo','Stamp','Jack']
 };
 // build 2026-08-20.6: QA/ผู้ตรวจ = หัวหน้าทีม ต่อ subteam — เขียนลง StepQA ทุก step ตอน Commit อัตโนมัติ
@@ -2050,7 +2050,7 @@ async function commitAndGenerateSteps(task, sug, selectedSubs, editedStart, edit
   await graphFetch(`/sites/${SITE_ID}/lists/${WORKPLAN_LIST}/items/${task.itemId}`, {
     method:'PATCH',
     body: JSON.stringify({ fields: {
-      CommitStatus:'Committed', CommittedFinish: toISO(finish),
+      CommitStatus:'Committed', Status:'Not Started', CommittedFinish: toISO(finish),  // build 2026-08-25.10: เพิ่ม Status:'Not Started' เพื่อให้รายการใหม่ผ่าน isActive และแสดงใน Timeline ทันที
       AISuggestStart: toISO(start), AISuggestFinish: toISO(finish), AISuggestAssignee: sug.who
     }})
   });
