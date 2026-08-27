@@ -285,13 +285,29 @@ tr.pick:hover td{background:var(--bg)}
 @keyframes up{from{transform:translateY(14px);opacity:0}to{transform:none;opacity:1}}
 
 @media print{.top,.tools,.btn,.btn2{display:none!important}.page{display:none}.page.print-target{display:block}}
+/* ===== Report · view toggle ===== */
+.rpt-toggle{display:flex;gap:2px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:3px}
+.rpt-mode-btn{background:transparent;border:none;padding:5px 13px;border-radius:6px;cursor:pointer;font-size:12.5px;color:var(--text2);font-weight:500;transition:.15s}
+.rpt-mode-btn.on{background:var(--primary);color:#fff!important;font-weight:600}
+/* ===== Report · badges & delay ===== */
+.r-badge{display:inline-block;padding:1px 7px;border-radius:10px;font-size:10.5px;font-weight:600;white-space:nowrap}
+.r-done{background:#dcfce7;color:#15803d}
+.r-prog{background:#dbeafe;color:#1e40af}
+.r-ns{background:#f1f5f9;color:#94a3b8}
+.r-late{color:#b91c1c;font-weight:700}
+.r-early{color:#16a34a;font-weight:600}
+.r-ontime{color:#94a3b8}
+.r-overdue{color:#dc2626;font-weight:700;font-style:italic}
+/* ===== Report · table rows ===== */
+.rpt-step-row td{padding:5px 9px;border-bottom:1px solid var(--border);font-size:12px;vertical-align:middle}
+.rpt-step-row:hover td{background:var(--bg)}
 </style>
 <script src="msal-browser.min.js"></script>
 </head>
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-25.10</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-25.11</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -466,57 +482,27 @@ tr.pick:hover td{background:var(--bg)}
   </div>
 </div>
 
-<!-- ============ PAGE 3 · REPORT ============ -->
+<!-- ============ PAGE 3 · REPORT · build 2026-08-25.11 ============ -->
 <div class="page" id="pgReport">
-  <div class="tools">
-    <span class="lbl">ช่วงเวลา:</span>
-    <select id="rptRange">
-      <option>เดือน ส.ค. 2026</option>
-      <option selected>เดือน ก.ย. 2026 (MTD)</option>
-      <option>ส.ค. – ก.ย. 2026</option>
-      <option>กำหนดเอง…</option>
-    </select>
+  <div class="tools" style="flex-wrap:wrap;row-gap:8px">
+    <div class="rpt-toggle">
+      <button class="rpt-mode-btn on" id="rptBtnProj" onclick="setRptMode('project')">🏗️ Project → Team</button>
+      <button class="rpt-mode-btn" id="rptBtnTeam" onclick="setRptMode('team')">👥 Team → Project</button>
+    </div>
     <span style="flex:1"></span>
-    <button class="btn btn2" onclick="printReport()">🖨️ Export PDF ส่งผู้บริหาร</button>
-    <button class="btn btn2" onclick="copyAI()">📋 Copy ข้อมูลให้ AI วิเคราะห์</button>
-    <button class="btn" onclick="showAI()">🤖 AI วิเคราะห์</button>
+    <button class="btn btn2" onclick="printReport()">🖨️ Export PDF</button>
+    <button class="btn btn2" onclick="copyReportForAI()">📋 Copy วิเคราะห์ AI</button>
+    <button class="btn" onclick="renderReportWithAI()">🤖 AI สรุป</button>
   </div>
-
-  <div class="kpis">
-    <div class="kpi"><div class="v">2</div><div class="l">โครงการ active</div><div class="d">Aquaris · Ayara</div></div>
-    <div class="kpi g"><div class="v">14/24</div><div class="l">Steps ปิดแล้ว</div><div class="d">58%</div></div>
-    <div class="kpi g"><div class="v">−5%</div><div class="l">Blank Phase เทียบแผน</div><div class="d">เร็วกว่าแผนเล็กน้อย</div></div>
-    <div class="kpi r"><div class="v">+33%</div><div class="l">S5 Take-off (MEP·EE)</div><div class="d">คอขวดหลัก</div></div>
-    <div class="kpi y"><div class="v">2 ครั้ง</div><div class="l">Senior ลงมาช่วยทำ</div><div class="d">สัญญาณ capacity</div></div>
-    <div class="kpi g"><div class="v">96%</div><div class="l">อัตราการจดเวลา</div><div class="d">ขาด 1 step ตามทวงแล้ว</div></div>
-  </div>
-
-  <div class="card">
-    <h3>Planning vs Actual · step ที่ปิดแล้วในช่วงเวลา</h3>
-    <table>
-      <thead><tr><th>โครงการ</th><th>ทีม/ระบบ</th><th>Step</th><th>ผู้ทำ</th><th>Plan (วัน)</th><th>Actual (วัน)</th><th>Delta</th></tr></thead>
-      <tbody>
-        <tr><td>Aquaris</td><td>MEP · EE</td><td>S1 รับแบบ</td><td>Jack</td><td>3</td><td>2</td><td class="delta-ok">−33%</td></tr>
-        <tr><td>Aquaris</td><td>MEP · EE</td><td>S3 Blank BOQ</td><td>Jack</td><td>5</td><td>5</td><td class="delta-ok">0%</td></tr>
-        <tr><td>Aquaris</td><td>MEP · AC</td><td>S3 Blank BOQ</td><td>Pari</td><td>5</td><td>6</td><td class="delta-warn">+20%</td></tr>
-        <tr><td>Aquaris</td><td>ST</td><td>S5 Take-off</td><td>P</td><td>12</td><td>13</td><td class="delta-warn">+8%</td></tr>
-        <tr style="background:#fef2f2"><td>Aquaris</td><td>MEP · EE</td><td><b>S5 Take-off</b></td><td>Jack</td><td>12</td><td><b>16</b></td><td class="delta-bad">+33%</td></tr>
-        <tr><td>Ayara</td><td>AR&ID</td><td>S1 รับแบบ</td><td>June</td><td>4</td><td>4</td><td class="delta-ok">0%</td></tr>
-        <tr><td>Ayara</td><td>MEP · SN</td><td>S2 Query</td><td>Fah</td><td>6</td><td>7</td><td class="delta-warn">+17%</td></tr>
-        <tr><td>Ayara</td><td>ST</td><td>S3 Blank BOQ</td><td>Ize</td><td>8</td><td>7</td><td class="delta-ok">−13%</td></tr>
-      </tbody>
-    </table>
-  </div>
-
+  <div class="kpis" id="rptKpis"></div>
+  <div id="rptBody"></div>
   <div class="ai-box" id="aiBox">
-    <h4>🤖 AI วิเคราะห์ · ก.ย. 2026 (ร่างให้ PCM ตรวจก่อนส่งผู้บริหาร)</h4>
-    <ul>
-      <li><b>ภาพรวม:</b> 2 โครงการ pilot คืบหน้า 58% · Blank Phase เร็วกว่าแผน 5% — standard ที่ตั้งไว้เหมาะสม</li>
-      <li><b>คอขวดที่ S5 Take-off ฝั่ง MEP:</b> EE เกินแผน 33% (แบบมี revision ระหว่างทาง) — เร่ง B2 (สายพาน CostX→Back-up) เข้ามาช่วยใน ต.ค.</li>
-      <li><b>Senior ลงมาช่วยทำ 2 ครั้ง</b> ช่วง S5 ชน 2 โครงการ — ควรใช้ Commit Check เข้มงวดปลาย ก.ย.</li>
-      <li><b>ข้อเสนอปรับ Baseline:</b> S5 จริง ~50% ของ Pretender (ตั้งไว้ 45%) — เก็บต่ออีก 4 สัปดาห์แล้วเสนอ Procurement Plan Rev.2</li>
-    </ul>
-    <div style="margin-top:10px;font-size:11.5px;color:#6d28d9">✎ PCM แก้ไข/เพิ่มเติมได้ก่อน Export ส่งผู้บริหาร</div>
+    <h4>🤖 สรุปเชิงวิเคราะห์ (คำนวณจากข้อมูลจริง)</h4>
+    <ul id="aiInsightLines"></ul>
+    <div style="margin-top:10px">
+      <button class="btn btn2" onclick="polishWithLocalAI()">🦙 ให้ Local AI เรียบเรียง (เสริม)</button>
+    </div>
+    <div id="ollamaOut" style="margin-top:8px;font-size:12.5px;white-space:pre-wrap"></div>
   </div>
 </div>
 
@@ -3618,6 +3604,7 @@ async function bootLive(){
     }
     updateModeTag();
     toastMsg('✓ โหลดข้อมูลจริงจาก SharePoint แล้ว');
+    if(document.getElementById('pgReport').classList.contains('on')) renderReport(); // build 2026-08-25.11: refresh รายงานถ้าอยู่ที่ tab รายงาน
   }catch(e){
     console.error('Live load failed, staying on mock data', e);
     LIVE_MODE = false;
@@ -4800,6 +4787,7 @@ document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
   document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
   document.querySelectorAll('.page').forEach(x=>x.classList.remove('on'));
   t.classList.add('on');document.getElementById(t.dataset.p).classList.add('on');
+  if(t.dataset.p==='pgReport') renderReport(); // build 2026-08-25.11: render รายงานทุกครั้งที่สลับมา tab นี้
 }));
 
 /* ============ COMMIT CHECK · AI Suggest ============ */
@@ -4897,28 +4885,258 @@ function copyNego(){
   navigator.clipboard.writeText(INTAKE[curIntake].nego).then(()=>toastMsg('📋 คัดลอกข้อความต่อรองแล้ว · ส่งให้ Post ได้เลย'));
 }
 
-/* ============ Report ============ */
+/* ============ Report · Planning vs Actual (build 2026-08-25.11) ============ */
 function printReport(){
   document.getElementById('pgReport').classList.add('print-target');
   window.print();
   document.getElementById('pgReport').classList.remove('print-target');
 }
-function showAI(){
-  const b=document.getElementById('aiBox');
-  if(LIVE_MODE){
-    const kpis = computeKpisFromLoadedSteps();
-    const lines = generateInsights(kpis);
-    b.innerHTML = `<h4>🤖 AI วิเคราะห์ (คำนวณจากข้อมูลจริงใน SharePoint)</h4>
-      <ul>${lines.map(l=>`<li>${l}</li>`).join('')}</ul>
-      <div style="margin-top:10px"><button class="btn btn2" onclick="polishWithLocalAI()">🦙 ให้ Local AI เรียบเรียง (เสริม)</button></div>
-      <div id="ollamaOut" style="margin-top:8px;font-size:12.5px;white-space:pre-wrap"></div>`;
+
+let RPT_MODE = 'project'; // 'project' | 'team'
+
+function setRptMode(mode){
+  RPT_MODE = mode;
+  document.getElementById('rptBtnProj').classList.toggle('on', mode==='project');
+  document.getElementById('rptBtnTeam').classList.toggle('on', mode==='team');
+  renderRptBody();
+}
+
+function renderReport(){
+  renderRptKpis();
+  renderRptBody();
+}
+
+// === KPI Summary ===
+function renderRptKpis(){
+  const el = document.getElementById('rptKpis'); if(!el) return;
+  let total=0,done=0,inProg=0,lateCount=0,lateDaySum=0;
+  const projActive=new Set(), stepDeltas={};
+  DATA.forEach(pj=>{
+    let hasPending=false;
+    pj.pkgs.forEach(pk=>pk.rows.forEach(row=>{
+      row.steps.forEach(st=>{
+        total++;
+        const c=row.closed[st.s], aOff=row.astart[st.s];
+        if(c){
+          done++;
+          const planEndInc=st.start+Math.max(st.dur-1,0);
+          const delay=c.end-planEndInc;
+          if(delay>0){lateCount++;lateDaySum+=delay;}
+          const asStart=aOff!==undefined?aOff:st.start;
+          const actualDur=Math.max(c.end-asStart+1,1);
+          const planDur=Math.max(st.dur,1);
+          const delta=(actualDur-planDur)/planDur*100;
+          const key=`S${st.s}`;
+          if(!stepDeltas[key])stepDeltas[key]=[];
+          stepDeltas[key].push(delta);
+        } else if(aOff!==undefined){inProg++;hasPending=true;}
+        else hasPending=true;
+      });
+    }));
+    if(hasPending)projActive.add(pj.id);
+  });
+  const pctDone=total?Math.round(done/total*100):0;
+  const avgLate=lateCount>0?Math.round(lateDaySum/lateCount):0;
+  let bottleneck='—',maxAvgDelta=0;
+  Object.entries(stepDeltas).forEach(([k,arr])=>{
+    const avg=arr.reduce((a,b)=>a+b,0)/arr.length;
+    if(avg>maxAvgDelta){maxAvgDelta=avg;bottleneck=k+' (+'+Math.round(avg)+'%)';}
+  });
+  el.innerHTML=`
+    <div class="kpi"><div class="v">${projActive.size||DATA.length}</div><div class="l">โครงการ active</div><div class="d">กำลังดำเนินงาน</div></div>
+    <div class="kpi ${done===total&&total>0?'g':''}"><div class="v">${done}/${total}</div><div class="l">Steps ปิดแล้ว</div><div class="d">${pctDone}% เสร็จสมบูรณ์</div></div>
+    <div class="kpi"><div class="v">${inProg}</div><div class="l">กำลังดำเนินการ</div><div class="d">In Progress</div></div>
+    <div class="kpi ${lateCount>0?'r':'g'}"><div class="v">${lateCount}</div><div class="l">Step เกินกำหนด</div><div class="d">${lateCount>0?'ปิดช้ากว่าแผน':'ทุก Step ตรงแผน'}</div></div>
+    <div class="kpi ${avgLate>3?'r':avgLate>0?'y':'g'}"><div class="v">${lateCount>0?'+'+avgLate+' วัน':'—'}</div><div class="l">ช่องว่างเฉลี่ย</div><div class="d">เฉพาะ Step ที่ปิดช้า</div></div>
+    <div class="kpi ${maxAvgDelta>=25?'r':maxAvgDelta>0?'y':'g'}"><div class="v">${bottleneck}</div><div class="l">คอขวดหลัก</div><div class="d">เฉลี่ยเกินแผนสูงสุด</div></div>`;
+}
+
+// === Step row HTML ===
+function rptStepRow(row, st){
+  const c=row.closed[st.s], aOff=row.astart[st.s];
+  const planStart=addD(T0,st.start);
+  const planEndInc=addD(T0,st.start+Math.max(st.dur-1,0));
+  const planDays=Math.max(st.dur,1);
+  let aStartStr='—',aEndStr='—',aDaysStr='—',statusHtml,delayHtml='';
+  if(c){
+    const asOff=aOff!==undefined?aOff:st.start;
+    aStartStr=fmt(addD(T0,asOff));
+    aEndStr=fmt(addD(T0,c.end));
+    aDaysStr=Math.max(c.end-asOff+1,1)+' วัน';
+    const delay=c.end-(st.start+Math.max(st.dur-1,0));
+    statusHtml='<span class="r-badge r-done">✅ Done</span>';
+    delayHtml=delay>0?`<span class="r-late">+${delay} วัน</span>`:delay<0?`<span class="r-early">${delay} วัน</span>`:'<span class="r-ontime">ตรงแผน</span>';
+  } else if(aOff!==undefined){
+    aStartStr=fmt(addD(T0,aOff));
+    const overdue=TODAY_D-(st.start+Math.max(st.dur-1,0));
+    statusHtml='<span class="r-badge r-prog">⏳ กำลังทำ</span>';
+    delayHtml=overdue>0?`<span class="r-overdue">เกินแผน ${overdue} วัน</span>`:'<span class="r-ontime">ตามแผน</span>';
+  } else {
+    const overdue=TODAY_D-(st.start+Math.max(st.dur-1,0));
+    statusHtml='<span class="r-badge r-ns">⭕ ยังไม่เริ่ม</span>';
+    if(overdue>0)delayHtml=`<span class="r-overdue">เกินแผน ${overdue} วัน</span>`;
   }
-  b.classList.add('show');b.scrollIntoView({behavior:'smooth'});
+  const assignees=[st.who,...(st.coAssignees||[])].filter(Boolean).join(', ')||'—';
+  const sName=(st.name||STEP_NAMES[st.s]||`S${st.s}`);
+  return `<tr class="rpt-step-row">
+    <td style="white-space:nowrap;color:var(--text3);font-weight:600">S${st.s}</td>
+    <td>${sName}</td>
+    <td>${assignees}</td>
+    <td style="white-space:nowrap">${fmt(planStart)}</td>
+    <td style="white-space:nowrap">${fmt(planEndInc)}</td>
+    <td style="text-align:right;color:var(--text2)">${planDays}d</td>
+    <td style="white-space:nowrap;color:var(--text3)">${aStartStr}</td>
+    <td style="white-space:nowrap;color:var(--text3)">${aEndStr}</td>
+    <td style="text-align:right;color:var(--text2)">${aDaysStr}</td>
+    <td style="white-space:nowrap">${delayHtml}</td>
+    <td>${statusHtml}</td></tr>`;
 }
-function copyAI(){
-  const txt=`สรุป BOQ Planning vs Actual · ก.ย. 2026\n- Steps ปิดแล้ว 14/24 (58%)\n- Blank Phase −5% เทียบแผน\n- คอขวด: S5 Take-off MEP·EE +33% (Aquaris, Jack, แบบ revision)\n- Senior ช่วยทำงาน 2 ครั้ง\n- อัตราการจดเวลา 96%\nช่วยวิเคราะห์แนวโน้ม คอขวด และข้อเสนอแนะสำหรับผู้บริหาร`;
-  navigator.clipboard.writeText(txt).then(()=>toastMsg('📋 คัดลอกแล้ว · นำไปวางใน Claude ได้เลย'));
+
+function rptTableWrap(rowsHtml){
+  return `<div style="overflow-x:auto"><table>
+    <thead><tr>
+      <th>Step</th><th>ชื่องาน</th><th>ผู้รับผิดชอบ</th>
+      <th>แผนเริ่ม</th><th>แผนจบ</th><th>แผน</th>
+      <th>จริงเริ่ม</th><th>จริงจบ</th><th>จริง</th>
+      <th>Delay</th><th>สถานะ</th></tr></thead>
+    <tbody>${rowsHtml}</tbody></table></div>`;
 }
+
+function rptRowPct(row){
+  const t=row.steps.length, d=row.steps.filter(st=>row.closed[st.s]).length;
+  return t?{done:d,total:t,pct:Math.round(d/t*100)}:{done:0,total:0,pct:0};
+}
+function rptPkgPct(pk){
+  let t=0,d=0; pk.rows.forEach(r=>{t+=r.steps.length;d+=r.steps.filter(st=>r.closed[st.s]).length;}); return {done:d,total:t,pct:t?Math.round(d/t*100):0};
+}
+function rptProjPct(pj){
+  let t=0,d=0; pj.pkgs.forEach(pk=>pk.rows.forEach(r=>{t+=r.steps.length;d+=r.steps.filter(st=>r.closed[st.s]).length;})); return {done:d,total:t,pct:t?Math.round(d/t*100):0};
+}
+
+function rptProjBar(pp, light){
+  const bg=light?'rgba(0,0,0,.08)':'rgba(255,255,255,.2)', fill='#22c55e';
+  return `<span style="display:inline-flex;align-items:center;gap:6px;font-size:11.5px">
+    <span style="display:inline-block;width:70px;height:5px;background:${bg};border-radius:3px;overflow:hidden"><span style="display:block;height:100%;background:${fill};width:${pp.pct}%;border-radius:3px"></span></span>
+    <span>${pp.pct}%</span></span>`;
+}
+
+function renderRptByProject(body){
+  if(!DATA.length){body.innerHTML='<div class="card" style="text-align:center;padding:40px;color:var(--text3)">⏳ ยังไม่มีข้อมูล</div>';return;}
+  let html='';
+  DATA.forEach(pj=>{
+    const pp=rptProjPct(pj);
+    html+=`<div class="card" style="margin-bottom:14px;padding:0;overflow:hidden">
+      <div style="padding:9px 14px;background:#1e3a5f;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <span style="color:#fff;font-weight:700;font-size:13.5px">🏗️ ${pj.name}</span>
+        <span style="color:#93c5fd;font-size:11.5px">${pj.meta||''}</span>
+        <span style="flex:1"></span>
+        <span style="color:#e0f2fe;font-size:11.5px;display:flex;align-items:center;gap:8px">${pp.done}/${pp.total} steps ${rptProjBar(pp,false)}</span>
+      </div>`;
+    pj.pkgs.forEach(pk=>{
+      const kp=rptPkgPct(pk);
+      html+=`<div style="padding:5px 14px;background:#eff6ff;border-top:1px solid #bfdbfe;display:flex;align-items:center;gap:10px">
+        <span style="color:#1e40af;font-weight:600;font-size:12.5px">📦 ${pk.name}</span>
+        <span style="color:#64748b;font-size:11.5px">${kp.done}/${kp.total} · ${rptProjBar(kp,true)}</span>
+      </div>`;
+      pk.rows.forEach(row=>{
+        const rp=rptRowPct(row);
+        const svc=row.service?` · ${row.service}`:'';
+        const due=row.due?` · Due: ${row.due}`:'';
+        html+=`<div style="padding:4px 14px 4px 24px;background:var(--bg);border-top:1px solid var(--border);display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span style="font-weight:600;font-size:12px;color:var(--text1)">👥 ${row.team}${svc}</span>
+          <span style="font-size:11px;color:var(--text3)">${due}</span>
+          <span style="margin-left:auto;font-size:11.5px;color:var(--text2)">${rp.done}/${rp.total} · ${rptProjBar(rp,true)}</span>
+        </div>`;
+        let rows=''; row.steps.forEach(st=>{rows+=rptStepRow(row,st);});
+        html+=rptTableWrap(rows);
+      });
+    });
+    html+='</div>';
+  });
+  body.innerHTML=html;
+}
+
+function renderRptByTeam(body){
+  if(!DATA.length){body.innerHTML='<div class="card" style="text-align:center;padding:40px;color:var(--text3)">⏳ ยังไม่มีข้อมูล</div>';return;}
+  // Build team map: team → [{pj,pk,row}]
+  const teamMap={};
+  DATA.forEach(pj=>pj.pkgs.forEach(pk=>pk.rows.forEach(row=>{
+    if(!teamMap[row.team])teamMap[row.team]=[];
+    teamMap[row.team].push({pj,pk,row});
+  })));
+  let html='';
+  Object.entries(teamMap).sort((a,b)=>a[0].localeCompare(b[0],'th')).forEach(([team,entries])=>{
+    let t=0,d=0;
+    entries.forEach(({row})=>{t+=row.steps.length;d+=row.steps.filter(st=>row.closed[st.s]).length;});
+    const pp={done:d,total:t,pct:t?Math.round(d/t*100):0};
+    html+=`<div class="card" style="margin-bottom:14px;padding:0;overflow:hidden">
+      <div style="padding:9px 14px;background:#1e3a5f;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <span style="color:#fff;font-weight:700;font-size:13.5px">👥 ${team}</span>
+        <span style="flex:1"></span>
+        <span style="color:#e0f2fe;font-size:11.5px;display:flex;align-items:center;gap:8px">${pp.done}/${pp.total} steps ${rptProjBar(pp,false)}</span>
+      </div>`;
+    entries.forEach(({pj,pk,row})=>{
+      const rp=rptRowPct(row);
+      const svc=row.service?` · ${row.service}`:'';
+      const due=row.due?` · Due: ${row.due}`:'';
+      html+=`<div style="padding:5px 14px;background:#eff6ff;border-top:1px solid #bfdbfe;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <span style="color:#1e40af;font-weight:600;font-size:12px">🏗️ ${pj.name} / ${pk.name}${svc}</span>
+        <span style="font-size:11px;color:var(--text3)">${due}</span>
+        <span style="margin-left:auto;font-size:11.5px;color:var(--text2)">${rp.done}/${rp.total} · ${rptProjBar(rp,true)}</span>
+      </div>`;
+      let rows=''; row.steps.forEach(st=>{rows+=rptStepRow(row,st);});
+      html+=rptTableWrap(rows);
+    });
+    html+='</div>';
+  });
+  body.innerHTML=html;
+}
+
+function renderRptBody(){
+  const body=document.getElementById('rptBody'); if(!body)return;
+  if(RPT_MODE==='project')renderRptByProject(body);
+  else renderRptByTeam(body);
+}
+
+function renderReportWithAI(){
+  const kpis=computeKpisFromLoadedSteps();
+  const lines=generateInsights(kpis);
+  const el=document.getElementById('aiInsightLines');
+  if(el)el.innerHTML=lines.map(l=>`<li>${l}</li>`).join('');
+  const b=document.getElementById('aiBox');
+  if(b){b.classList.add('show');b.scrollIntoView({behavior:'smooth'});}
+}
+
+// Legacy alias (ใช้ตอน LIVE_MODE)
+function showAI(){ renderReportWithAI(); }
+
+function copyReportForAI(){
+  const lines=['สรุป BOQ Planning vs Actual'];
+  DATA.forEach(pj=>{
+    const pp=rptProjPct(pj);
+    lines.push(`\n=== ${pj.name} === ความคืบหน้า ${pp.pct}% (${pp.done}/${pp.total} steps)`);
+    pj.pkgs.forEach(pk=>pk.rows.forEach(row=>{
+      lines.push(`  [${row.team}${row.service?' · '+row.service:''}]`);
+      row.steps.forEach(st=>{
+        const c=row.closed[st.s],aOff=row.astart[st.s];
+        const status=c?'Done':aOff!==undefined?'In Progress':'Not Started';
+        const planEnd=fmt(addD(T0,st.start+Math.max(st.dur-1,0)));
+        const aEnd=c?fmt(addD(T0,c.end)):'-';
+        const delay=c?(c.end-(st.start+Math.max(st.dur-1,0))):null;
+        const delayStr=delay!=null&&delay>0?` [ช้า +${delay}วัน]`:delay!=null&&delay<0?` [เร็ว ${-delay}วัน]`:'';
+        lines.push(`    S${st.s} ${STEP_NAMES[st.s]||''}: ${status}${delayStr} · ${st.who||'-'} · แผนจบ ${planEnd} จริงจบ ${aEnd}`);
+      });
+    }));
+  });
+  const kpis=computeKpisFromLoadedSteps();
+  lines.push(`\nภาพรวม: ปิดแล้ว ${kpis.done}/${kpis.total} (${kpis.pctDone}%)`);
+  if(kpis.bottlenecks.length>0)lines.push('คอขวด: '+kpis.bottlenecks.map(b=>`${b.step} +${b.avg.toFixed(0)}%`).join(', '));
+  lines.push('\nช่วยวิเคราะห์แนวโน้ม คอขวด และข้อเสนอแนะสำหรับผู้บริหาร ภาษาไทย ไม่เกิน 8 บรรทัด');
+  navigator.clipboard.writeText(lines.join('\n')).then(()=>toastMsg('📋 คัดลอกแล้ว · นำไปวางใน Claude ได้เลย'));
+}
+
+// Legacy alias
+function copyAI(){ copyReportForAI(); }
 
 /* init */
 loadStepTemplatesFromStorage(); // โหลดตั้งแต่ต้น เผื่อผู้ใช้เปิดฟอร์ม "⚙️ Step Template" ก่อน login SharePoint ด้วยซ้ำ
