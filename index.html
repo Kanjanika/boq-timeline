@@ -307,7 +307,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-25.11</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-25.12</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -767,7 +767,7 @@ const STEP_NAMES = {1:'รับแบบ+ตรวจ',2:'Query Sheet',3:'ท�
 // จริงไม่เหมือนกัน เลยทำ Step Template แยกตาม Service Type แทน แก้ไขได้จากปุ่ม "⚙️ Step Template" ในแถบ Timeline
 // ratio ของแต่ละ Stage ไม่จำเป็นต้องรวมกันเป็น 1 พอดี ระบบ normalize ให้เองตอนคำนวณจริง (ดู getTemplateForService)
 // SERVICE_TYPES: ต้องตรงกับ choice list ของ field "Service Type" ใน SharePoint list เป๊ะๆ (ดูภาพหน้าตั้งค่า field)
-const SERVICE_TYPES = ['Blank BOQ','Pretender','Budget','VE','Cost Exercise','VO','Meeting','Check Progress','Payment Certificate'];
+const SERVICE_TYPES = ['Blank BOQ','Pretender','Budget','VE','Cost Exercise','VO','Meeting - Online','Meeting - Onsite','Check Progress','Payment Certificate']; // build 2026-08-25.12: แยก Meeting → Meeting - Online + Meeting - Onsite ตาม choice list ใน SharePoint
 const DEFAULT_STEP_TEMPLATES = {
   // Blank BOQ กับ Pretender เป็นงานคนละข้อกันใน SharePoint (commit แยกกัน คนละ record ไม่ได้รวมเป็นโครงการเดียว)
   // แต่ยังอ้างอิงเลข Step ต่อเนื่องกันตามธรรมเนียมเดิม (ตอนที่เคยมองเป็น 8 Step เดียวกัน): Blank BOQ = S1-S4,
@@ -798,7 +798,8 @@ const DEFAULT_STEP_TEMPLATES = {
   'VE':                   [ {name:'รับ Scope งาน', ratio:0.25}, {name:'วิเคราะห์ทางเลือก', ratio:0.35}, {name:'ประมาณราคาเทียบ', ratio:0.25}, {name:'ตรวจ+ส่ง', days:2} ],
   'Cost Exercise':        [ {name:'รับ Scope งาน', ratio:0.3}, {name:'ประมาณราคา', ratio:0.4}, {name:'ตรวจ+ส่ง', days:2} ],
   'VO':                   [ {name:'รับ Scope VO', ratio:0.2}, {name:'Take-off ปริมาณ', ratio:0.3}, {name:'ตั้งราคา', ratio:0.3}, {name:'ตรวจ+ส่ง', days:2} ],
-  'Meeting':              [ {name:'เตรียมข้อมูล', ratio:0.4}, {name:'ประชุม+สรุป', ratio:0.6} ],
+  'Meeting - Online':     [ {name:'เตรียมข้อมูล', ratio:0.4}, {name:'ประชุม Online+สรุป', ratio:0.6} ],  // build 2026-08-25.12
+  'Meeting - Onsite':     [ {name:'เตรียมข้อมูล', ratio:0.4}, {name:'ประชุม Onsite+สรุป', ratio:0.6} ],  // build 2026-08-25.12
   'Check Progress':       [ {name:'ตรวจหน้างาน/เอกสาร', ratio:0.5}, {name:'สรุปรายงาน', ratio:0.5} ],
   'Payment Certificate':  [ {name:'ตรวจปริมาณงาน', ratio:0.4}, {name:'ทำ Payment Cert.', ratio:0.4}, {name:'ตรวจ+ส่ง', days:2} ],
 };
