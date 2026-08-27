@@ -307,7 +307,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-25.12</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-25.13</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -751,7 +751,7 @@ tr.pick:hover td{background:var(--bg)}
 // BUILD_VERSION: เลขเวอร์ชันที่ต้องแก้คู่กับข้อความ "build ..." ใน <div class="brand"> ของ HTML ทุกครั้งที่ส่งไฟล์ใหม่
 // ให้ทีม — ใช้เช็คได้ง่ายๆ ว่าไฟล์ที่ deploy จริง (เช่น GitHub Pages) เป็นเวอร์ชันล่าสุดที่ส่งไปหรือยัง (ดูที่มุมซ้ายบน
 // ของหน้าเว็บได้เลย ไม่ต้อง login/กดปุ่มตรวจสอบอะไรก่อน) log ออก console ด้วยเผื่อสะดวกกว่าตอน debug
-const BUILD_VERSION = '2026-08-19.7';
+const BUILD_VERSION = '2026-08-25.13';
 console.log('[BOQ Timeline] BUILD_VERSION =', BUILD_VERSION);
 // หมายเหตุ: ค่าเริ่มต้นนี้ (10 ส.ค.–2 พ.ย. 2569) ใช้กับ MOCK DATA เท่านั้น พอเข้าโหมด LIVE ค่าพวกนี้จะถูก
 // คำนวณใหม่จากวันที่จริงของงานใน SharePoint โดย recalcTimelineWindow() (ดูใน bootLive()) จึงต้องเป็น let ไม่ใช่ const
@@ -1213,7 +1213,10 @@ async function graphFetchAllItems(initialPath){
 // Start/Finish Date อยู่นอกช่วง 10 ส.ค.–2 พ.ย. 2569 จะโดนตัดขอบ/บีบอัดจนดูเหมือน "ระยะเวลาไม่ยืดหยุ่น"
 // ฟังก์ชันนี้สแกนวันที่จริงจาก BOQ Step Tracking + BOQ Team Work Plan (เฉพาะรายการที่ commit แล้ว) มาหาช่วง
 // วันที่ที่ต้องแสดง แล้วปรับ T0/DAYS/TODAY/TODAY_D ให้ตรงกับข้อมูลจริง ต้องเรียกก่อนโหลด/แปลง Step เป็น day-offset เสมอ
-async function recalcTimelineWindow(){
+// build 2026-08-25.13: รับ pre-fetched items แทนการยิง API เองอีกรอบ — bootLive() ดึง STEP_LIST + WORKPLAN_LIST
+// ครั้งเดียวใน Promise.all แล้วส่งผ่านมา ตัด 2 round-trip API ออกได้เลย (เดิม recalcTimelineWindow ดึงซ้ำกัน
+// 2 รายการก่อน ตามด้วย bootLive ดึงซ้ำอีก 2 รายการเดิม รวมแล้ว 4 round-trip → เหลือ 3 (STEP+WP+Intake) parallel)
+function recalcTimelineWindow(stepItems, wpItems){
   let minDate = null, maxDate = null;
   const consider = raw => {
     if(!raw) return;
@@ -1223,15 +1226,13 @@ async function recalcTimelineWindow(){
     if(!maxDate || dt > maxDate) maxDate = dt;
   };
   try{
-    const stepItems = await graphFetchAllItems(`/sites/${SITE_ID}/lists/${STEP_LIST}/items?$expand=fields&$top=200`);
-    stepItems.forEach(it=>{
+    (stepItems||[]).forEach(it=>{
       const f = it.fields;
       consider(f.PlanStart); consider(f.PlanEnd); consider(f.ActualStart); consider(f.ActualEnd);
     });
   }catch(e){ console.warn('recalcTimelineWindow: อ่าน BOQ Step Tracking ไม่สำเร็จ', e); }
   try{
-    const wpItems = await graphFetchAllItems(`/sites/${SITE_ID}/lists/${WORKPLAN_LIST}/items?$expand=fields&$top=200`);
-    wpItems.forEach(it=>{
+    (wpItems||[]).forEach(it=>{
       const f = it.fields;
       const s = f.Start_x0020_Date  || f.StartDate  || f.Start  || null;
       const e2 = f.Finish_x0020_Date || f.FinishDate || f.Finish || null;
@@ -1343,13 +1344,11 @@ function resolvePersonField(val){
   if(typeof val === 'object') return val.LookupValue || val.displayName || val.Title || val.Email || val.email || '';
   return String(val).trim();
 }
-async function loadStepsFromGraph(){
-  // build 2026-08-18.6: เดิมใช้ graphFetch เฉยๆ (ดึงมาแค่หน้าแรกหน้าเดียว) ทั้งที่ผู้ใช้ถามตรงๆ ว่า "ใช้ graph เข้าไป
-  // อ่าน all item ทุก list ด้วยไหม" — เช็คแล้วพบว่า "ไม่" จริงๆ สำหรับ list นี้ (BOQ Step Tracking) Graph มักตัด
-  // response เป็นหลายหน้า (@odata.nextLink) โดยเฉพาะตอน $expand=fields แม้จะขอ $top=200 ก็ตาม (หน้าจริงมักเล็กกว่านั้น
-  // มาก) ถ้ามี Step จริงเกินกว่า 1 หน้า รายการที่อยู่หน้าถัดไปจะหายไปเงียบๆ ทุกครั้งที่โหลด Timeline — เปลี่ยนไปใช้
-  // graphFetchAllItems (วนดึงทุกหน้าจนครบ) แทน ให้เหมือนกับที่ BOQ Team Work Plan ใช้อยู่แล้ว
-  const items = await graphFetchAllItems(`/sites/${SITE_ID}/lists/${STEP_LIST}/items?$expand=fields&$top=200`);
+// build 2026-08-25.13: รับ pre-fetched items แทนการยิง API เอง — bootLive() ส่ง rawStepItems ที่ดึงพร้อมกันใน
+// Promise.all แรกมาให้ ตัด 1 round-trip API ออก (loadStepsFromGraph เดิม async เพราะดึงเองใน function body)
+function loadStepsFromGraph(items){
+  // build 2026-08-18.6: เดิมใช้ graphFetch เฉยๆ (ดึงมาแค่หน้าแรกหน้าเดียว) — เปลี่ยนเป็น graphFetchAllItems
+  // build 2026-08-25.13: ย้าย fetch ไปอยู่ใน bootLive()'s Promise.all รอบแรก ฟังก์ชันนี้รับ items สำเร็จรูปแล้ว
   console.log(`[BOQ Step Tracking] ดึงมาได้ ${items.length} รายการ`);
   const projMap = {};
   items.forEach(it=>{
@@ -2720,7 +2719,11 @@ async function diagnoseAiesActiveStatus(){
     // ทั้งหมดใน bootLive) มี "aies" จริงไหม ไม่ใช่แค่เช็ค activeProjectIds เฉยๆ เหมือนเดิม — เพราะ loadLegacyCommittedProjects
     // เช็คจาก existingProjIds โดยตรง (ดู line ~1372) ไม่ได้เช็คจาก activeProjectIds ตรงๆ)
     let liveStepsAll = [];
-    try{ liveStepsAll = await loadStepsFromGraph(); }catch(e){ console.warn('loadStepsFromGraph ล้มเหลวระหว่าง diagnose', e); }
+    try{
+      // build 2026-08-25.13: loadStepsFromGraph รับ pre-fetched items แล้ว ต้องดึงเองตรงนี้ก่อน (diagnose ไม่มี items จาก bootLive)
+      const diagStepItems = await graphFetchAllItems(`/sites/${SITE_ID}/lists/${STEP_LIST}/items?$expand=fields&$top=200`);
+      liveStepsAll = loadStepsFromGraph(diagStepItems);
+    }catch(e){ console.warn('loadStepsFromGraph ล้มเหลวระหว่าง diagnose', e); }
     const aiesLiveEntry = liveStepsAll.find(p=>p.id==='aies');
     const liveSteps = liveStepsAll.filter(p=> !knownProjIds.has(p.id) || activeProjectIds[p.id]);
     const existingProjIds = liveSteps.map(p=>p.id);
@@ -3335,17 +3338,21 @@ function updateModeTag(){
 }
 async function bootLive(){
   try{
-    // ต้องปรับ T0/DAYS/TODAY ให้ตรงกับวันที่จริงก่อน แล้วค่อยแปลง Step เป็น day-offset (loadStepsFromGraph ฯลฯ
-    // อ้างอิง T0 ตอนคำนวณ) ไม่งั้นงานที่วันที่อยู่นอกช่วง MOCK เดิม (10 ส.ค.–2 พ.ย. 2569) จะโดนตัดขอบ/บีบอัด
-    await recalcTimelineWindow();
+    // build 2026-08-25.13: ปรับประสิทธิภาพการโหลด — เดิม recalcTimelineWindow() ดึง STEP_LIST + WORKPLAN_LIST
+    // เองก่อน แล้ว Promise.all ด้านล่างดึง STEP_LIST + WORKPLAN_LIST ซ้ำอีกรอบ รวมเป็น 4 round-trip sequential+parallel
+    // ใหม่: ดึง STEP_LIST + WORKPLAN_LIST + Intake พร้อมกันใน Promise.all รอบเดียว (3 parallel round-trip)
+    // แล้วส่ง raw items ที่ได้ไปให้ recalcTimelineWindow + loadStepsFromGraph ใช้ต่อ → ตัด 2 round-trip ออก
     loadStepTemplatesFromStorage(); // โหลด Step Template ที่เคยแก้ไว้ (ถ้ามี) มาทับค่าเริ่มต้นก่อนใช้งานจริง
-    // ดึง BOQ Team Work Plan ครั้งเดียวตรงนี้ แล้วแบ่งใช้กับทั้ง getDoneProjectIds/loadLegacyCommittedProjects/
-    // buildServiceTypeMap (เดิมแต่ละฟังก์ชันยิง Graph API ดึง list เดียวกันซ้ำกันเอง 2-3 รอบ)
-    const [liveStepsAll, liveIntake, workplanItemsAll] = await Promise.all([
-      loadStepsFromGraph(),
-      loadIntakeFromGraph(),
-      graphFetchAllItems(`/sites/${SITE_ID}/lists/${WORKPLAN_LIST}/items?$expand=fields&$top=200`).catch(e=>{ console.warn('โหลด BOQ Team Work Plan (สำหรับ Status=Done/legacy commit/Service Type) ไม่สำเร็จ', e); return []; })
+    // ดึง STEP_LIST + WORKPLAN_LIST + Intake พร้อมกัน (parallel) ครั้งเดียวตรงนี้ แล้วแบ่งใช้กับทุกขั้นตอนถัดไป
+    const [rawStepItems, workplanItemsAll, liveIntake] = await Promise.all([
+      graphFetchAllItems(`/sites/${SITE_ID}/lists/${STEP_LIST}/items?$expand=fields&$top=200`).catch(e=>{ console.warn('โหลด BOQ Step Tracking ไม่สำเร็จ', e); return []; }),
+      graphFetchAllItems(`/sites/${SITE_ID}/lists/${WORKPLAN_LIST}/items?$expand=fields&$top=200`).catch(e=>{ console.warn('โหลด BOQ Team Work Plan ไม่สำเร็จ', e); return []; }),
+      loadIntakeFromGraph()
     ]);
+    // ต้องปรับ T0/DAYS/TODAY ให้ตรงกับวันที่จริงก่อน แล้วค่อยแปลง Step เป็น day-offset
+    recalcTimelineWindow(rawStepItems, workplanItemsAll);
+    // แปลง raw Step items → โครงสร้าง liveStepsAll (ใช้ items ที่ดึงมาแล้วข้างบน ไม่ดึงซ้ำ)
+    const liveStepsAll = loadStepsFromGraph(rawStepItems);
     const activeProjectIds = buildActiveProjectIds(workplanItemsAll); // projId -> true ถ้ามี item ที่ Status ยัง active จริงๆ (เชื่อถือได้กว่า getDoneProjectIds เดิม — ดูเหตุผลด้านล่าง)
     // projId ทั้งหมดที่มี record อยู่ใน BOQ Team Work Plan (ไม่ว่า Status อะไร) — ใช้แยกว่า "มีข้อมูลแต่ไม่ active"
     // (ควรซ่อน) กับ "ไม่มีข้อมูลให้เช็คเลย" (ไม่ควรซ่อน เผื่อกรณีข้อมูลไม่ครบ จะได้ไม่ซ่อนโครงการที่ยังทำอยู่จริงผิดๆ)
