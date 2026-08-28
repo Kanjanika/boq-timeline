@@ -1871,9 +1871,15 @@ async function computeAISuggest(task){
     histMult = refRow? Number(refRow.HistMultiplier)||1.2 : 1.2;
   }
   let needDays = Math.round(targetWeeks*histMult*5); // สัปดาห์ → วันทำการโดยประมาณ
+  // build 2026-08-25.15: Meeting - Online / Onsite ใช้เวลาแค่ 0.5–1 วัน → needDays=1 ทุกกรณี
+  // (ไม่ขึ้นกับ GFA/sizeBand/WorkPackage และไม่ลด revision เพิ่มอีก)
+  if(task.service==='Meeting - Online' || task.service==='Meeting - Onsite'){
+    needDays = 1;
+  }
   // build 2026-08-20.7: งาน Revise (Version > 2 หรือมีคำว่า Rev) ลด needDays เหลือ ≤ 2 สัปดาห์
   const revisionReduced = isRevisionVersion(task.version);
-  if(revisionReduced) needDays = Math.min(needDays, 10);
+  if(revisionReduced && task.service!=='Meeting - Online' && task.service!=='Meeting - Onsite')
+    needDays = Math.min(needDays, 10);
   const subs = subteamsForRawPackage(task.packageName);
   let earliestFree = new Date();
   // build 2026-08-18.10: ผู้ใช้แจ้งว่า "ผู้ทำที่แนะนำ" ในหน้า AI Suggest ขึ้นแค่ชื่อ P/June/Jack ซ้ำๆ ตลอด — ต้นเหตุคือ
