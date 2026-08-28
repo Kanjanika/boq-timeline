@@ -455,7 +455,7 @@ tr.pick:hover td{background:var(--bg)}
           <div><small>Start</small><input type="date" id="ciStartInput" style="font-weight:600;font-size:14px" oninput="updateAIDurationDisplay()"></div>
           <div><small>Finish</small><input type="date" id="ciFinishInput" style="font-weight:600;font-size:14px" oninput="updateAIDurationDisplay()"></div>
           <div><small>ระยะเวลา</small><b id="aiDuration" style="font-size:13px">—</b></div>
-          <div><small>ผู้ทำที่แนะนำ</small><b id="aiWho" style="font-size:13px">—</b></div>
+          <div><small>ผู้ทำที่แนะนำ</small><b id="aiWho" style="font-size:12px">—</b><span id="aiLargeBadge" style="display:none;margin-left:6px;background:#fef3c7;color:#92400e;font-size:10px;font-weight:700;padding:1px 7px;border-radius:8px;border:1px solid #fbbf24">งานใหญ่ 2 คน</span></div>
         </div>
       </div>
 
@@ -499,6 +499,32 @@ tr.pick:hover td{background:var(--bg)}
   <div class="ai-box" id="aiBox">
     <h4>🤖 สรุปเชิงวิเคราะห์ (คำนวณจากข้อมูลจริง)</h4>
     <ul id="aiInsightLines"></ul>
+    <!-- Ollama config panel (build 2026-08-28) -->
+    <details id="ollamaCfgPanel" style="margin-top:10px;border:1px solid #d1fae5;border-radius:8px;padding:8px 12px;background:#f0fdf4">
+      <summary style="cursor:pointer;font-size:12px;font-weight:600;color:#065f46;user-select:none">🦙 ตั้งค่า Local AI (Ollama)</summary>
+      <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+        <div style="display:flex;flex-direction:column;gap:3px;flex:1;min-width:180px">
+          <label style="font-size:11px;color:#6b7280">URL (IP:Port)</label>
+          <input id="ollamaCfgUrl" type="text" placeholder="http://192.168.1.117:11434"
+            style="font-size:12px;padding:4px 8px;border:1px solid #a7f3d0;border-radius:6px;width:100%;box-sizing:border-box"
+            onchange="saveOllamaCfg()"/>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:3px;flex:0 0 140px">
+          <label style="font-size:11px;color:#6b7280">Model</label>
+          <input id="ollamaCfgModel" type="text" placeholder="llama3.2:3b"
+            style="font-size:12px;padding:4px 8px;border:1px solid #a7f3d0;border-radius:6px;width:100%;box-sizing:border-box"
+            onchange="saveOllamaCfg()"/>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:3px;align-self:flex-end">
+          <button class="btn btn2" onclick="testOllamaConnection()" style="font-size:11px;padding:4px 10px;white-space:nowrap">🔌 Test</button>
+        </div>
+        <span id="ollamaSaveBadge" style="display:none;font-size:11px;color:#059669;font-weight:600">✅ บันทึกแล้ว</span>
+      </div>
+      <div id="ollamaTestBadge" style="display:none;margin-top:6px;font-size:11.5px;font-weight:500"></div>
+      <div style="margin-top:6px;font-size:11px;color:#6b7280">
+        💡 ค่าจะถูกบันทึกในเบราว์เซอร์นี้ · ถ้า Ollama อยู่เครื่องอื่นในวง LAN ใส่ IP จริงของเครื่องนั้น
+      </div>
+    </details>
     <div style="margin-top:10px">
       <button class="btn btn2" onclick="polishWithLocalAI()">🦙 ให้ Local AI เรียบเรียง (เสริม)</button>
     </div>
@@ -891,6 +917,27 @@ const QA_LEADS = {
   EE:'Stamp', AC:'Stamp', SN:'Stamp', FP:'Stamp',
   Budget:'Yo'
 };
+// build 2026-08-28: TEAM_ROLES — ระดับบทบาทของแต่ละคน ใช้คำนวณ roleFit score ใน Smart Assign
+// Lead/Senior เหมาะกับ steps ยาก (S4 QA, S5 Price+Checklist, S6 Submit) มากกว่า Junior
+// PCM แก้ไขได้ที่นี่ถ้าทีมเปลี่ยนบทบาท
+const TEAM_ROLES = {
+  // ST pool
+  'P':'Lead', 'Ize':'Senior', 'May':'Senior',
+  // AR pool
+  'June':'Lead', 'Si':'Senior', 'Su':'Senior', 'Yim':'Senior',
+  'Pang':'Mid', 'Memie':'Mid', 'Mai':'Mid',
+  // MEP pool
+  'Jack':'Lead', 'Pari':'Senior', 'Stamp':'Senior',
+  'Hongyok':'Mid', 'Fah':'Mid', 'Wim':'Junior',
+  // BUDGET pool
+  'Best':'Senior', 'Yo':'Senior',
+};
+// LARGE_JOB_PATTERNS: pattern ชื่อ Package/Project ที่ถือว่าเป็นงานใหญ่ → assign 2 คน
+// ปรับเพิ่ม/ลด pattern ได้ที่นี่
+const LARGE_JOB_PATTERNS = [
+  /main.?con(tractor)?/i, /full.?build/i, /phase/i,
+  /\bmc\b/i, /overall/i, /complete/i
+];
 const MEP_SUBTEAMS = ['EE','AC','SN','FP'];
 // รายชื่อทีมทั้งหมด (unique) รวมจากทุก pool — ใช้เป็น roster หลักของตาราง Manpower เพื่อให้เห็นครบทุกคน
 // แม้ตอนนี้ไม่มีงานถือครองอยู่เลยก็ตาม (ไม่ใช่แค่คนที่บังเอิญมีชื่อโผล่ในข้อมูลปัจจุบัน) — คนหนึ่งอาจอยู่หลาย pool
@@ -1819,27 +1866,47 @@ async function pickLeastBusyPerson(subteam, pool, excludeNames=[]){
     const data = await graphFetch(q);
     const items = (data && data.value) || [];
     const maxEndByPerson = {};
+    const activeCountByPerson = {}; // build 2026-08-28: นับ active steps (ยังไม่ปิด) ต่อคน
+    const today = Date.now();
     items.forEach(it=>{
       const f = it.fields||{};
       const name = resolveAssigneeName(f.StepAssignee, f.StepAssigneeLookupId);
       if(!name || name==='-' || !roster.includes(name)) return;
       const end = f.PlanEnd ? new Date(f.PlanEnd).getTime() : 0;
       if(!(name in maxEndByPerson) || end > maxEndByPerson[name]) maxEndByPerson[name] = end;
+      // นับ step ที่ยังไม่ปิด (PlanEnd ในอนาคต และยังไม่มี ActualEnd)
+      if(!f.ActualEnd && end > today){
+        activeCountByPerson[name] = (activeCountByPerson[name]||0) + 1;
+      }
     });
-    // คนที่ไม่เคยมี Step เลย (maxEndByPerson ไม่มี key) ถือว่าว่างที่สุด (0) — เรียงจากว่างเร็วสุด/ว่างอยู่แล้วก่อน
-    // กรอง excludeNames ออกก่อนเรียง (กันซ้ำข้ามทีม)
+    // build 2026-08-28: Smart Assign Scoring
+    // score ต่ำ = ดีกว่า (ว่างเร็ว + งานน้อย + role เหมาะ)
+    // daysWaiting: วันที่ต้องรอตั้งแต่วันนี้จนว่าง
+    // workloadPenalty: active tasks × 2 (กันซ้อนงาน)
+    // roleFit: Lead/Senior ได้ bonus ลบออกจาก score (ยิ่งเหมาะยิ่ง score ต่ำ)
     const available = roster.filter(n => !excludeNames.includes(n));
-    const sorted = available.sort((a,b)=> (maxEndByPerson[a]||0) - (maxEndByPerson[b]||0));
-    const chosenName = sorted[0] || null;
-    const freeDateMs = chosenName ? (maxEndByPerson[chosenName] || 0) : 0;
+    const scored = available.map(name => {
+      const freeDateMs = maxEndByPerson[name] || 0;
+      const daysWaiting = freeDateMs > today ? (freeDateMs - today) / 86400000 : 0;
+      const workloadPenalty = (activeCountByPerson[name] || 0) * 2;
+      const role = TEAM_ROLES[name] || 'Junior';
+      const roleFit = role==='Lead' ? 3 : role==='Senior' ? 2 : role==='Mid' ? 1 : 0;
+      const score = daysWaiting + workloadPenalty - roleFit;
+      return { name, freeDateMs, score, activeCount: activeCountByPerson[name]||0 };
+    });
+    scored.sort((a,b) => a.score - b.score);
+    const chosen = scored[0] || null;
+    const chosenName = chosen ? chosen.name : null;
+    const freeDateMs = chosen ? (chosen.freeDateMs || 0) : 0;
     // build 2026-08-25.15: คืน maxEndByPerson ทั้ง dict กลับไป เพื่อให้ computeAISuggest
     // รวม (merge) ข้อมูลวันว่างข้ามทุก subteam โดยไม่ต้องยิง API รอบสองที่ filter StepAssignee eq 'name'
     // (filter นั้นล้มเหลวถ้า StepAssignee เป็น Person/Group lookup — ทำให้ได้ items=[] → freeDateMs=0 → start=วันนี้)
-    return {name: chosenName, freeDateMs, maxEndByPerson};
+    // build 2026-08-28: เพิ่ม scoredRoster (ทุกคนพร้อม score) และ activeCountByPerson กลับไปด้วย
+    return {name: chosenName, freeDateMs, maxEndByPerson, activeCountByPerson, scoredRoster: scored};
   }catch(e){
     console.warn('[pickLeastBusyPerson] ดึงข้อมูลไม่สำเร็จ ใช้คนแรกในรายชื่อแทน', subteam, e);
     const fallback = roster.filter(n => !excludeNames.includes(n));
-    return {name: fallback[0] || null, freeDateMs: 0, maxEndByPerson: {}};
+    return {name: fallback[0] || null, freeDateMs: 0, maxEndByPerson: {}, activeCountByPerson: {}, scoredRoster: []};
   }
 }
 async function computeAISuggest(task){
@@ -1889,21 +1956,46 @@ async function computeAISuggest(task){
   // build 2026-08-20.5: เรียก pickLeastBusyPerson ทีละ subteam พร้อม excludeNames
   // ทำให้ EE/AC/SN/FP (pool เดียวกัน = MEP) ได้คนละคนกัน ไม่ซ้ำกัน
   // (pool เดิมมี 6 คน: Jack/Pari/Hongyok/Fah/Wim/Stamp — เพียงพอสำหรับ 4 ทีม)
+  // build 2026-08-28: ตรวจว่างานนี้ใหญ่ไหม → ถ้าใหญ่ assign 2 คนต่อ subteam หลัก
+  const isLargeJob = LARGE_JOB_PATTERNS.some(re => re.test(task.packageName||'') || re.test(task.name||''));
   const whoBySubteam = {};
+  // build 2026-08-28: whoCoBySubteam — คนที่สองสำหรับงานใหญ่
+  const whoCoBySubteam = {};
   // build 2026-08-25.15: globalMaxEndByPerson รวมวันว่างของทุกคนจากทุก subteam query
-  // แทน freeBySubteam ที่เคยใช้ — เพื่อแก้ bug start=วันนี้เสมอ
   const globalMaxEndByPerson = {};
+  const globalActiveCount = {}; // build 2026-08-28: รวม activeCount ข้ามทุก subteam
+  // build 2026-08-28: tentativeEndByPerson — track งานที่ "จอง" ไปแล้วในรอบนี้
+  // ป้องกัน assign คนเดิมซ้ำหลายงานในสัปดาห์เดียวกัน
+  if(!computeAISuggest._tentative) computeAISuggest._tentative = {};
+  const tentative = computeAISuggest._tentative;
   const assignedPeople = [];
   for(const allSt of ALL_SUBTEAMS){
     const pool = subToPool(allSt);
-    const result = await pickLeastBusyPerson(allSt, pool, assignedPeople);
+    // build 2026-08-28: ส่ง tentative บวกเข้าไปใน excludeNames ของ subteam นี้ด้วย
+    // (คนที่ถูก tentative assign ใน subteam ก่อนหน้าในสัปดาห์เดียวกัน จะไม่ได้งานซ้ำ)
+    const nowMs = Date.now();
+    const tentativeExclude = Object.entries(tentative)
+      .filter(([,endMs]) => endMs > nowMs)
+      .map(([name]) => name);
+    const excludeAll = [...assignedPeople, ...tentativeExclude];
+    const result = await pickLeastBusyPerson(allSt, pool, excludeAll);
     whoBySubteam[allSt] = result.name || null;
-    // merge maxEndByPerson จาก subteam นี้เข้า globalMaxEndByPerson (เก็บค่า max ต่อคน)
+    // merge maxEndByPerson และ activeCountByPerson
     Object.entries(result.maxEndByPerson || {}).forEach(([name, end])=>{
       if(!(name in globalMaxEndByPerson) || end > globalMaxEndByPerson[name])
         globalMaxEndByPerson[name] = end;
     });
+    Object.entries(result.activeCountByPerson || {}).forEach(([name, cnt])=>{
+      globalActiveCount[name] = (globalActiveCount[name]||0) + cnt;
+    });
     if(result.name) assignedPeople.push(result.name);
+    // build 2026-08-28: งานใหญ่ → หาคนที่สองจาก pool เดียวกัน (exclude คนแรก + tentative)
+    if(isLargeJob){
+      const exclude2 = [...excludeAll, result.name].filter(Boolean);
+      const result2 = await pickLeastBusyPerson(allSt, pool, exclude2);
+      whoCoBySubteam[allSt] = result2.name || null;
+      if(result2.name) assignedPeople.push(result2.name);
+    }
   }
   // who สำหรับแสดงตอนเปิด = คนจาก subs ของ task (ตาม Package จริง) dedupe by name
   const displayNamesSeen = new Set();
@@ -1914,12 +2006,17 @@ async function computeAISuggest(task){
       displayNamesSeen.add(p);
       whoParts.push(p);
     }
+    // build 2026-08-28: เพิ่มคนที่สองถ้างานใหญ่
+    if(isLargeJob){
+      const p2 = whoCoBySubteam[st];
+      if(p2 && !displayNamesSeen.has(p2)){
+        displayNamesSeen.add(p2);
+        whoParts.push(p2);
+      }
+    }
   }
   const who = whoParts.join(' + ');
   // build 2026-08-25.15: ใช้ globalMaxEndByPerson ที่ merge มาจากทุก subteam query แล้ว
-  // แทนการยิง API รอบสองด้วย $filter=StepAssignee eq 'name' ซึ่งล้มเหลวถ้า StepAssignee เป็น Person/Group lookup
-  // → ได้ items=[] → freeByPerson[person]=0 → earliestFree=วันนี้ (bug ที่แก้ตรงนี้)
-  // globalMaxEndByPerson ครอบคลุมทุก subteam แล้ว เพราะ ALL_SUBTEAMS ครอบคลุมทุกทีม
   for(const st of subs){
     const person = whoBySubteam[st];
     const freeDateMs = person ? (globalMaxEndByPerson[person] || 0) : 0;
@@ -1927,11 +2024,33 @@ async function computeAISuggest(task){
       const d = new Date(freeDateMs);
       if(d > earliestFree) earliestFree = d;
     }
-    // ถ้า freeDateMs===0 (คนนั้นยังไม่เคยมี Step เลย) ให้ earliestFree คงค่า new Date() ไว้ = เริ่มได้เลยวันนี้
+    // build 2026-08-28: ถ้างานใหญ่ → earliestFree = max(คนแรก, คนที่สอง) ด้วย
+    if(isLargeJob){
+      const p2 = whoCoBySubteam[st];
+      const free2Ms = p2 ? (globalMaxEndByPerson[p2] || 0) : 0;
+      if(free2Ms > 0){
+        const d2 = new Date(free2Ms);
+        if(d2 > earliestFree) earliestFree = d2;
+      }
+    }
   }
   const start = earliestFree;
   const finish = addBusinessDays(start, needDays);
-  return { start, finish, who: who||'-', whoBySubteam, needDays, refRow, matchLevel, revisionReduced };
+  // build 2026-08-28: บันทึก tentative commitment — ป้องกัน assign ซ้ำในรอบ Commit ถัดไป
+  // (reset ได้โดยเรียก computeAISuggest._tentative = {} หรือ reload หน้า)
+  whoParts.forEach(name => {
+    tentative[name] = finish.getTime();
+  });
+  // build 2026-08-28: สร้าง assignReason สำหรับแสดงใน aiWho label
+  const reasonParts = whoParts.map(name => {
+    const role = TEAM_ROLES[name] || 'Mid';
+    const freeMs = globalMaxEndByPerson[name] || 0;
+    const activeCnt = globalActiveCount[name] || 0;
+    const freeLabel = freeMs > 0 ? `ว่าง ${new Date(freeMs).toLocaleDateString('th-TH',{day:'numeric',month:'short'})}` : 'ว่างอยู่แล้ว';
+    return `${name} (${role}·${freeLabel}·${activeCnt} tasks)`;
+  });
+  const assignReason = reasonParts.join(' + ') + (isLargeJob ? ' [งานใหญ่ 2 คน]' : '');
+  return { start, finish, who: who||'-', assignReason, whoBySubteam, whoCoBySubteam, isLargeJob, needDays, refRow, matchLevel, revisionReduced };
 }
 function buildIntakeEntry(task, sug){
   const dueDate = task.due && task.due!=='-'? new Date(task.due) : null;
@@ -1981,7 +2100,13 @@ function renderIntakeTable(){
     </tr>`;
   }).join('');
 }
+// build 2026-08-28: resetTentative — เรียกก่อน load งานใหม่ เพื่อล้าง tentative commitment จากรอบก่อน
+// การ refresh data ใหม่ = ข้อมูลว่างจริงล่าสุดมาแล้ว ไม่ต้องใช้ tentative เก่าอีก
+function resetTentative(){
+  if(computeAISuggest._tentative) computeAISuggest._tentative = {};
+}
 async function loadIntakeFromGraph(){
+  resetTentative(); // ล้าง tentative ทุกครั้งที่ load ใหม่
   // หมายเหตุ: เดิมกรอง CommitStatus ด้วย OData filter (`ne 'Committed'`) ที่ระดับ server แต่ SharePoint/Graph
   // ตีความ "ค่าว่าง/null ne 'Committed'" เป็น unknown แล้วตัดรายการที่ CommitStatus ยังว่างออกไปด้วย (ทั้งที่ควรถือว่ายังไม่ commit)
   // ผลคือโครงการจริงที่ยังไม่เคย commit เลย (CommitStatus ว่าง) เช่น VOCO/Moxy หายไปจากลิสต์ ทั้งที่ควรโชว์
@@ -3306,13 +3431,53 @@ function generateInsights(kpis){
   if(kpis.bottlenecks.length===0) lines.push('ไม่พบคอขวดที่เกินแผน ≥25% ในช่วงนี้');
   return lines;
 }
-const OLLAMA_URL = 'http://192.168.1.117:11434'; // เครื่องที่ลง Ollama จริง (Ethernet adapter, ตรวจจาก ipconfig)
-const OLLAMA_MODEL = 'llama3.2:3b';
+// build 2026-08-28: Ollama config — reads from UI inputs (persisted to localStorage)
+const OLLAMA_URL_DEFAULT = 'http://192.168.1.117:11434';
+const OLLAMA_MODEL_DEFAULT = 'llama3.2:3b';
+function getOllamaUrl(){
+  const el = document.getElementById('ollamaCfgUrl');
+  const v = el ? el.value.trim() : '';
+  return v || localStorage.getItem('ollama_url') || OLLAMA_URL_DEFAULT;
+}
+function getOllamaModel(){
+  const el = document.getElementById('ollamaCfgModel');
+  const v = el ? el.value.trim() : '';
+  return v || localStorage.getItem('ollama_model') || OLLAMA_MODEL_DEFAULT;
+}
+function saveOllamaCfg(){
+  const url = getOllamaUrl();
+  const model = getOllamaModel();
+  localStorage.setItem('ollama_url', url);
+  localStorage.setItem('ollama_model', model);
+  const badge = document.getElementById('ollamaSaveBadge');
+  if(badge){ badge.style.display='inline'; setTimeout(()=>badge.style.display='none', 1800); }
+}
+function initOllamaCfgInputs(){
+  const urlEl = document.getElementById('ollamaCfgUrl');
+  const modelEl = document.getElementById('ollamaCfgModel');
+  if(urlEl && !urlEl.value) urlEl.value = localStorage.getItem('ollama_url') || OLLAMA_URL_DEFAULT;
+  if(modelEl && !modelEl.value) modelEl.value = localStorage.getItem('ollama_model') || OLLAMA_MODEL_DEFAULT;
+}
+async function testOllamaConnection(){
+  const badge = document.getElementById('ollamaTestBadge');
+  if(badge){ badge.textContent='⏳ กำลังทดสอบ...'; badge.style.color='#6b7280'; badge.style.display='inline'; }
+  saveOllamaCfg();
+  try{
+    const res = await fetch(`${getOllamaUrl()}/api/tags`, {method:'GET'});
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const data = await res.json();
+    const models = (data.models||[]).map(m=>m.name||m.model).join(', ');
+    if(badge){ badge.textContent=`✅ เชื่อมต่อสำเร็จ · models: ${models||'(ไม่พบ)'}`;
+      badge.style.color='#059669'; }
+  }catch(e){
+    if(badge){ badge.textContent=`❌ เชื่อมต่อไม่สำเร็จ (${e.message})`; badge.style.color='#dc2626'; }
+  }
+}
 async function askLocalAI(promptText){
-  const res = await fetch(`${OLLAMA_URL}/api/generate`, {
+  const res = await fetch(`${getOllamaUrl()}/api/generate`, {
     method:'POST',
     headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({model:OLLAMA_MODEL, prompt:promptText, stream:false})
+    body: JSON.stringify({model:getOllamaModel(), prompt:promptText, stream:false})
   });
   if(!res.ok) throw new Error('Ollama HTTP '+res.status);
   const data = await res.json();
@@ -3641,7 +3806,8 @@ async function bootLive(){
     }
     updateModeTag();
     toastMsg('✓ โหลดข้อมูลจริงจาก SharePoint แล้ว');
-    if(document.getElementById('pgReport').classList.contains('on')) renderReport(); // build 2026-08-25.11: refresh รายงานถ้าอยู่ที่ tab รายงาน
+    if(document.getElementById('pgReport').classList.contains('on')){ renderReport(); initOllamaCfgInputs(); } // build 2026-08-25.11: refresh รายงานถ้าอยู่ที่ tab รายงาน
+    else initOllamaCfgInputs(); // build 2026-08-28: init Ollama config inputs ไม่ว่าจะอยู่ tab ไหน (เผื่อ DOM พร้อมแล้วก่อนเปิด tab Report)
   }catch(e){
     console.error('Live load failed, staying on mock data', e);
     LIVE_MODE = false;
@@ -4824,7 +4990,7 @@ document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
   document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
   document.querySelectorAll('.page').forEach(x=>x.classList.remove('on'));
   t.classList.add('on');document.getElementById(t.dataset.p).classList.add('on');
-  if(t.dataset.p==='pgReport') renderReport(); // build 2026-08-25.11: render รายงานทุกครั้งที่สลับมา tab นี้
+  if(t.dataset.p==='pgReport'){ renderReport(); initOllamaCfgInputs(); } // build 2026-08-25.11: render รายงานทุกครั้งที่สลับมา tab นี้
 }));
 
 /* ============ COMMIT CHECK · AI Suggest ============ */
@@ -4859,7 +5025,12 @@ function renderIntake(){
   if(ciVersionEl) ciVersionEl.textContent = it.version || '—';
   ciType.textContent=it.type; ciDue.textContent=it.due;
   aiStd.textContent=it.std; aiHist.textContent=it.hist; aiFree.textContent=it.free;
-  aiWho.textContent=it.who;
+  // build 2026-08-28: แสดง assignReason (role·free date·active tasks) ถ้ามี ไม่งั้น fallback it.who
+  aiWho.textContent = (it._liveSug && it._liveSug.assignReason) ? it._liveSug.assignReason : it.who;
+  // badge งานใหญ่
+  { const largeEl = document.getElementById('aiLargeBadge');
+    if(largeEl) largeEl.style.display = (it._liveSug && it._liveSug.isLargeJob) ? 'inline-block' : 'none';
+  }
   // build 2026-08-20.4: แสดงระยะเวลา (วันทำการ / สัปดาห์) ระหว่าง Finish กับ ผู้ทำที่แนะนำ
   { const durEl = document.getElementById('aiDuration');
     if(durEl && it._liveSug && it._liveSug.start instanceof Date && it._liveSug.finish instanceof Date){
