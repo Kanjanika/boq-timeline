@@ -307,7 +307,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-25.13</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-08-25.14</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -751,7 +751,7 @@ tr.pick:hover td{background:var(--bg)}
 // BUILD_VERSION: เลขเวอร์ชันที่ต้องแก้คู่กับข้อความ "build ..." ใน <div class="brand"> ของ HTML ทุกครั้งที่ส่งไฟล์ใหม่
 // ให้ทีม — ใช้เช็คได้ง่ายๆ ว่าไฟล์ที่ deploy จริง (เช่น GitHub Pages) เป็นเวอร์ชันล่าสุดที่ส่งไปหรือยัง (ดูที่มุมซ้ายบน
 // ของหน้าเว็บได้เลย ไม่ต้อง login/กดปุ่มตรวจสอบอะไรก่อน) log ออก console ด้วยเผื่อสะดวกกว่าตอน debug
-const BUILD_VERSION = '2026-08-25.13';
+const BUILD_VERSION = '2026-08-25.14';
 console.log('[BOQ Timeline] BUILD_VERSION =', BUILD_VERSION);
 // หมายเหตุ: ค่าเริ่มต้นนี้ (10 ส.ค.–2 พ.ย. 2569) ใช้กับ MOCK DATA เท่านั้น พอเข้าโหมด LIVE ค่าพวกนี้จะถูก
 // คำนวณใหม่จากวันที่จริงของงานใน SharePoint โดย recalcTimelineWindow() (ดูใน bootLive()) จึงต้องเป็น let ไม่ใช่ const
@@ -874,13 +874,18 @@ function resolveRowServiceLabel(stepNums, hintServiceType){
 // ต่างหาก (Best/Yo มาจาก ST, Stamp/Jack มาจาก MEP อยู่แล้ว — คนคนเดียวอยู่ได้หลาย pool ตามที่ ALL_TEAM_MEMBERS ด้านล่าง
 // รองรับอยู่แล้ว) ตามที่ผู้ใช้ยืนยันรายชื่อจริงของทีม Budget มา
 const POOLS = {
-  ST:['P','Ize','May','Yo'],  // build 2026-08-25.10: เพิ่ม Yo ในทุกทีม ตามที่ผู้ใช้ขอ
-  AR:['June','Si','Pang','Memie','Mai','Yim','Su','Yo'],
-  MEP:['Jack','Pari','Hongyok','Fah','Wim','Stamp','Yo'],
+  // build 2026-08-25.14: Yo วางตัวเป็น "ผู้ตรวจ (Reviewer)" ข้ามทุกทีม — ไม่ใช่ doer ใน Commit สำหรับ ST/AR/MEP
+  // จึงเอา Yo ออกจาก pool ทั้งสาม (Yo ยังอยู่ใน QA_LEADS ทุกทีมแทน) คงไว้เฉพาะ BUDGET เพราะ Yo ทำหน้าที่
+  // ทั้ง doer + reviewer พร้อมกัน — ในหน้า Timeline PCM ยังแก้ไข/เปลี่ยน doer เป็น Yo ได้อิสระถ้าจำเป็น
+  ST:['P','Ize','May'],
+  AR:['June','Si','Pang','Memie','Mai','Yim','Su'],
+  MEP:['Jack','Pari','Hongyok','Fah','Wim','Stamp'],
   BUDGET:['Best','Yo','Stamp','Jack']
 };
 // build 2026-08-20.6: QA/ผู้ตรวจ = หัวหน้าทีม ต่อ subteam — เขียนลง StepQA ทุก step ตอน Commit อัตโนมัติ
 // (ต้องสร้าง column "StepQA" ชนิด Text และ "StepQALookupId" ชนิด Number ใน BOQ Step Tracking ก่อน)
+// build 2026-08-25.14: Yo เป็น reviewer สำรองข้ามทีม แต่ default QA_LEADS คงเดิม (ST=May, AR&ID=Yim, MEP=Stamp)
+// PCM สามารถเปลี่ยนเป็น Yo ในหน้า Timeline ได้ถ้าต้องการ
 const QA_LEADS = {
   ST:'May', 'AR&ID':'Yim',
   EE:'Stamp', AC:'Stamp', SN:'Stamp', FP:'Stamp',
@@ -1896,11 +1901,27 @@ async function computeAISuggest(task){
     }
   }
   const who = whoParts.join(' + ');
-  // build 2026-08-25.13: ใช้วันว่างของคนที่ recommend โดยตรง (จาก pickLeastBusyPerson ที่รันแล้ว) แทนการยิง API
-  // รอบสองเพื่อดึง PlanEnd ของทั้ง subteam — เดิมผิดพลาดตรงนี้: ถ้า Yo มีงานถึง 18 ก.ย. (ทั้งที่ recommend P)
-  // ก็จะได้ Sep 18 ทุกงาน ทั้งที่ P ว่างตั้งแต่ Sep 8 แล้ว
+  // build 2026-08-25.13 (แก้ครั้งที่ 2): pickLeastBusyPerson ดูแค่ steps ของ SubTeam เดียว — ถ้าคนที่ recommend
+  // (เช่น Yo) ไม่มี step ใน SubTeam นั้นเลย (เช่น AR&ID) freeDateMs จะเป็น 0 ทั้งที่ Yo มีงานใน ST/MEP/Budget
+  // ถึง Sep 19 จริง — แก้โดยดึง PlanEnd ล่าสุดของแต่ละคน "ข้ามทุก subteam" แบบ parallel หลังจากทราบว่าใคร
+  // จะถูก recommend แล้ว (freeByPerson = วันว่างจริงแบบรวมทุกงานที่ถืออยู่ ไม่ใช่แค่งานใน subteam เดียว)
+  const uniquePeople = [...new Set(Object.values(whoBySubteam).filter(Boolean))];
+  const freeByPerson = {};
+  await Promise.all(uniquePeople.map(async person => {
+    try{
+      // StepAssignee เป็น Text field — เก็บชื่อตรงๆ ตาม commitAndGenerateSteps → filter ด้วย eq 'name' ได้
+      const q = `/sites/${SITE_ID}/lists/${STEP_LIST}/items?$expand=fields&$orderby=fields/PlanEnd desc&$top=50&$filter=fields/StepAssignee eq '${encodeURIComponent(person)}'`;
+      const data = await graphFetch(q);
+      const items = (data && data.value) || [];
+      let maxEnd = 0;
+      items.forEach(it=>{ const end = it.fields&&it.fields.PlanEnd? new Date(it.fields.PlanEnd).getTime():0; if(end>maxEnd) maxEnd=end; });
+      freeByPerson[person] = maxEnd;
+    }catch(e){ freeByPerson[person] = 0; }
+  }));
+  // คำนวณ earliestFree จากวันว่างของคนที่ recommend แต่ละ subteam (รวมทุกงานที่ถืออยู่ข้าม subteam)
   for(const st of subs){
-    const freeDateMs = freeBySubteam[st] || 0;
+    const person = whoBySubteam[st];
+    const freeDateMs = person ? (freeByPerson[person] || 0) : 0;
     if(freeDateMs > 0){
       const d = new Date(freeDateMs);
       if(d > earliestFree) earliestFree = d;
