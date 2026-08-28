@@ -1801,9 +1801,13 @@ const projId = canonicalProjId(name);
 // StepAssigneeLookupId ดิบๆ ไม่ใช่อ็อบเจกต์ ดู resolveAssigneeName ด้านบนสำหรับรายละเอียด)
 // build 2026-08-20.5: เพิ่ม excludeNames — ถ้า subteam อื่นใน pool เดียวกัน assign ไปแล้ว จะข้ามคนนั้น
 // ทำให้ EE/AC/SN/FP (ล้วน MEP pool) ได้คนละคนกันแทนที่จะซ้ำกันหมด
+// build 2026-08-25.13: เปลี่ยน return จาก name (string) เป็น {name, freeDateMs} เพื่อให้ computeAISuggest
+// นำ freeDateMs ของคนที่ recommend ไปคำนวณ earliestFree ได้เลย โดยไม่ต้องยิง API รอบที่สองซ้ำ
+// (เดิม computeAISuggest ยิง API แยกเพื่อหา PlanEnd ล่าสุดของทั้ง subteam ซึ่งผิดพลาดเพราะนับทุกคนในทีม
+//  ไม่ใช่แค่คนที่ recommend — เช่น P ว่าง 8 ก.ย. แต่ Yo มีงานถึง 18 ก.ย. → ได้ Sep 18 ทุกงาน)
 async function pickLeastBusyPerson(subteam, pool, excludeNames=[]){
   const roster = POOLS[pool] || [];
-  if(!roster.length) return null;
+  if(!roster.length) return {name: null, freeDateMs: 0};
   try{
     // encodeURIComponent จำเป็นเพราะชื่อทีมบางอัน (เช่น "AR&ID") มี & อยู่ในตัว ถ้าไม่ encode Graph จะตอบ 400
     const q = `/sites/${SITE_ID}/lists/${STEP_LIST}/items?$expand=fields&$orderby=fields/PlanEnd desc&$top=50&$filter=fields/SubTeam eq '${encodeURIComponent(subteam)}'`;
@@ -1821,11 +1825,13 @@ async function pickLeastBusyPerson(subteam, pool, excludeNames=[]){
     // กรอง excludeNames ออกก่อนเรียง (กันซ้ำข้ามทีม)
     const available = roster.filter(n => !excludeNames.includes(n));
     const sorted = available.sort((a,b)=> (maxEndByPerson[a]||0) - (maxEndByPerson[b]||0));
-    return sorted[0] || null;
+    const chosenName = sorted[0] || null;
+    const freeDateMs = chosenName ? (maxEndByPerson[chosenName] || 0) : 0;
+    return {name: chosenName, freeDateMs};
   }catch(e){
     console.warn('[pickLeastBusyPerson] ดึงข้อมูลไม่สำเร็จ ใช้คนแรกในรายชื่อแทน', subteam, e);
     const fallback = roster.filter(n => !excludeNames.includes(n));
-    return fallback[0] || null;
+    return {name: fallback[0] || null, freeDateMs: 0};
   }
 }
 async function computeAISuggest(task){
@@ -1870,12 +1876,14 @@ async function computeAISuggest(task){
   // ทำให้ EE/AC/SN/FP (pool เดียวกัน = MEP) ได้คนละคนกัน ไม่ซ้ำกัน
   // (pool เดิมมี 6 คน: Jack/Pari/Hongyok/Fah/Wim/Stamp — เพียงพอสำหรับ 4 ทีม)
   const whoBySubteam = {};
+  const freeBySubteam = {}; // build 2026-08-25.13: วันว่างของคนที่ recommend แต่ละ subteam (ms timestamp)
   const assignedPeople = [];
   for(const allSt of ALL_SUBTEAMS){
     const pool = subToPool(allSt);
-    const person = await pickLeastBusyPerson(allSt, pool, assignedPeople);
-    whoBySubteam[allSt] = person || null;
-    if(person) assignedPeople.push(person);
+    const result = await pickLeastBusyPerson(allSt, pool, assignedPeople);
+    whoBySubteam[allSt] = result.name || null;
+    freeBySubteam[allSt] = result.freeDateMs || 0;
+    if(result.name) assignedPeople.push(result.name);
   }
   // who สำหรับแสดงตอนเปิด = คนจาก subs ของ task (ตาม Package จริง) dedupe by name
   const displayNamesSeen = new Set();
@@ -1888,17 +1896,16 @@ async function computeAISuggest(task){
     }
   }
   const who = whoParts.join(' + ');
+  // build 2026-08-25.13: ใช้วันว่างของคนที่ recommend โดยตรง (จาก pickLeastBusyPerson ที่รันแล้ว) แทนการยิง API
+  // รอบสองเพื่อดึง PlanEnd ของทั้ง subteam — เดิมผิดพลาดตรงนี้: ถ้า Yo มีงานถึง 18 ก.ย. (ทั้งที่ recommend P)
+  // ก็จะได้ Sep 18 ทุกงาน ทั้งที่ P ว่างตั้งแต่ Sep 8 แล้ว
   for(const st of subs){
-    try{
-      // encodeURIComponent จำเป็นเพราะชื่อทีมบางอัน (เช่น "AR&ID") มี & อยู่ในตัว ถ้าไม่ encode จะโดนตีความเป็นตัวแบ่ง query param ทำให้ Graph ตอบ 400 Bad Request
-      const q = `/sites/${SITE_ID}/lists/${STEP_LIST}/items?$expand=fields&$orderby=fields/PlanEnd desc&$top=1&$filter=fields/SubTeam eq '${encodeURIComponent(st)}'`;
-      const data = await graphFetch(q);
-      const last = data.value && data.value[0];
-      if(last && last.fields.PlanEnd){
-        const d = new Date(last.fields.PlanEnd);
-        if(d > earliestFree) earliestFree = d;
-      }
-    }catch(e){ console.warn('subteam lookup failed', st, e); }
+    const freeDateMs = freeBySubteam[st] || 0;
+    if(freeDateMs > 0){
+      const d = new Date(freeDateMs);
+      if(d > earliestFree) earliestFree = d;
+    }
+    // ถ้า freeDateMs===0 (คนนั้นยังไม่เคยมี Step เลย) ให้ earliestFree คงค่า new Date() ไว้ = เริ่มได้เลยวันนี้
   }
   const start = earliestFree;
   const finish = addBusinessDays(start, needDays);
