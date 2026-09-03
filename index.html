@@ -1286,8 +1286,8 @@ function recalcTimelineWindow(stepItems, wpItems){
   try{
     (wpItems||[]).forEach(it=>{
       const f = it.fields;
-      const s = f.Start_x0020_Date  || f.StartDate  || f.Start  || null;
-      const e2 = f.Finish_x0020_Date || f.FinishDate || f.Finish || null;
+      const s = f.AISuggestStart || f.Start_x0020_Date  || f.StartDate  || f.Start  || null;
+      const e2 = f.CommittedFinish || f.AISuggestFinish || f.Finish_x0020_Date || f.FinishDate || f.Finish || null;
       if(s && e2){ consider(s); consider(e2); } // นับเฉพาะรายการที่ commit แล้ว (มีทั้ง Start และ Finish)
     });
   }catch(e){ console.warn('recalcTimelineWindow: อ่าน BOQ Team Work Plan ไม่สำเร็จ', e); }
@@ -1716,8 +1716,8 @@ async function loadLegacyCommittedProjects(items, existingProjIds, activeProject
   const projMap = {};
   items.forEach(it=>{
     const f = it.fields;
-    const startRaw  = f.Start_x0020_Date  || f.StartDate  || f.Start  || null;
-    const finishRaw = f.Finish_x0020_Date || f.FinishDate || f.Finish || null;
+    const startRaw  = f.AISuggestStart || f.Start_x0020_Date  || f.StartDate  || f.Start  || null;
+    const finishRaw = f.CommittedFinish || f.AISuggestFinish || f.Finish_x0020_Date || f.FinishDate || f.Finish || null;
     if(!startRaw || !finishRaw) return; // ยังไม่ commit ข้ามไป (จะไปโผล่ในลิสต์ "รอ Commit" ของ Commit Check แทน)
     // Status (field เก่า) = Done/Reject/Replace/On Hold แล้ว คืองาน (หรือ item การ commit นี้) ที่ไม่ต้องเอามาแสดงเป็น
     // แถวประมาณการใน Timeline อีก — Done/Reject/Replace เพราะจบเรื่องแล้วจริงๆ ส่วน On Hold ผู้ใช้ขอให้ย้ายกลับไป
@@ -3671,9 +3671,10 @@ async function bootLive(){
         if(key in svcTypeByKey && svcTypeByKey[key]!==svcRaw) svcTypeKeyAmbiguous[key] = true;
         else svcTypeByKey[key] = svcRaw;
       }
-      // build 2026-08-20.1: Commit Start/End (Start_x0020_Date / Finish_x0020_Date)
-      const cmtSRaw = f.Start_x0020_Date || f.StartDate || f.Start || null;
-      const cmtERaw = f.Finish_x0020_Date || f.FinishDate || f.Finish || null;
+      // build 2026-08-20.1: Commit Start/End — field จริงที่ commit เขียนคือ AISuggestStart/AISuggestFinish
+      // (Start_x0020_Date/Finish_x0020_Date ไม่มีใน list นี้ — build 2026-09-03 fix)
+      const cmtSRaw = f.AISuggestStart || f.Start_x0020_Date || f.StartDate || f.Start || null;
+      const cmtERaw = f.CommittedFinish || f.AISuggestFinish || f.Finish_x0020_Date || f.FinishDate || f.Finish || null;
       if(cmtSRaw) cmtStartById[String(it.id)] = cmtSRaw;
       if(cmtERaw) cmtEndById[String(it.id)] = cmtERaw;
       // build 2026-08-25: Version, Status, WP Team, WP Assignee
@@ -4150,9 +4151,11 @@ async function confirmDateEdit(){
     if(newDue && newDue !== toVal(row.dueRaw)) changes.push({field:'DueDate', old:row.dueRaw, nv:newDue});
     if(changes.length === 0){ closeDateEditModal(); toastMsg('ℹ️ ไม่มีการเปลี่ยนแปลง'); return; }
     // PATCH BOQ Team Work Plan
+    // build 2026-09-03: field จริงใน Work Plan คือ AISuggestStart/AISuggestFinish/CommittedFinish
+    // (ไม่มี Start_x0020_Date/Finish_x0020_Date ใน list นี้ — SharePoint ตอบ 400 "not recognized")
     const patchFields = {};
-    if(changes.find(c=>c.field==='CommitStart')) patchFields.Start_x0020_Date = newCS;
-    if(changes.find(c=>c.field==='CommitEnd')) patchFields.Finish_x0020_Date = newCE;
+    if(changes.find(c=>c.field==='CommitStart')) patchFields.AISuggestStart = newCS;
+    if(changes.find(c=>c.field==='CommitEnd')){ patchFields.AISuggestFinish = newCE; patchFields.CommittedFinish = newCE; }
     if(changes.find(c=>c.field==='DueDate')) patchFields.Due_x0020_Date = newDue;
     await graphFetch(`/sites/${SITE_ID}/lists/${WORKPLAN_LIST}/items/${row.parentTaskId}`, {
       method:'PATCH', body: JSON.stringify({fields: patchFields})
