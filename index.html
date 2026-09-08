@@ -307,7 +307,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-08.2</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-08.4</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -1003,7 +1003,9 @@ const WP_SELECT = [
   'Status','CommitStatus',
   'Start_x0020_Date','Finish_x0020_Date','Due_x0020_Date',
   'Service_x0020_Type','ServiceType','Description',
-  'Version','AssignedTeam','Assignee'
+  'Version','Team','AssignedTeam',
+  'Assignee','AssignedTo','Responsible','AISuggestAssignee',
+  'AISuggestStart','AISuggestFinish'
 ].join(',');
 async function resolveHistoryListId(){
   if(HISTORY_LIST) return HISTORY_LIST;
@@ -4021,11 +4023,14 @@ async function loadDateEditHistory(parentTaskId){
   try{
     const histId = await resolveHistoryListId();
     if(!histId) return;
+    // build 2026-09-08.4: แสดง CommitStart, CommitEnd, DueDate — filter client-side
     const q = `/sites/${SITE_ID}/lists/${histId}/items?$expand=fields`
       + `&$filter=fields/WorkPlanItemId eq ${parseInt(parentTaskId)}`
-      + `&$orderby=fields/ChangedAt desc&$top=3`;
+      + `&$orderby=fields/ChangedAt desc&$top=50`;
     const data = await graphFetch(q);
-    const items = (data && data.value) || [];
+    const allItems = (data && data.value) || [];
+    const SHOW_FIELDS = new Set(['CommitStart','CommitEnd','DueDate']);
+    const items = allItems.filter(it=> SHOW_FIELDS.has((it.fields||{}).FieldChanged)).slice(0,6);
     if(!items.length) return;
     const fmtDate = s => {
       if(!s) return '-';
@@ -4048,12 +4053,16 @@ async function loadDateEditHistory(parentTaskId){
       const f = it.fields || {};
       const reason = (f.ChangeReason||'').trim();
       const delta = f.DeltaDays != null ? (f.DeltaDays > 0 ? `+${f.DeltaDays}d` : `${f.DeltaDays}d`) : '';
-      return `<div style="background:var(--bg2,#f5f5f5);border-radius:6px;padding:7px 9px;margin-bottom:6px;font-size:11.5px;line-height:1.55">
-        <span style="font-weight:600;color:var(--text1)">${fieldLabel(f.FieldChanged||'')}</span>
-        <span style="color:var(--text3)"> ${fmtDate(f.OldValue)} → ${fmtDate(f.NewValue)}</span>
-        ${delta ? `<span style="margin-left:4px;background:#eee;border-radius:3px;padding:0 4px;color:var(--text2)">${delta}</span>` : ''}
-        ${reason ? `<div style="margin-top:3px;color:var(--text1)">💬 ${reason}</div>` : ''}
-        <div style="margin-top:2px;color:var(--text3);font-size:10.5px">${fmtDT(f.ChangedAt)}</div>
+      // เหตุผล truncate 1 บรรทัด — title แสดง full text ตอน hover
+      const reasonHtml = reason
+        ? `<span style="color:var(--text2);margin-left:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px;display:inline-block;vertical-align:bottom" title="${reason.replace(/"/g,'&quot;')}">💬 ${reason}</span>`
+        : '';
+      return `<div style="background:var(--bg2,#f5f5f5);border-radius:6px;padding:5px 8px;margin-bottom:5px;font-size:11px;line-height:1.5;display:flex;align-items:baseline;gap:4px;flex-wrap:wrap">
+        <span style="font-weight:600;color:var(--text1);white-space:nowrap">${fieldLabel(f.FieldChanged||'')}</span>
+        <span style="color:var(--text3);white-space:nowrap">${fmtDate(f.OldValue)} → ${fmtDate(f.NewValue)}</span>
+        ${delta ? `<span style="background:#e2e8f0;border-radius:3px;padding:0 3px;color:var(--text2);font-size:10px;white-space:nowrap">${delta}</span>` : ''}
+        ${reasonHtml}
+        <span style="color:var(--text3);font-size:10px;white-space:nowrap;margin-left:auto">${fmtDT(f.ChangedAt)}</span>
       </div>`;
     }).join('');
     histEl.style.display = 'block';
