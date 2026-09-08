@@ -307,7 +307,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-08.1</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-08.2</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -350,7 +350,8 @@ tr.pick:hover td{background:var(--bg)}
       <button class="sort-btn" id="sortBtnDue" onclick="setSortOrder('due')" title="เรียงตาม Due Date ที่ Post ขอส่ง (น้อย→มาก)">📅 Due Date</button>
       <button class="sort-btn" id="sortBtnAZ" onclick="setSortOrder('az')" title="เรียงชื่อโครงการ A→Z">🔤 A→Z</button>
     </span>
-    <button class="btn btn2" style="margin-left:auto" onclick="openBackfillAll()">🗄️ Backfill ข้อมูลจริงทั้งหมด</button>
+    <button class="btn btn2" id="refreshBtn" style="margin-left:auto" title="โหลดข้อมูลใหม่จาก SharePoint" onclick="refreshLiveData()">🔄 Refresh</button>
+    <button class="btn btn2" onclick="openBackfillAll()">🗄️ Backfill ข้อมูลจริงทั้งหมด</button>
     <button class="btn btn2" onclick="fixExistingReviewStepDurations()">🛠️ ปรับ Step วันคงที่ให้ตรง Template</button>
     <button class="btn btn2" onclick="openTemplateEditor()">⚙️ Step Template</button>
   </div>
@@ -984,6 +985,26 @@ const PROCREF_LIST   = '79daccb5-6f30-4c8c-99a4-6f95ae59142a'; // Procurement Pl
 const GRAPH = 'https://graph.microsoft.com/v1.0';
 // build 2026-08-20.1: BOQ Date History list — resolved dynamically by name so no GUID needs to be hardcoded
 let HISTORY_LIST = null;
+
+// build 2026-09-08.1: In-memory cache ของ raw items จาก STEP_LIST + WORKPLAN_LIST
+// เก็บผลลัพธ์จาก bootLive ไว้ให้ฟังก์ชันอื่นใช้ซ้ำได้โดยไม่ต้องยิง API ซ้ำ
+// ล้างด้วย clearBootCache() ก่อนโหลดใหม่ (ปุ่ม Refresh / หลัง Commit / หลัง Delete)
+let BOOT_CACHE = null; // { stepItems: [], workplanItems: [], loadedAt: Date }
+function clearBootCache(){ BOOT_CACHE = null; }
+// Fields จริงที่ใช้ใน loadStepsFromGraph + bootLive — ลด payload ~60%
+const STEP_SELECT = [
+  'Project','Package','SubTeam','WBSStep','PlanStart','PlanEnd',
+  'StepAssignee','StepAssigneeLookupId','StepCoAssignees',
+  'RoleInStep','ActualHours','StepNotes','ActualStart','ActualEnd',
+  'ParentTaskID','RowClosed','IsOver'
+].join(',');
+const WP_SELECT = [
+  'Title','Project_x0020_Name','Project','Package','WorkPackage',
+  'Status','CommitStatus',
+  'Start_x0020_Date','Finish_x0020_Date','Due_x0020_Date',
+  'Service_x0020_Type','ServiceType','Description',
+  'Version','AssignedTeam','Assignee'
+].join(',');
 async function resolveHistoryListId(){
   if(HISTORY_LIST) return HISTORY_LIST;
   try{
@@ -2081,7 +2102,8 @@ async function commitAndGenerateSteps(task, sug, selectedSubs, editedStart, edit
   // Legacy cleanup: ถ้า item ไม่มี ParentTaskID (กรอก Step ตรง/commit ก่อน build ที่เริ่มบันทึก ParentTaskID) ให้ลบ
   // เฉพาะที่ Project+Package+ServiceType hint ตรงกัน (ป้องกัน Blank BOQ ลบ Pretender เก่าที่ไม่มี ParentTaskID)
   try{
-    const oldItems = await graphFetchAllItems(`/sites/${SITE_ID}/lists/${STEP_LIST}/items?$expand=fields&$top=200`);
+    // build 2026-09-08.1: $select เฉพาะ fields ที่ใช้ในการค้นหาและลบ
+    const oldItems = await graphFetchAllItems(`/sites/${SITE_ID}/lists/${STEP_LIST}/items?$expand=fields($select=Project,Package,SubTeam,WBSStep,ParentTaskID)&$top=200`);
     const targetProjId = canonicalProjId(task.name), targetPkgId = canonicalProjId(task.packageName);
     const taskItemIdStr = String(task.itemId);
     // เลขช่วง Step ของ Service นี้ (ใช้เช็ค legacy item ที่ไม่มี ParentTaskID)
@@ -3370,6 +3392,16 @@ function updateModeTag(){
   }
   else { tag.textContent='MOCK DATA · สถานะ ณ 9 ก.ย. 2026'; tag.style.background='#fef3c7'; tag.style.color='#92400e'; }
 }
+// build 2026-09-08.1: Refresh ปุ่มบน Toolbar — clear cache แล้วโหลดใหม่
+async function refreshLiveData(){
+  if(!LIVE_MODE){ toastMsg('⚠️ กรุณา Login ก่อน'); return; }
+  const btn = document.getElementById('refreshBtn');
+  if(btn){ btn.disabled=true; btn.textContent='⏳ กำลังโหลด…'; }
+  clearBootCache();
+  try{ await bootLive(); }
+  finally{ if(btn){ btn.disabled=false; btn.textContent='🔄 Refresh'; } }
+}
+
 async function bootLive(){
   try{
     // build 2026-08-25.13: ปรับประสิทธิภาพการโหลด — เดิม recalcTimelineWindow() ดึง STEP_LIST + WORKPLAN_LIST
@@ -3378,11 +3410,14 @@ async function bootLive(){
     // แล้วส่ง raw items ที่ได้ไปให้ recalcTimelineWindow + loadStepsFromGraph ใช้ต่อ → ตัด 2 round-trip ออก
     loadStepTemplatesFromStorage(); // โหลด Step Template ที่เคยแก้ไว้ (ถ้ามี) มาทับค่าเริ่มต้นก่อนใช้งานจริง
     // ดึง STEP_LIST + WORKPLAN_LIST + Intake พร้อมกัน (parallel) ครั้งเดียวตรงนี้ แล้วแบ่งใช้กับทุกขั้นตอนถัดไป
+    // build 2026-09-08.1: ใช้ $select เลือกเฉพาะ fields ที่ใช้จริง ลดขนาด payload ~60%
+    // และเก็บ cache ไว้ให้ฟังก์ชันอื่น (diagnose, refreshTimeline) ใช้ซ้ำโดยไม่ต้องยิง API ซ้ำ
     const [rawStepItems, workplanItemsAll, liveIntake] = await Promise.all([
-      graphFetchAllItems(`/sites/${SITE_ID}/lists/${STEP_LIST}/items?$expand=fields&$top=200`).catch(e=>{ console.warn('โหลด BOQ Step Tracking ไม่สำเร็จ', e); return []; }),
-      graphFetchAllItems(`/sites/${SITE_ID}/lists/${WORKPLAN_LIST}/items?$expand=fields&$top=200`).catch(e=>{ console.warn('โหลด BOQ Team Work Plan ไม่สำเร็จ', e); return []; }),
+      graphFetchAllItems(`/sites/${SITE_ID}/lists/${STEP_LIST}/items?$expand=fields($select=${STEP_SELECT})&$top=200`).catch(e=>{ console.warn('โหลด BOQ Step Tracking ไม่สำเร็จ', e); return []; }),
+      graphFetchAllItems(`/sites/${SITE_ID}/lists/${WORKPLAN_LIST}/items?$expand=fields($select=${WP_SELECT})&$top=200`).catch(e=>{ console.warn('โหลด BOQ Team Work Plan ไม่สำเร็จ', e); return []; }),
       loadIntakeFromGraph()
     ]);
+    BOOT_CACHE = { stepItems: rawStepItems, workplanItems: workplanItemsAll, loadedAt: new Date() };
     // ต้องปรับ T0/DAYS/TODAY ให้ตรงกับวันที่จริงก่อน แล้วค่อยแปลง Step เป็น day-offset
     recalcTimelineWindow(rawStepItems, workplanItemsAll);
     // แปลง raw Step items → โครงสร้าง liveStepsAll (ใช้ items ที่ดึงมาแล้วข้างบน ไม่ดึงซ้ำ)
@@ -3663,10 +3698,19 @@ async function bootLive(){
 async function diagnoseTimelineFilter(projectSubstr){
   if(!LIVE_MODE){ console.warn('⚠️ ต้อง login SharePoint ก่อน (LIVE_MODE=false)'); return; }
   const needle = canonicalProjId(projectSubstr||'');
-  const [stepItemsAll, workplanItems] = await Promise.all([
-    graphFetchAllItems(`/sites/${SITE_ID}/lists/${STEP_LIST}/items?$expand=fields&$top=200`),
-    graphFetchAllItems(`/sites/${SITE_ID}/lists/${WORKPLAN_LIST}/items?$expand=fields&$top=200`)
-  ]);
+  // build 2026-09-08.1: ใช้ BOOT_CACHE ถ้ามี ไม่ต้องยิง API ซ้ำ
+  let stepItemsAll, workplanItems;
+  if(BOOT_CACHE){
+    console.log('[diagnose] ใช้ BOOT_CACHE (โหลดเมื่อ', BOOT_CACHE.loadedAt.toLocaleTimeString(), ')');
+    stepItemsAll = BOOT_CACHE.stepItems;
+    workplanItems = BOOT_CACHE.workplanItems;
+  } else {
+    const [a, b] = await Promise.all([
+      graphFetchAllItems(`/sites/${SITE_ID}/lists/${STEP_LIST}/items?$expand=fields($select=${STEP_SELECT})&$top=200`),
+      graphFetchAllItems(`/sites/${SITE_ID}/lists/${WORKPLAN_LIST}/items?$expand=fields($select=${WP_SELECT})&$top=200`)
+    ]);
+    stepItemsAll = a; workplanItems = b;
+  }
   const stepItems = stepItemsAll.filter(it=> canonicalProjId((it.fields||{}).Project||'').includes(needle));
   const wpItems = workplanItems.filter(it=> canonicalProjId((it.fields||{}).Title||(it.fields||{}).Project||'').includes(needle));
 
@@ -4074,10 +4118,11 @@ async function confirmDateEdit(){
         });
       }
     }
-    // อัปเดต row ใน memory
+    // อัปเดต row ใน memory + clear cache
     if(changes.find(c=>c.field==='CommitStart')){ row.cmtStartRaw = newCS; row.cmtStart = fmtY(new Date(newCS)); }
     if(changes.find(c=>c.field==='CommitEnd')){ row.cmtEndRaw = newCE; row.cmtEnd = fmtY(new Date(newCE)); }
     if(changes.find(c=>c.field==='DueDate')){ row.dueRaw = newDue; row.due = fmtY(new Date(newDue)); }
+    clearBootCache(); // build 2026-09-08.1: ข้อมูลใน SharePoint เปลี่ยนแล้ว กด Refresh เพื่อโหลดใหม่
     closeDateEditModal();
     renderRows();
     toastMsg(`✓ บันทึกวันที่ ${changes.length} ฟิลด์ + History เรียบร้อย`);
@@ -4392,7 +4437,9 @@ async function confirmMarkPackageDone(){
     }
     // ส่วนเสริม (best-effort เท่านั้น): sync Status='Done' กลับ Work Plan เฉพาะตอนหางานที่ตรงกันเจอแบบไม่คลุมเครือ
     try{
-      const workplanItems = await graphFetchAllItems(`/sites/${SITE_ID}/lists/${WORKPLAN_LIST}/items?$expand=fields&$top=200`);
+      // build 2026-09-08.1: ใช้ BOOT_CACHE ถ้ามีแทนการดึง API ซ้ำ
+      const workplanItems = BOOT_CACHE ? BOOT_CACHE.workplanItems :
+        await graphFetchAllItems(`/sites/${SITE_ID}/lists/${WORKPLAN_LIST}/items?$expand=fields($select=Title,Project_x0020_Name,Project,Package,WorkPackage)&$top=200`);
       const targetProjId = canonicalProjId(projName);
       const targetPkgId = canonicalProjId(pkgName);
       const matches = workplanItems.filter(it=>{
@@ -4411,6 +4458,7 @@ async function confirmMarkPackageDone(){
     }catch(syncErr){
       console.warn('[markPackageDone] sync Status ไปที่ Work Plan ไม่สำเร็จ (ไม่กระทบผลหลัก)', syncErr);
     }
+    clearBootCache(); // build 2026-09-08.1: ข้อมูล Step Tracking เปลี่ยนแล้ว
     closeDoneModal();
     toastMsg(`✓ ปิดงาน "${projName} · ${pkgName}" แล้ว (${itemIds.length} Step ใน BOQ Step Tracking) กำลังโหลด Timeline ใหม่...`);
     await bootLive();
