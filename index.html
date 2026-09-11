@@ -293,16 +293,12 @@ tr.pick:hover td{background:var(--bg)}
 .today-section{margin-bottom:16px}
 .today-section-head{display:flex;align-items:center;gap:10px;padding:7px 14px;border-radius:8px 8px 0 0;font-weight:700;font-size:13px;cursor:pointer;user-select:none}
 .today-section-head .today-cnt{font-size:11.5px;font-weight:500;margin-left:auto;opacity:.85}
-.today-card{background:var(--card);border:1px solid var(--border);border-radius:0;padding:9px 14px;font-size:12.5px;display:flex;gap:12px;align-items:flex-start;border-top:none}
-.today-card:first-of-type{border-top:1px solid var(--border)}
-.today-card:last-of-type{border-radius:0 0 8px 8px}
-.today-card:only-of-type{border-radius:0 0 8px 8px}
-.today-card-step{flex:0 0 40px;font-weight:700;color:var(--text3);font-size:12px;padding-top:1px}
-.today-card-main{flex:1;min-width:0}
-.today-card-title{font-weight:600;color:var(--text1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px}
-.today-card-meta{font-size:11.5px;color:var(--text2);display:flex;flex-wrap:wrap;gap:6px 14px}
-.today-card-who{display:inline-flex;align-items:center;gap:4px;font-weight:600;color:var(--primary)}
-.today-card-status{flex:0 0 auto}
+.today-tbl{width:100%;border-collapse:collapse;font-size:12px;background:var(--card);border:1px solid var(--border);border-radius:0 0 8px 8px}
+.today-tbl th{background:var(--bg2,#f1f5f9);padding:5px 8px;text-align:left;font-size:11px;font-weight:600;color:var(--text2);white-space:nowrap;border-bottom:1px solid var(--border)}
+.today-tbl td{padding:5px 8px;border-top:1px solid var(--border);vertical-align:middle;white-space:nowrap}
+.today-tbl tr:hover td{background:var(--bg2,#f1f5f9)}
+.today-tbl .td-wrap{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px}
+.today-card-who{font-weight:600;color:var(--primary)}
 .today-empty{text-align:center;padding:32px 20px;color:var(--text3);font-size:13px;border:1px dashed var(--border);border-radius:8px;margin-top:4px}
 .today-summary{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:4px}
 .today-kpi{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:8px 16px;display:flex;flex-direction:column;align-items:center;min-width:90px;gap:1px}
@@ -327,7 +323,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-11.5</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-11.6</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -5597,64 +5593,64 @@ function renderTodayTasks(){
     body.innerHTML='<div class="today-empty">✅ ไม่มีงานค้างคาหรืองานที่ต้องทำวันนี้</div>'; return;
   }
 
-  function todayCard(item){
+  // thead ร่วม — ใช้ในทุก section
+  const TODAY_THEAD = `<thead><tr>
+    <th style="width:38px">Step</th>
+    <th style="width:130px">โปรเจกต์</th>
+    <th style="width:110px">Package</th>
+    <th style="width:80px">ทีม/ระบบ</th>
+    <th style="width:120px">Service</th>
+    <th>ชื่องาน</th>
+    <th style="width:130px">ผู้รับผิดชอบ</th>
+    <th style="width:100px">แผนเริ่ม–จบ</th>
+    <th style="width:90px">สถานะ</th>
+  </tr></thead>`;
+
+  function todayRow(item){
     const planS = fmt(addD(T0, item.planStart));
     const planE = fmt(addD(T0, item.planEnd));
     const overdueDay = TODAY_D - item.planEnd;
-    const closedDay = item.closed ? item.closed.end : null;
-    let statusBadge='', delayNote='';
+    const closedDay  = item.closed ? item.closed.end : null;
+    let badge='', delay='';
     if(item.closed){
-      const delay = closedDay - item.planEnd;
-      statusBadge=`<span class="r-badge r-done">✅ Done</span>`;
-      delayNote = delay>0?`<span class="r-late">+${delay} วัน</span>`:delay<0?`<span class="r-early">${delay} วัน</span>`:`<span class="r-ontime">ตรงแผน</span>`;
+      const d = closedDay - item.planEnd;
+      badge=`<span class="r-badge r-done">✅ Done</span>`;
+      delay=d>0?`<span class="r-late">+${d}ว</span>`:d<0?`<span class="r-early">${d}ว</span>`:`<span class="r-ontime">ตรงแผน</span>`;
     } else if(item.aOff!==undefined){
-      statusBadge=`<span class="r-badge r-prog">⏳ กำลังทำ</span>`;
-      delayNote = overdueDay>0?`<span class="r-overdue">เกินแผน ${overdueDay} วัน</span>`:'<span class="r-ontime">ตามแผน</span>';
+      badge=`<span class="r-badge r-prog">⏳ กำลังทำ</span>`;
+      delay=overdueDay>0?`<span class="r-overdue">+${overdueDay}ว</span>`:'';
     } else if(overdueDay>0){
-      statusBadge=`<span class="r-badge r-late">⚠️ เกินกำหนด</span>`;
-      delayNote=`<span class="r-overdue">เกิน ${overdueDay} วัน</span>`;
+      badge=`<span class="r-badge r-late">⚠️ เกิน</span>`;
+      delay=`<span class="r-overdue">${overdueDay}ว</span>`;
     } else {
-      statusBadge=`<span class="r-badge" style="background:#dbeafe;color:#1d4ed8">🔵 วันนี้</span>`;
-      delayNote=TODAY_D===item.planStart?'<span style="color:#2563eb;font-weight:600">เริ่มวันนี้</span>':'<span style="color:var(--text2)">อยู่ในช่วงแผน</span>';
+      badge=`<span class="r-badge" style="background:#dbeafe;color:#1d4ed8">🔵 วันนี้</span>`;
+      delay=TODAY_D===item.planStart?`<span style="color:#2563eb;font-size:10.5px">เริ่มวันนี้</span>`:'';
     }
-    // ผู้รับผิดชอบ: หลัก + co-assignees แต่ละคนแยกบรรทัด
-    const whoHtml = item.who.length
-      ? item.who.map((w,i)=>`<span class="today-card-who">${i===0?'👤':'👥'} ${w}</span>`).join('')
-      : '<span style="color:var(--text3)">— ยังไม่ระบุ —</span>';
-    return `<div class="today-card">
-      <div class="today-card-step">S${item.step}</div>
-      <div class="today-card-main">
-        <!-- บรรทัด 1: โปรเจกต์ / Package -->
-        <div style="font-size:11px;color:var(--text3);margin-bottom:2px">
-          🏗️ <strong style="color:var(--text2)">${item.pj}</strong>
-          <span style="margin:0 4px;opacity:.5">/</span>
-          📦 <span style="color:var(--text2)">${item.pk}</span>
-        </div>
-        <!-- บรรทัด 2: ทีม/ระบบ · Service · ชื่องาน -->
-        <div class="today-card-title">
-          <span style="color:var(--text2);font-weight:600">👥 ${item.team}</span>${item.svc?`<span style="color:var(--text3);font-weight:400"> · ${item.svc}</span>`:''}
-          <span style="color:var(--text1);margin-left:6px">— ${item.name}</span>
-        </div>
-        <!-- บรรทัด 3: ผู้รับผิดชอบ + วันแผน + สถานะล่าช้า -->
-        <div class="today-card-meta">
-          ${whoHtml}
-          <span style="color:var(--text3);border-left:1px solid var(--border);padding-left:10px">แผน: ${planS} – ${planE}</span>
-          ${delayNote}
-        </div>
-      </div>
-      <div class="today-card-status">${statusBadge}</div>
-    </div>`;
+    const whoStr = item.who.length ? item.who.join(', ') : '—';
+    return `<tr>
+      <td style="color:var(--text3);font-weight:700;text-align:center">S${item.step}</td>
+      <td class="td-wrap" title="${item.pj}" style="color:var(--text2);font-weight:600">${item.pj}</td>
+      <td class="td-wrap" title="${item.pk}" style="color:var(--text2)">${item.pk}</td>
+      <td class="td-wrap" title="${item.team}" style="color:var(--text2)">${item.team}</td>
+      <td class="td-wrap" title="${item.svc}" style="color:var(--text3)">${item.svc||'—'}</td>
+      <td style="color:var(--text1);font-weight:500">${item.name}</td>
+      <td class="today-card-who td-wrap" title="${whoStr}">${whoStr}</td>
+      <td style="color:var(--text3);font-size:11px">${planS}–${planE}</td>
+      <td style="white-space:nowrap">${badge} ${delay}</td>
+    </tr>`;
   }
 
   function section(emoji, label, color, bgColor, items){
     if(!items.length) return '';
     const gid='td'+Math.random().toString(36).slice(2,7);
     return `<div class="today-section">
-      <div class="today-section-head" style="background:${bgColor};color:${color}" onclick="document.getElementById('${gid}').style.display=document.getElementById('${gid}').style.display==='none'?'':'none'">
+      <div class="today-section-head" style="background:${bgColor};color:${color}" onclick="(function(el){el.style.display=el.style.display==='none'?'':'none'})(document.getElementById('${gid}'))">
         ${emoji} ${label}
         <span class="today-cnt">${items.length} รายการ</span>
       </div>
-      <div id="${gid}">${items.map(todayCard).join('')}</div>
+      <div id="${gid}" style="overflow-x:auto">
+        <table class="today-tbl">${TODAY_THEAD}<tbody>${items.map(todayRow).join('')}</tbody></table>
+      </div>
     </div>`;
   }
 
