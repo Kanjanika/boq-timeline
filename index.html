@@ -307,7 +307,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-08.4</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-11.1</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -998,15 +998,9 @@ const STEP_SELECT = [
   'RoleInStep','ActualHours','StepNotes','ActualStart','ActualEnd',
   'ParentTaskID','RowClosed','IsOver'
 ].join(',');
-const WP_SELECT = [
-  'Title','Project_x0020_Name','Project','Package','WorkPackage',
-  'Status','CommitStatus',
-  'Start_x0020_Date','Finish_x0020_Date','Due_x0020_Date',
-  'Service_x0020_Type','ServiceType','Description',
-  'Version','Team','AssignedTeam',
-  'Assignee','AssignedTo','Responsible','AISuggestAssignee',
-  'AISuggestStart','AISuggestFinish'
-].join(',');
+// build 2026-09-11: ไม่ใช้ $select กับ WORKPLAN เพราะ Graph API บางครั้งไม่ส่ง field
+// ที่มีชื่อ encoded (Start_x0020_Date ฯลฯ) กลับมาเมื่อระบุใน $select — ดึงทั้งหมดแทน
+const WP_SELECT = null; // null = ไม่ใส่ $select (ดึง fields ทั้งหมด)
 async function resolveHistoryListId(){
   if(HISTORY_LIST) return HISTORY_LIST;
   try{
@@ -3416,7 +3410,7 @@ async function bootLive(){
     // และเก็บ cache ไว้ให้ฟังก์ชันอื่น (diagnose, refreshTimeline) ใช้ซ้ำโดยไม่ต้องยิง API ซ้ำ
     const [rawStepItems, workplanItemsAll, liveIntake] = await Promise.all([
       graphFetchAllItems(`/sites/${SITE_ID}/lists/${STEP_LIST}/items?$expand=fields($select=${STEP_SELECT})&$top=200`).catch(e=>{ console.warn('โหลด BOQ Step Tracking ไม่สำเร็จ', e); return []; }),
-      graphFetchAllItems(`/sites/${SITE_ID}/lists/${WORKPLAN_LIST}/items?$expand=fields($select=${WP_SELECT})&$top=200`).catch(e=>{ console.warn('โหลด BOQ Team Work Plan ไม่สำเร็จ', e); return []; }),
+      graphFetchAllItems(`/sites/${SITE_ID}/lists/${WORKPLAN_LIST}/items?$expand=${WP_SELECT?`fields($select=${WP_SELECT})`:'fields'}&$top=200`).catch(e=>{ console.warn('โหลด BOQ Team Work Plan ไม่สำเร็จ', e); return []; }),
       loadIntakeFromGraph()
     ]);
     BOOT_CACHE = { stepItems: rawStepItems, workplanItems: workplanItemsAll, loadedAt: new Date() };
@@ -3709,7 +3703,7 @@ async function diagnoseTimelineFilter(projectSubstr){
   } else {
     const [a, b] = await Promise.all([
       graphFetchAllItems(`/sites/${SITE_ID}/lists/${STEP_LIST}/items?$expand=fields($select=${STEP_SELECT})&$top=200`),
-      graphFetchAllItems(`/sites/${SITE_ID}/lists/${WORKPLAN_LIST}/items?$expand=fields($select=${WP_SELECT})&$top=200`)
+      graphFetchAllItems(`/sites/${SITE_ID}/lists/${WORKPLAN_LIST}/items?$expand=${WP_SELECT?`fields($select=${WP_SELECT})`:'fields'}&$top=200`)
     ]);
     stepItemsAll = a; workplanItems = b;
   }
