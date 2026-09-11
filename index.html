@@ -323,7 +323,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-11.3</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-11.4</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -5544,21 +5544,26 @@ function renderTodayTasks(){
     });
   })));
 
-  // จัดเรียง overdue ตามวันที่ planEnd (เก่าสุดขึ้นก่อน)
-  overdue.sort((a,b)=>a.planEnd-b.planEnd);
-  // inProg: เรียงตาม planEnd
-  inProg.sort((a,b)=>a.planEnd-b.planEnd);
-  // startToday: เรียงตาม planStart
-  startToday.sort((a,b)=>a.planStart-b.planStart);
+  // เรียงทุกกลุ่มตาม: โปรเจกต์ → Package → ทีม/ระบบ → Service → Step number
+  const sortKey = it => [it.pj, it.pk, it.team, it.svc, it.step];
+  const cmpItems = (a,b) => {
+    const ka=sortKey(a), kb=sortKey(b);
+    for(let i=0;i<ka.length;i++){
+      if(ka[i]<kb[i]) return -1;
+      if(ka[i]>kb[i]) return 1;
+    }
+    return 0;
+  };
+  overdue.sort(cmpItems);
+  inProg.sort(cmpItems);
+  startToday.sort(cmpItems);
+  done.sort(cmpItems);
 
   if(!inProg.length && !startToday.length && !overdue.length && !done.length){
     body.innerHTML='<div class="today-empty">✅ ไม่มีงานค้างคาหรืองานที่ต้องทำวันนี้</div>'; return;
   }
 
   function todayCard(item){
-    const whoHtml = item.who.length
-      ? item.who.map(w=>`<span class="today-card-who">👤 ${w}</span>`).join('')
-      : '<span style="color:var(--text3)">— ยังไม่ระบุ —</span>';
     const planS = fmt(addD(T0, item.planStart));
     const planE = fmt(addD(T0, item.planEnd));
     const overdueDay = TODAY_D - item.planEnd;
@@ -5578,15 +5583,28 @@ function renderTodayTasks(){
       statusBadge=`<span class="r-badge" style="background:#dbeafe;color:#1d4ed8">🔵 วันนี้</span>`;
       delayNote=TODAY_D===item.planStart?'<span style="color:#2563eb;font-weight:600">เริ่มวันนี้</span>':'<span style="color:var(--text2)">อยู่ในช่วงแผน</span>';
     }
+    // ผู้รับผิดชอบ: หลัก + co-assignees แต่ละคนแยกบรรทัด
+    const whoHtml = item.who.length
+      ? item.who.map((w,i)=>`<span class="today-card-who">${i===0?'👤':'👥'} ${w}</span>`).join('')
+      : '<span style="color:var(--text3)">— ยังไม่ระบุ —</span>';
     return `<div class="today-card">
       <div class="today-card-step">S${item.step}</div>
       <div class="today-card-main">
-        <div class="today-card-title" title="${item.pj} / ${item.pk}">${item.name}
-          <span style="font-weight:400;color:var(--text2);font-size:11.5px;margin-left:6px">${item.team}${item.svc?' · '+item.svc:''}</span>
+        <!-- บรรทัด 1: โปรเจกต์ / Package -->
+        <div style="font-size:11px;color:var(--text3);margin-bottom:2px">
+          🏗️ <strong style="color:var(--text2)">${item.pj}</strong>
+          <span style="margin:0 4px;opacity:.5">/</span>
+          📦 <span style="color:var(--text2)">${item.pk}</span>
         </div>
-        <div style="font-size:11.5px;color:var(--text3);margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">🏗️ ${item.pj} / 📦 ${item.pk}</div>
-        <div class="today-card-meta">${whoHtml}
-          <span style="color:var(--text3)">แผน: ${planS} – ${planE}</span>
+        <!-- บรรทัด 2: ทีม/ระบบ · Service · ชื่องาน -->
+        <div class="today-card-title">
+          <span style="color:var(--text2);font-weight:600">👥 ${item.team}</span>${item.svc?`<span style="color:var(--text3);font-weight:400"> · ${item.svc}</span>`:''}
+          <span style="color:var(--text1);margin-left:6px">— ${item.name}</span>
+        </div>
+        <!-- บรรทัด 3: ผู้รับผิดชอบ + วันแผน + สถานะล่าช้า -->
+        <div class="today-card-meta">
+          ${whoHtml}
+          <span style="color:var(--text3);border-left:1px solid var(--border);padding-left:10px">แผน: ${planS} – ${planE}</span>
           ${delayNote}
         </div>
       </div>
