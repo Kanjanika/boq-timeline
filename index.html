@@ -354,6 +354,7 @@ tr.pick:hover td{background:var(--bg)}
     <button class="btn btn2" onclick="openBackfillAll()">🗄️ Backfill ข้อมูลจริงทั้งหมด</button>
     <button class="btn btn2" onclick="fixExistingReviewStepDurations()">🛠️ ปรับ Step วันคงที่ให้ตรง Template</button>
     <button class="btn btn2" onclick="openTemplateEditor()">⚙️ Step Template</button>
+    <button class="btn btn2" onclick="openCleanupDupModal()" title="ลบรายการซ้ำใน BOQ Date History และ StepNotes">🧹 Cleanup ซ้ำ</button>
   </div>
 
   <!-- build 2026-08-19.4: แถบสรุปความล่าช้า/เสี่ยงล่าช้าภาพรวมทุกโครงการ (ไม่ผูกกับตัวกรองคน/โครงการด้านบน — ต้องการให้
@@ -746,6 +747,19 @@ tr.pick:hover td{background:var(--bg)}
         <button class="btn btn2" onclick="closeUserIdForm()">ยกเลิก</button>
         <button class="btn" onclick="saveUserIdForm()">✓ บันทึก</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODAL · Cleanup ข้อมูลซ้ำ (build 2026-09-11.1) ============ -->
+<div class="mbg" id="cleanupDupMbg">
+  <div class="modal" style="max-width:640px">
+    <h3>🧹 Cleanup ข้อมูลซ้ำ</h3>
+    <div class="sub">ลบรายการซ้ำที่มี FieldChanged + NewValue เหมือนกันและเวลาห่างกันน้อยกว่า 5 นาที ออกจาก BOQ Date History (เหลือรายการล่าสุดของกลุ่ม) และลบ StepNotes ซ้ำออกจาก BOQ Step Tracking</div>
+    <div id="cleanupDupOut" style="margin-top:12px;font-size:12.5px;white-space:pre-wrap;background:var(--bg);border-radius:8px;padding:10px 12px;max-height:380px;overflow:auto">กด "เริ่ม Cleanup" เพื่อสแกนและลบข้อมูลซ้ำ</div>
+    <div class="m-actions">
+      <button class="btn btn2" onclick="closeCleanupDupModal()">ปิด</button>
+      <button class="btn" id="cleanupDupRunBtn" onclick="runCleanupDuplicates()">🧹 เริ่ม Cleanup</button>
     </div>
   </div>
 </div>
@@ -2886,6 +2900,133 @@ document.getElementById('nameMismatchMbg').addEventListener('click', e=>{ if(e.t
    ฟังก์ชันนี้ไม่เดา แต่ไปดึงทั้ง column list และตัวอย่างข้อมูลจริงมาโชว์ตรงๆ
 */
 function closeProcRefDiagModal(){ document.getElementById('procRefDiagMbg').classList.remove('on'); }
+
+/* ===== build 2026-09-11.1: Cleanup ข้อมูลซ้ำ (BOQ Date History + BOQ Step Tracking StepNotes) ===== */
+function openCleanupDupModal(){
+  if(!LIVE_MODE){ toastMsg('⚠️ ต้อง login SharePoint ก่อนถึงจะลบข้อมูลได้'); return; }
+  document.getElementById('cleanupDupOut').textContent = 'กด "เริ่ม Cleanup" เพื่อสแกนและลบข้อมูลซ้ำ';
+  document.getElementById('cleanupDupRunBtn').disabled = false;
+  document.getElementById('cleanupDupRunBtn').textContent = '🧹 เริ่ม Cleanup';
+  document.getElementById('cleanupDupMbg').classList.add('on');
+}
+function closeCleanupDupModal(){ document.getElementById('cleanupDupMbg').classList.remove('on'); }
+
+async function runCleanupDuplicates(){
+  const out = document.getElementById('cleanupDupOut');
+  const btn = document.getElementById('cleanupDupRunBtn');
+  btn.disabled = true; btn.textContent = '⏳ กำลังสแกน...';
+  out.textContent = '⏳ กำลังโหลดข้อมูล...\n';
+  let log = '';
+  const addLog = s => { log += s + '\n'; out.textContent = log; };
+
+  try{
+    // ---- 1. BOQ Date History ----
+    const histId = await resolveHistoryListId();
+    if(!histId){
+      addLog('⚠️ ไม่พบ BOQ Date History list — ข้ามขั้นตอนนี้');
+    } else {
+      addLog('📋 โหลด BOQ Date History...');
+      const histItems = await graphFetchAllItems(`/sites/${SITE_ID}/lists/${histId}/items?$expand=fields&$top=200`);
+      addLog(`   พบทั้งหมด ${histItems.length} รายการ`);
+
+      // จัดกลุ่มตาม WorkPlanItemId + FieldChanged + NewValue
+      const groups = new Map();
+      for(const it of histItems){
+        const f = it.fields||{};
+        const key = `${f.WorkPlanItemId}|${f.FieldChanged}|${f.NewValue}`;
+        if(!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(it);
+      }
+
+      // หารายการซ้ำ (ภายใน 5 นาที)
+      const toDelete = [];
+      for(const [, group] of groups){
+        if(group.length < 2) continue;
+        // เรียงตามเวลา desc
+        group.sort((a,b)=>{
+          const ta = new Date((a.fields||{}).ChangedAt||0).getTime();
+          const tb = new Date((b.fields||{}).ChangedAt||0).getTime();
+          return tb - ta;
+        });
+        // เก็บอันแรก (ล่าสุด) ลบอันที่เหลือถ้าเวลาห่าง < 5 นาทีจากอันล่าสุด
+        const tLatest = new Date((group[0].fields||{}).ChangedAt||0).getTime();
+        for(let i=1; i<group.length; i++){
+          const ti = new Date((group[i].fields||{}).ChangedAt||0).getTime();
+          if(Math.abs(tLatest - ti) < 5*60*1000) toDelete.push(group[i]);
+        }
+      }
+
+      if(toDelete.length === 0){
+        addLog('   ✅ ไม่พบรายการซ้ำใน BOQ Date History');
+      } else {
+        addLog(`   🗑️ พบรายการซ้ำ ${toDelete.length} รายการ — กำลังลบ...`);
+        let delCount = 0;
+        for(const it of toDelete){
+          try{
+            await graphFetch(`/sites/${SITE_ID}/lists/${histId}/items/${it.id}`, { method:'DELETE' });
+            delCount++;
+          } catch(e){ addLog(`   ⚠️ ลบ item ${it.id} ไม่สำเร็จ: ${e.message}`); }
+        }
+        addLog(`   ✅ ลบแล้ว ${delCount}/${toDelete.length} รายการ`);
+      }
+    }
+
+    // ---- 2. BOQ Step Tracking StepNotes ----
+    addLog('\n📋 โหลด BOQ Step Tracking...');
+    const stepItems = await graphFetchAllItems(`/sites/${SITE_ID}/lists/${STEP_LIST}/items?$expand=fields($select=StepNotes,Project,Package,SubTeam,WBSStep,ParentTaskID)&$top=200`);
+    addLog(`   พบทั้งหมด ${stepItems.length} รายการ`);
+
+    // จัดกลุ่มตาม Project+Package+SubTeam+WBSStep — ตรวจ StepNotes ซ้ำใน group เดียวกัน
+    const stepGroups = new Map();
+    for(const it of stepItems){
+      const f = it.fields||{};
+      const key = `${f.Project||''}|${f.Package||''}|${f.SubTeam||''}|${f.WBSStep||''}`;
+      if(!stepGroups.has(key)) stepGroups.set(key, []);
+      stepGroups.get(key).push(it);
+    }
+
+    // หากลุ่มที่มี StepNotes เหมือนกัน ≥2 รายการ
+    const stepDupIds = [];
+    for(const [, group] of stepGroups){
+      if(group.length < 2) continue;
+      const notesSeen = new Map();
+      for(const it of group){
+        const note = ((it.fields||{}).StepNotes||'').trim();
+        if(!note) continue;
+        if(notesSeen.has(note)){
+          stepDupIds.push(it); // ลบอันหลัง เก็บอันแรก
+        } else {
+          notesSeen.set(note, it);
+        }
+      }
+    }
+
+    if(stepDupIds.length === 0){
+      addLog('   ✅ ไม่พบ StepNotes ซ้ำใน BOQ Step Tracking');
+    } else {
+      addLog(`   🗑️ พบ StepNotes ซ้ำ ${stepDupIds.length} รายการ — กำลังล้าง StepNotes...`);
+      let cleared = 0;
+      for(const it of stepDupIds){
+        try{
+          await graphFetch(`/sites/${SITE_ID}/lists/${STEP_LIST}/items/${it.id}`, {
+            method:'PATCH', body: JSON.stringify({fields:{ StepNotes: '' }})
+          });
+          cleared++;
+        } catch(e){ addLog(`   ⚠️ ล้าง StepNotes item ${it.id} ไม่สำเร็จ: ${e.message}`); }
+      }
+      addLog(`   ✅ ล้าง StepNotes แล้ว ${cleared}/${stepDupIds.length} รายการ`);
+    }
+
+    addLog('\n🎉 Cleanup เสร็จสมบูรณ์ — กด Refresh เพื่อโหลดข้อมูลใหม่');
+    clearBootCache();
+    btn.textContent = '✅ เสร็จแล้ว';
+  } catch(e){
+    addLog('\n❌ เกิดข้อผิดพลาด: ' + e.message);
+    console.error('runCleanupDuplicates error', e);
+    btn.disabled = false;
+    btn.textContent = '🧹 เริ่ม Cleanup';
+  }
+}
 async function diagnoseProcRefList(){
   if(!LIVE_MODE){ toastMsg('⚠️ ต้อง login SharePoint ก่อนถึงจะตรวจสอบได้'); return; }
   const out = document.getElementById('procRefDiagOut');
@@ -4024,7 +4165,20 @@ async function loadDateEditHistory(parentTaskId){
     const data = await graphFetch(q);
     const allItems = (data && data.value) || [];
     const SHOW_FIELDS = new Set(['CommitStart','CommitEnd','DueDate']);
-    const items = allItems.filter(it=> SHOW_FIELDS.has((it.fields||{}).FieldChanged)).slice(0,6);
+    // build 2026-09-11.1: dedup รายการซ้ำ — ถ้า FieldChanged+NewValue เหมือนกันและเวลาห่างกัน <5 นาที เก็บแค่อันล่าสุด
+    const deduped = [];
+    for(const it of allItems.filter(it=> SHOW_FIELDS.has((it.fields||{}).FieldChanged))){
+      const f = it.fields||{};
+      const tMs = f.ChangedAt ? new Date(f.ChangedAt).getTime() : 0;
+      const prev = deduped[deduped.length-1];
+      if(prev){
+        const pf = prev.fields||{};
+        const pMs = pf.ChangedAt ? new Date(pf.ChangedAt).getTime() : 0;
+        if(pf.FieldChanged===f.FieldChanged && pf.NewValue===f.NewValue && Math.abs(tMs-pMs)<5*60*1000) continue;
+      }
+      deduped.push(it);
+    }
+    const items = deduped.slice(0,6);
     if(!items.length) return;
     const fmtDate = s => {
       if(!s) return '-';
