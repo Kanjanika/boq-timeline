@@ -307,7 +307,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-11.1</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-11.2</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -5261,12 +5261,40 @@ function renderRptKpis(){
 }
 
 // === Step row HTML ===
-function rptStepRow(row, st){
+// build 2026-09-11.1: ใช้ตารางเดียวต่อโครงการ/ทีม column ตรงกันทุกแถว + collapse toggle
+const RPT_COLS = `<colgroup>
+  <col style="width:44px">
+  <col style="width:130px">
+  <col style="width:170px">
+  <col style="width:76px">
+  <col style="width:76px">
+  <col style="width:46px">
+  <col style="width:76px">
+  <col style="width:76px">
+  <col style="width:52px">
+  <col style="width:110px">
+  <col style="width:110px">
+</colgroup>`;
+const RPT_THEAD = `<thead><tr style="background:var(--bg2,#f1f5f9);font-size:11.5px">
+  <th style="text-align:left;padding:5px 8px">Step</th>
+  <th style="text-align:left;padding:5px 8px">ชื่องาน</th>
+  <th style="text-align:left;padding:5px 8px">ผู้รับผิดชอบ</th>
+  <th style="text-align:left;padding:5px 8px">แผนเริ่ม</th>
+  <th style="text-align:left;padding:5px 8px">แผนจบ</th>
+  <th style="text-align:right;padding:5px 8px">แผน</th>
+  <th style="text-align:left;padding:5px 8px">จริงเริ่ม</th>
+  <th style="text-align:left;padding:5px 8px">จริงจบ</th>
+  <th style="text-align:right;padding:5px 8px">จริง</th>
+  <th style="text-align:left;padding:5px 8px">Delay</th>
+  <th style="text-align:left;padding:5px 8px">สถานะ</th>
+</tr></thead>`;
+
+function rptStepRow(row, st, groupId){
   const c=row.closed[st.s], aOff=row.astart[st.s];
   const planStart=addD(T0,st.start);
   const planEndInc=addD(T0,st.start+Math.max(st.dur-1,0));
   const planDays=Math.max(st.dur,1);
-  let aStartStr='—',aEndStr='—',aDaysStr='—',statusHtml,delayHtml='';
+  let aStartStr='—',aEndStr='—',aDaysStr='—',statusHtml,delayHtml='—';
   if(c){
     const asOff=aOff!==undefined?aOff:st.start;
     aStartStr=fmt(addD(T0,asOff));
@@ -5283,32 +5311,49 @@ function rptStepRow(row, st){
   } else {
     const overdue=TODAY_D-(st.start+Math.max(st.dur-1,0));
     statusHtml='<span class="r-badge r-ns">⭕ ยังไม่เริ่ม</span>';
-    if(overdue>0)delayHtml=`<span class="r-overdue">เกินแผน ${overdue} วัน</span>`;
+    delayHtml=overdue>0?`<span class="r-overdue">เกินแผน ${overdue} วัน</span>`:'—';
   }
   const assignees=[st.who,...(st.coAssignees||[])].filter(Boolean).join(', ')||'—';
   const sName=(st.name||STEP_NAMES[st.s]||`S${st.s}`);
-  return `<tr class="rpt-step-row">
-    <td style="white-space:nowrap;color:var(--text3);font-weight:600">S${st.s}</td>
-    <td>${sName}</td>
-    <td>${assignees}</td>
-    <td style="white-space:nowrap">${fmt(planStart)}</td>
-    <td style="white-space:nowrap">${fmt(planEndInc)}</td>
-    <td style="text-align:right;color:var(--text2)">${planDays}d</td>
-    <td style="white-space:nowrap;color:var(--text3)">${aStartStr}</td>
-    <td style="white-space:nowrap;color:var(--text3)">${aEndStr}</td>
-    <td style="text-align:right;color:var(--text2)">${aDaysStr}</td>
-    <td style="white-space:nowrap">${delayHtml}</td>
-    <td>${statusHtml}</td></tr>`;
+  return `<tr class="rpt-step-row rpt-grp-${groupId}" style="font-size:12px">
+    <td style="padding:5px 8px;white-space:nowrap;color:var(--text3);font-weight:600">S${st.s}</td>
+    <td style="padding:5px 8px">${sName}</td>
+    <td style="padding:5px 8px;color:var(--text2)">${assignees}</td>
+    <td style="padding:5px 8px;white-space:nowrap">${fmt(planStart)}</td>
+    <td style="padding:5px 8px;white-space:nowrap">${fmt(planEndInc)}</td>
+    <td style="padding:5px 8px;text-align:right;color:var(--text2)">${planDays}d</td>
+    <td style="padding:5px 8px;white-space:nowrap;color:var(--text3)">${aStartStr}</td>
+    <td style="padding:5px 8px;white-space:nowrap;color:var(--text3)">${aEndStr}</td>
+    <td style="padding:5px 8px;text-align:right;color:var(--text2)">${aDaysStr}</td>
+    <td style="padding:5px 8px;white-space:nowrap">${delayHtml}</td>
+    <td style="padding:5px 8px">${statusHtml}</td></tr>`;
 }
 
-function rptTableWrap(rowsHtml){
-  return `<div style="overflow-x:auto"><table>
-    <thead><tr>
-      <th>Step</th><th>ชื่องาน</th><th>ผู้รับผิดชอบ</th>
-      <th>แผนเริ่ม</th><th>แผนจบ</th><th>แผน</th>
-      <th>จริงเริ่ม</th><th>จริงจบ</th><th>จริง</th>
-      <th>Delay</th><th>สถานะ</th></tr></thead>
-    <tbody>${rowsHtml}</tbody></table></div>`;
+function rptToggleRows(cls){
+  document.querySelectorAll('.'+cls).forEach(el=>{
+    el.style.display = el.style.display==='none' ? '' : 'none';
+  });
+  // หมุนลูกศรของปุ่มที่ trigger
+  const btn = document.querySelector(`[data-toggle="${cls}"]`);
+  if(btn){ const arrow=btn.querySelector('.rpt-arrow'); if(arrow) arrow.style.transform = arrow.style.transform==='rotate(-90deg)' ? '' : 'rotate(-90deg)'; }
+}
+
+// สร้าง unique group id
+let _rptGid = 0;
+function rptGid(){ return 'g'+(++_rptGid); }
+
+function rptGroupRow(label, sublabel, pct, bg, color, gid, parentGid, indent){
+  const pp = rptProjBar(pct, bg!=='#1e3a5f');
+  const cls = parentGid ? `rpt-grp-${parentGid}` : '';
+  const pad = indent ? `padding-left:${indent}px` : '';
+  return `<tr class="rpt-group-row ${cls}" style="cursor:pointer;user-select:none" onclick="rptToggleRows('rpt-grp-${gid}')" data-toggle="rpt-grp-${gid}">
+    <td colspan="11" style="background:${bg};padding:7px 12px;${pad}">
+      <span style="color:${color};font-weight:700;font-size:12.5px">
+        <span class="rpt-arrow" style="display:inline-block;transition:transform .2s;margin-right:6px">▼</span>${label}
+      </span>
+      ${sublabel?`<span style="color:${color};opacity:.7;font-size:11.5px;margin-left:8px">${sublabel}</span>`:''}
+      <span style="float:right;font-size:11.5px;color:${color};opacity:.85">${pct.done}/${pct.total} steps ${pp}</span>
+    </td></tr>`;
 }
 
 function rptRowPct(row){
@@ -5331,42 +5376,54 @@ function rptProjBar(pp, light){
 
 function renderRptByProject(body){
   if(!DATA.length){body.innerHTML='<div class="card" style="text-align:center;padding:40px;color:var(--text3)">⏳ ยังไม่มีข้อมูล</div>';return;}
+  _rptGid=0; // reset IDs each render
   let html='';
   DATA.forEach(pj=>{
     const pp=rptProjPct(pj);
+    const projGid=rptGid();
+    // Open unified table for this project
     html+=`<div class="card" style="margin-bottom:14px;padding:0;overflow:hidden">
-      <div style="padding:9px 14px;background:#1e3a5f;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-        <span style="color:#fff;font-weight:700;font-size:13.5px">🏗️ ${pj.name}</span>
-        <span style="color:#93c5fd;font-size:11.5px">${pj.meta||''}</span>
-        <span style="flex:1"></span>
-        <span style="color:#e0f2fe;font-size:11.5px;display:flex;align-items:center;gap:8px">${pp.done}/${pp.total} steps ${rptProjBar(pp,false)}</span>
-      </div>`;
+    <table style="width:100%;border-collapse:collapse;table-layout:fixed">${RPT_COLS}${RPT_THEAD}<tbody>`;
+    // Project header row (level 0 — always visible)
+    html+=rptGroupRow('🏗️ '+pj.name, pj.meta||'', pp, '#1e3a5f','#fff', projGid, null, 0);
     pj.pkgs.forEach(pk=>{
       const kp=rptPkgPct(pk);
-      html+=`<div style="padding:5px 14px;background:#eff6ff;border-top:1px solid #bfdbfe;display:flex;align-items:center;gap:10px">
-        <span style="color:#1e40af;font-weight:600;font-size:12.5px">📦 ${pk.name}</span>
-        <span style="color:#64748b;font-size:11.5px">${kp.done}/${kp.total} · ${rptProjBar(kp,true)}</span>
-      </div>`;
+      const pkgGid=rptGid();
+      // Package header row (child of project)
+      html+=rptGroupRow('📦 '+pk.name, '', kp, '#eff6ff','#1e40af', pkgGid, projGid, 14);
       pk.rows.forEach(row=>{
         const rp=rptRowPct(row);
         const svc=row.service?` · ${row.service}`:'';
         const due=row.due?` · Due: ${row.due}`:'';
-        html+=`<div style="padding:4px 14px 4px 24px;background:var(--bg);border-top:1px solid var(--border);display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          <span style="font-weight:600;font-size:12px;color:var(--text1)">👥 ${row.team}${svc}</span>
-          <span style="font-size:11px;color:var(--text3)">${due}</span>
-          <span style="margin-left:auto;font-size:11.5px;color:var(--text2)">${rp.done}/${rp.total} · ${rptProjBar(rp,true)}</span>
-        </div>`;
-        let rows=''; row.steps.forEach(st=>{rows+=rptStepRow(row,st);});
-        html+=rptTableWrap(rows);
+        const rowGid=rptGid();
+        // Team header row (child of package + project)
+        // multi-level: belongs to both pkgGid and projGid classes
+        const teamLabel=`👥 ${row.team}${svc}${due?` <span style="font-weight:400;font-size:11px">${due}</span>`:''}`;
+        const rowCls=`rpt-grp-${pkgGid} rpt-grp-${projGid}`;
+        html+=`<tr class="rpt-group-row ${rowCls}" style="cursor:pointer;user-select:none" onclick="rptToggleRows('rpt-grp-${rowGid}')" data-toggle="rpt-grp-${rowGid}">
+          <td colspan="11" style="background:var(--bg);padding:5px 12px 5px 28px;border-top:1px solid var(--border)">
+            <span style="color:var(--text1);font-weight:600;font-size:12px">
+              <span class="rpt-arrow" style="display:inline-block;transition:transform .2s;margin-right:5px">▼</span>${teamLabel}
+            </span>
+            <span style="float:right;font-size:11.5px;color:var(--text2)">${rp.done}/${rp.total} ${rptProjBar(rp,true)}</span>
+          </td></tr>`;
+        // Step rows — belong to rowGid + pkgGid + projGid
+        row.steps.forEach(st=>{
+          const sRow=rptStepRow(row,st,rowGid);
+          // inject extra parent classes into the tr
+          html+=sRow.replace(`class="rpt-step-row rpt-grp-${rowGid}"`,
+            `class="rpt-step-row rpt-grp-${rowGid} rpt-grp-${pkgGid} rpt-grp-${projGid}"`);
+        });
       });
     });
-    html+='</div>';
+    html+=`</tbody></table></div>`;
   });
   body.innerHTML=html;
 }
 
 function renderRptByTeam(body){
   if(!DATA.length){body.innerHTML='<div class="card" style="text-align:center;padding:40px;color:var(--text3)">⏳ ยังไม่มีข้อมูล</div>';return;}
+  _rptGid=0;
   // Build team map: team → [{pj,pk,row}]
   const teamMap={};
   DATA.forEach(pj=>pj.pkgs.forEach(pk=>pk.rows.forEach(row=>{
@@ -5378,25 +5435,35 @@ function renderRptByTeam(body){
     let t=0,d=0;
     entries.forEach(({row})=>{t+=row.steps.length;d+=row.steps.filter(st=>row.closed[st.s]).length;});
     const pp={done:d,total:t,pct:t?Math.round(d/t*100):0};
+    const teamGid=rptGid();
+    // Open unified table for this team
     html+=`<div class="card" style="margin-bottom:14px;padding:0;overflow:hidden">
-      <div style="padding:9px 14px;background:#1e3a5f;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-        <span style="color:#fff;font-weight:700;font-size:13.5px">👥 ${team}</span>
-        <span style="flex:1"></span>
-        <span style="color:#e0f2fe;font-size:11.5px;display:flex;align-items:center;gap:8px">${pp.done}/${pp.total} steps ${rptProjBar(pp,false)}</span>
-      </div>`;
+    <table style="width:100%;border-collapse:collapse;table-layout:fixed">${RPT_COLS}${RPT_THEAD}<tbody>`;
+    // Team header row (level 0)
+    html+=rptGroupRow('👥 '+team, '', pp, '#1e3a5f','#fff', teamGid, null, 0);
     entries.forEach(({pj,pk,row})=>{
       const rp=rptRowPct(row);
       const svc=row.service?` · ${row.service}`:'';
       const due=row.due?` · Due: ${row.due}`:'';
-      html+=`<div style="padding:5px 14px;background:#eff6ff;border-top:1px solid #bfdbfe;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-        <span style="color:#1e40af;font-weight:600;font-size:12px">🏗️ ${pj.name} / ${pk.name}${svc}</span>
-        <span style="font-size:11px;color:var(--text3)">${due}</span>
-        <span style="margin-left:auto;font-size:11.5px;color:var(--text2)">${rp.done}/${rp.total} · ${rptProjBar(rp,true)}</span>
-      </div>`;
-      let rows=''; row.steps.forEach(st=>{rows+=rptStepRow(row,st);});
-      html+=rptTableWrap(rows);
+      const rowGid=rptGid();
+      // Project/package sub-header (child of team)
+      const subLabel=`🏗️ ${pj.name} / 📦 ${pk.name}${svc}${due?` · ${due}`:''}`;
+      const rowCls=`rpt-grp-${teamGid}`;
+      html+=`<tr class="rpt-group-row ${rowCls}" style="cursor:pointer;user-select:none" onclick="rptToggleRows('rpt-grp-${rowGid}')" data-toggle="rpt-grp-${rowGid}">
+        <td colspan="11" style="background:#eff6ff;padding:5px 12px 5px 18px;border-top:1px solid #bfdbfe">
+          <span style="color:#1e40af;font-weight:600;font-size:12px">
+            <span class="rpt-arrow" style="display:inline-block;transition:transform .2s;margin-right:5px">▼</span>${subLabel}
+          </span>
+          <span style="float:right;font-size:11.5px;color:var(--text2)">${rp.done}/${rp.total} ${rptProjBar(rp,true)}</span>
+        </td></tr>`;
+      // Step rows — belong to rowGid + teamGid
+      row.steps.forEach(st=>{
+        const sRow=rptStepRow(row,st,rowGid);
+        html+=sRow.replace(`class="rpt-step-row rpt-grp-${rowGid}"`,
+          `class="rpt-step-row rpt-grp-${rowGid} rpt-grp-${teamGid}"`);
+      });
     });
-    html+='</div>';
+    html+=`</tbody></table></div>`;
   });
   body.innerHTML=html;
 }
