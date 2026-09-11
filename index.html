@@ -293,11 +293,12 @@ tr.pick:hover td{background:var(--bg)}
 .today-section{margin-bottom:16px}
 .today-section-head{display:flex;align-items:center;gap:10px;padding:7px 14px;border-radius:8px 8px 0 0;font-weight:700;font-size:13px;cursor:pointer;user-select:none}
 .today-section-head .today-cnt{font-size:11.5px;font-weight:500;margin-left:auto;opacity:.85}
-.today-tbl{width:100%;border-collapse:collapse;font-size:12px;background:var(--card);border:1px solid var(--border);border-radius:0 0 8px 8px}
-.today-tbl th{background:var(--bg2,#f1f5f9);padding:5px 8px;text-align:left;font-size:11px;font-weight:600;color:var(--text2);white-space:nowrap;border-bottom:1px solid var(--border)}
-.today-tbl td{padding:5px 8px;border-top:1px solid var(--border);vertical-align:middle;white-space:nowrap}
-.today-tbl tr:hover td{background:var(--bg2,#f1f5f9)}
-.today-tbl .td-wrap{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px}
+.today-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:8px;background:var(--card)}
+.today-tbl{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed}
+.today-tbl th{background:var(--bg2,#f1f5f9);padding:5px 8px;text-align:left;font-size:11px;font-weight:600;color:var(--text2);white-space:nowrap;border-bottom:2px solid var(--border)}
+.today-tbl td{padding:5px 8px;border-top:1px solid var(--border);vertical-align:middle;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.today-tbl tr.data-row:hover td{background:var(--bg2,#f1f5f9)}
+.today-tbl tr.sec-head td{font-weight:700;font-size:12.5px;padding:6px 12px;cursor:pointer;user-select:none;border-top:2px solid var(--border)}
 .today-card-who{font-weight:600;color:var(--primary)}
 .today-empty{text-align:center;padding:32px 20px;color:var(--text3);font-size:13px;border:1px dashed var(--border);border-radius:8px;margin-top:4px}
 .today-summary{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:4px}
@@ -323,7 +324,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-11.6</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-11.7</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -5593,20 +5594,31 @@ function renderTodayTasks(){
     body.innerHTML='<div class="today-empty">✅ ไม่มีงานค้างคาหรืองานที่ต้องทำวันนี้</div>'; return;
   }
 
-  // thead ร่วม — ใช้ในทุก section
+  // colgroup กำหนดความกว้าง fixed ครั้งเดียว — ทุก section ใช้ตารางเดียวกัน
+  const TODAY_COLS = `<colgroup>
+    <col style="width:40px">
+    <col style="width:120px">
+    <col style="width:120px">
+    <col style="width:72px">
+    <col style="width:110px">
+    <col style="width:160px">
+    <col style="width:130px">
+    <col style="width:106px">
+    <col style="width:100px">
+  </colgroup>`;
   const TODAY_THEAD = `<thead><tr>
-    <th style="width:38px">Step</th>
-    <th style="width:130px">โปรเจกต์</th>
-    <th style="width:110px">Package</th>
-    <th style="width:80px">ทีม/ระบบ</th>
-    <th style="width:120px">Service</th>
+    <th style="text-align:center">Step</th>
+    <th>โปรเจกต์</th>
+    <th>Package</th>
+    <th>ทีม/ระบบ</th>
+    <th>Service</th>
     <th>ชื่องาน</th>
-    <th style="width:130px">ผู้รับผิดชอบ</th>
-    <th style="width:100px">แผนเริ่ม–จบ</th>
-    <th style="width:90px">สถานะ</th>
+    <th>ผู้รับผิดชอบ</th>
+    <th>แผนเริ่ม–จบ</th>
+    <th>สถานะ</th>
   </tr></thead>`;
 
-  function todayRow(item){
+  function todayRow(item, bgRow){
     const planS = fmt(addD(T0, item.planStart));
     const planE = fmt(addD(T0, item.planEnd));
     const overdueDay = TODAY_D - item.planEnd;
@@ -5627,38 +5639,46 @@ function renderTodayTasks(){
       delay=TODAY_D===item.planStart?`<span style="color:#2563eb;font-size:10.5px">เริ่มวันนี้</span>`:'';
     }
     const whoStr = item.who.length ? item.who.join(', ') : '—';
-    return `<tr>
+    const bg = bgRow ? `style="background:${bgRow}"` : '';
+    return `<tr class="data-row" ${bg}>
       <td style="color:var(--text3);font-weight:700;text-align:center">S${item.step}</td>
-      <td class="td-wrap" title="${item.pj}" style="color:var(--text2);font-weight:600">${item.pj}</td>
-      <td class="td-wrap" title="${item.pk}" style="color:var(--text2)">${item.pk}</td>
-      <td class="td-wrap" title="${item.team}" style="color:var(--text2)">${item.team}</td>
-      <td class="td-wrap" title="${item.svc}" style="color:var(--text3)">${item.svc||'—'}</td>
+      <td title="${item.pj}" style="color:var(--text2);font-weight:600">${item.pj}</td>
+      <td title="${item.pk}" style="color:var(--text2)">${item.pk}</td>
+      <td title="${item.team}" style="color:var(--text2)">${item.team}</td>
+      <td title="${item.svc}" style="color:var(--text3)">${item.svc||'—'}</td>
       <td style="color:var(--text1);font-weight:500">${item.name}</td>
-      <td class="today-card-who td-wrap" title="${whoStr}">${whoStr}</td>
+      <td class="today-card-who" title="${whoStr}">${whoStr}</td>
       <td style="color:var(--text3);font-size:11px">${planS}–${planE}</td>
-      <td style="white-space:nowrap">${badge} ${delay}</td>
+      <td style="white-space:nowrap">${badge}${delay?` ${delay}`:''}</td>
     </tr>`;
   }
 
-  function section(emoji, label, color, bgColor, items){
+  // กลุ่ม section ใช้ group header row (<tr class="sec-head">) ใน tbody เดียวกัน
+  function secRows(emoji, label, color, bgHead, items, bgRow){
     if(!items.length) return '';
-    const gid='td'+Math.random().toString(36).slice(2,7);
-    return `<div class="today-section">
-      <div class="today-section-head" style="background:${bgColor};color:${color}" onclick="(function(el){el.style.display=el.style.display==='none'?'':'none'})(document.getElementById('${gid}'))">
-        ${emoji} ${label}
-        <span class="today-cnt">${items.length} รายการ</span>
-      </div>
-      <div id="${gid}" style="overflow-x:auto">
-        <table class="today-tbl">${TODAY_THEAD}<tbody>${items.map(todayRow).join('')}</tbody></table>
-      </div>
-    </div>`;
+    const gid='tg'+Math.random().toString(36).slice(2,7);
+    const toggle=`document.querySelectorAll('.${gid}').forEach(r=>{r.style.display=r.style.display==='none'?'':'none'})`;
+    const head=`<tr class="sec-head" onclick="${toggle}" style="background:${bgHead}">
+      <td colspan="9" style="color:${color}">
+        <span style="margin-right:6px">▼</span>${emoji} ${label}
+        <span style="float:right;font-weight:500;font-size:11.5px">${items.length} รายการ</span>
+      </td></tr>`;
+    return head + items.map(it=>{
+      const r=todayRow(it, bgRow);
+      return r.replace('class="data-row"',`class="data-row ${gid}"`);
+    }).join('');
   }
 
-  body.innerHTML =
-    section('⏳','กำลังทำอยู่ (In Progress)', '#92400e','#fef3c7', inProg) +
-    section('⚠️','เลยกำหนดแผน (Overdue)',    '#991b1b','#fee2e2', overdue) +
-    section('🔵','งานวันนี้ตามแผน (Today)',   '#1e3a8a','#dbeafe', startToday) +
-    (showDone ? section('✅','เสร็จแล้ว (Done)','#166534','#dcfce7', done) : '');
+  // ตารางเดียว — thead ครั้งเดียว colgroup ครั้งเดียว → column ตรงกันทุก section
+  const rows =
+    secRows('⏳','กำลังทำอยู่ (In Progress)','#92400e','#fef3c7', inProg,   null) +
+    secRows('⚠️','เลยกำหนดแผน (Overdue)',   '#991b1b','#fee2e2', overdue,  '#fff5f5') +
+    secRows('🔵','งานวันนี้ตามแผน (Today)',  '#1e3a8a','#dbeafe', startToday, null) +
+    (showDone ? secRows('✅','เสร็จแล้ว (Done)','#166534','#dcfce7', done, null) : '');
+
+  body.innerHTML = `<div class="today-wrap">
+    <table class="today-tbl">${TODAY_COLS}${TODAY_THEAD}<tbody>${rows}</tbody></table>
+  </div>`;
 }
 
 function renderRptBody(){
