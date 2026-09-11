@@ -2971,50 +2971,43 @@ async function runCleanupDuplicates(){
       }
     }
 
-    // ---- 2. BOQ Step Tracking StepNotes ----
+    // ---- 2. BOQ Step Tracking StepNotes — dedup บรรทัดซ้ำภายใน field เดียวกัน ----
     addLog('\n📋 โหลด BOQ Step Tracking...');
     const stepItems = await graphFetchAllItems(`/sites/${SITE_ID}/lists/${STEP_LIST}/items?$expand=fields($select=StepNotes,Project,Package,SubTeam,WBSStep,ParentTaskID)&$top=200`);
     addLog(`   พบทั้งหมด ${stepItems.length} รายการ`);
 
-    // จัดกลุ่มตาม Project+Package+SubTeam+WBSStep — ตรวจ StepNotes ซ้ำใน group เดียวกัน
-    const stepGroups = new Map();
+    // dedup บรรทัดซ้ำใน StepNotes แต่ละ item (เก็บบรรทัดสุดท้ายของ content เดิม ถ้า content เหมือนกัน)
+    const stepPatchList = [];
     for(const it of stepItems){
-      const f = it.fields||{};
-      const key = `${f.Project||''}|${f.Package||''}|${f.SubTeam||''}|${f.WBSStep||''}`;
-      if(!stepGroups.has(key)) stepGroups.set(key, []);
-      stepGroups.get(key).push(it);
-    }
-
-    // หากลุ่มที่มี StepNotes เหมือนกัน ≥2 รายการ
-    const stepDupIds = [];
-    for(const [, group] of stepGroups){
-      if(group.length < 2) continue;
-      const notesSeen = new Map();
-      for(const it of group){
-        const note = ((it.fields||{}).StepNotes||'').trim();
-        if(!note) continue;
-        if(notesSeen.has(note)){
-          stepDupIds.push(it); // ลบอันหลัง เก็บอันแรก
-        } else {
-          notesSeen.set(note, it);
-        }
+      const raw = ((it.fields||{}).StepNotes||'').trim();
+      if(!raw) continue;
+      const lines = raw.split('\n').filter(l=>l.trim());
+      const seen = new Map();
+      for(const line of lines){
+        const body = line.replace(/^\[[^\]]+\]\s*/,''); // ตัดส่วน [วันที่] ออก
+        seen.set(body, line); // เขียนทับ เก็บอันล่าสุด
+      }
+      const cleaned = [...seen.values()].join('\n');
+      if(cleaned !== raw){
+        stepPatchList.push({ id: it.id, old: lines.length, new: seen.size, notes: cleaned });
       }
     }
 
-    if(stepDupIds.length === 0){
+    if(stepPatchList.length === 0){
       addLog('   ✅ ไม่พบ StepNotes ซ้ำใน BOQ Step Tracking');
     } else {
-      addLog(`   🗑️ พบ StepNotes ซ้ำ ${stepDupIds.length} รายการ — กำลังล้าง StepNotes...`);
-      let cleared = 0;
-      for(const it of stepDupIds){
+      addLog(`   🗑️ พบ ${stepPatchList.length} item ที่มีบรรทัดซ้ำ — กำลัง dedup...`);
+      let patched = 0;
+      for(const p of stepPatchList){
         try{
-          await graphFetch(`/sites/${SITE_ID}/lists/${STEP_LIST}/items/${it.id}`, {
-            method:'PATCH', body: JSON.stringify({fields:{ StepNotes: '' }})
+          await graphFetch(`/sites/${SITE_ID}/lists/${STEP_LIST}/items/${p.id}`, {
+            method:'PATCH', body: JSON.stringify({fields:{ StepNotes: p.notes }})
           });
-          cleared++;
-        } catch(e){ addLog(`   ⚠️ ล้าง StepNotes item ${it.id} ไม่สำเร็จ: ${e.message}`); }
+          addLog(`   ✓ item ${p.id}: ${p.old} → ${p.new} บรรทัด`);
+          patched++;
+        } catch(e){ addLog(`   ⚠️ patch item ${p.id} ไม่สำเร็จ: ${e.message}`); }
       }
-      addLog(`   ✅ ล้าง StepNotes แล้ว ${cleared}/${stepDupIds.length} รายการ`);
+      addLog(`   ✅ dedup StepNotes แล้ว ${patched}/${stepPatchList.length} item`);
     }
 
     addLog('\n🎉 Cleanup เสร็จสมบูรณ์ — กด Refresh เพื่อโหลดข้อมูลใหม่');
@@ -4773,7 +4766,18 @@ function openStep(el){
     }
     roleSel.value='Review';
   }
-  document.getElementById('mHistory').textContent = st.notes || 'ยังไม่มีประวัติ';
+  // build 2026-09-11.1: dedup ประวัติก่อนแสดง — ถ้า content (ไม่นับวันที่) ซ้ำกัน เก็บแค่รายการล่าสุด
+  const dedupNotes = (raw) => {
+    if(!raw) return '';
+    const lines = raw.split('\n').filter(l=>l.trim());
+    const seen = new Map();
+    for(const line of lines){
+      const body = line.replace(/^\[[^\]]+\]\s*/,'');
+      seen.set(body, line); // เขียนทับ — เก็บอันหลังสุด (ล่าสุด)
+    }
+    return [...seen.values()].join('\n');
+  };
+  document.getElementById('mHistory').textContent = dedupNotes(st.notes) || 'ยังไม่มีประวัติ';
   document.getElementById('mbg').classList.add('on');
 }
 function closeModal(){document.getElementById('mbg').classList.remove('on')}
@@ -5050,7 +5054,13 @@ function applyCommon(row,st){
   }
   const allWhoStamp=[st.who,...(st.coAssignees||[])].filter(Boolean);
   const stamp = `[${fmtY(new Date())}] ${roleVal}: ${allWhoStamp.join('+')}${hrsVal!==''? ' · '+hrsVal+' ชม.':''}${noteVal? ' · '+noteVal:''}`;
-  st.notes = st.notes ? `${st.notes}\n${stamp}` : stamp;
+  // build 2026-09-11.1: ป้องกันต่อท้าย stamp ซ้ำ — ถ้า stamp (ไม่รวมวันที่) เหมือนรายการล่าสุดใน st.notes ให้ข้าม
+  const stampBody = stamp.replace(/^\[[^\]]+\]\s*/, ''); // ตัดส่วน [วันที่] ออก เหลือแค่เนื้อหา
+  const lastLine = st.notes ? st.notes.split('\n').pop() : '';
+  const lastBody = lastLine.replace(/^\[[^\]]+\]\s*/, '');
+  if(!lastBody || lastBody !== stampBody){
+    st.notes = st.notes ? `${st.notes}\n${stamp}` : stamp;
+  }
 }
 async function saveOnly(){
   if(!cur)return;
