@@ -2401,7 +2401,9 @@ async function syncStepToGraph(row, stepNum, pj, pk){
   const st = row.steps.find(x=>x.s===stepNum);
   const fields = {};
   const as = row.astart[stepNum];
+  // build 2026-09-23.11: ส่ง null เพื่อล้าง ActualStart ใน SharePoint เมื่อ astart ถูกลบออก (กด Clear)
   if(as!==undefined) fields.ActualStart = toISO(addD(T0,as));
+  else fields.ActualStart = null;
   const c = row.closed[stepNum];
   if(c) fields.ActualEnd = toISO(addD(T0,c.end));
   // StepAssignee เป็น Person or Group field จริง (ยืนยันแล้วผ่าน diagnoseStepAssigneeColumn) — SharePoint จะไม่บันทึก
@@ -5223,7 +5225,9 @@ function applyCommon(row,st){
     if(newEnd>=newStart){ st.start = newStart; st.dur = newEnd-newStart+1; } // +1: pev = inclusive end (build 2026-08-25.8)
   }
   const sv=document.getElementById('mStart').value;
+  // build 2026-09-23.11: ถ้า input ว่าง (กด Clear) ให้ลบวันเริ่มงานจริงออกจาก memory + คำนวณ inprog ใหม่
   if(sv) row.astart[cur.s]=Math.round((new Date(sv)-T0)/864e5);
+  else{ delete row.astart[cur.s]; let _ip=0; row.steps.forEach(_s=>{ if(row.closed[_s.s]) _ip=Math.max(_ip,_s.s+1); else if(row.astart[_s.s]!==undefined) _ip=Math.max(_ip,_s.s); }); row.inprog=_ip; }
   // บทบาท/ชั่วโมง/หมายเหตุ — เก็บเป็น "ประวัติ" สะสม (RoleInStep/ActualHours/StepNotes ใน BOQ Step Tracking)
   // ทุกครั้งที่กดบันทึก ถือเป็น 1 รายการในประวัติว่าใครทำ/รีวิว/อนุมัติ เมื่อไหร่ ใช้เวลาเท่าไหร่ครั้งนี้
   const roleVal = document.getElementById('mRole').value;
