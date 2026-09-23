@@ -4513,7 +4513,8 @@ function renderRows(){
     // build 2026-09-23.10: ซ่อนโครงการที่ไม่มี package ใดตรง filter เลย
     if(person || checkedTeams.size > 0){
       const projHasMatch = pj.pkgs.some(pk=>pk.rows.some(row=>{
-        const ppl=[...new Set(row.steps.map(s=>s.who))];
+        // build 2026-09-23.12: รวม coAssignees เข้าใน filter ด้วย
+        const ppl=[...new Set([...row.steps.map(s=>s.who),...row.steps.flatMap(s=>s.coAssignees||[])].filter(n=>n&&n!=='-'))];
         if(person && !ppl.includes(person)) return false;
         const rowTeam = row.subteam||(row.team||'').replace(/\s*[·•]\s*ประมาณการ\s*$/,'').trim();
         if(checkedTeams.size>0 && !checkedTeams.has(rowTeam)) return false;
@@ -4542,7 +4543,8 @@ function renderRows(){
       // build 2026-09-23.10: ซ่อน package ที่ไม่มี row ตรง filter (person / team)
       if(person || checkedTeams.size > 0){
         const hasMatch = pk.rows.some(row=>{
-          const ppl=[...new Set(row.steps.map(s=>s.who))];
+          // build 2026-09-23.12: รวม coAssignees เข้าใน filter ด้วย
+          const ppl=[...new Set([...row.steps.map(s=>s.who),...row.steps.flatMap(s=>s.coAssignees||[])].filter(n=>n&&n!=='-'))];
           if(person && !ppl.includes(person)) return false;
           const rowTeam = row.subteam||(row.team||'').replace(/\s*[·•]\s*ประมาณการ\s*$/,'').trim();
           if(checkedTeams.size>0 && !checkedTeams.has(rowTeam)) return false;
@@ -4568,7 +4570,8 @@ function renderRows(){
       if(!pk.open) return;
 
       pk.rows.forEach((row,ri)=>{
-        const people=[...new Set(row.steps.map(s=>s.who))];
+        // build 2026-09-23.12: รวม coAssignees เข้าใน people list (แสดงผล + filter) — ไม่แสดง '-'
+        const people=[...new Set([...row.steps.map(s=>s.who),...row.steps.flatMap(s=>s.coAssignees||[])].filter(n=>n&&n!=='-'))];
         if(person && !people.includes(person)) return;
         const rowTeam = row.subteam || (row.team||'').replace(/\s*[·•]\s*ประมาณการ\s*$/,'').trim();
         if(checkedTeams.size > 0 && !checkedTeams.has(rowTeam)) return;
@@ -4607,11 +4610,13 @@ function renderRows(){
             const nextLeft = nextSt2 ? (row.astart[nextSt2.s]!==undefined ? row.astart[nextSt2.s] : nextSt2.start) : null;
             const actW = nextLeft!==null && (nextLeft - c.end) <= 1 ? nextLeft - left : rawW;
             actParts.push(`<div class="seg act ${c.over?'over':'ok'} ${dim} ${hi}" style="left:${pct(left)};width:${pct(Math.max(actW,1))}" title="S${st.s} ${whoTxt} · เริ่มจริง ${fmt(addD(T0,left))} · ปิด ${fmt(addD(T0,c.end))}${c.over?' · ช้ากว่าแผน':''} · คลิกแก้ไข" ${ref} onclick="openStep(this)">S${st.s}✓</div>`);
-          } else if(st.s===row.inprog){
-            const left = as!==undefined? as : st.start;
+          } else if(st.s===row.inprog && as!==undefined){
+            // build 2026-09-23.13: ต้องมี astart จริงถึงจะแสดง "กำลังทำ" — ป้องกัน inprog:1 default ทำให้ S1 ลายเสมอแม้ยังไม่ได้ใส่วันเริ่ม
+            const left = as;
             const w = Math.max(TODAY_D-left,2);
             actParts.push(`<div class="seg act inprog ${dim} ${hi}" style="left:${pct(left)};width:${pct(w)}" title="S${st.s} กำลังทำ (${whoTxt}) · เริ่มจริง ${fmt(addD(T0,left))} · คลิกเพื่อปิด" ${ref} onclick="openStep(this)">S${st.s}…</div>`);
-          } else if(st.s>row.inprog){
+          } else if(st.s>=row.inprog){
+            // ครอบกรณี s===inprog แต่ยังไม่มี astart (ยังไม่เริ่ม) ด้วย
             const gapAct = nextSt2 ? nextSt2.start - (st.start + st.dur) : 0;
             // build 2026-08-20.8: Issue 1 — Math.max(...,1) เช่นเดียวกับ plan bar
             const vizDurAct = Math.max(nextSt2 && gapAct <= 1 ? nextSt2.start - st.start : st.dur, 1);
