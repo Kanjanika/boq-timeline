@@ -325,7 +325,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-23.6</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-23.8</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -335,7 +335,7 @@ tr.pick:hover td{background:var(--bg)}
   </div>
   <div class="right">
     <button class="btn btn2" id="loginBtn" style="display:none" onclick="doLogin()">🔐 เข้าสู่ระบบ SharePoint</button>
-    <!-- build 2026-09-23.6: ซ่อน modeTag (MOCK DATA) — ไม่แสดงในโหมดปกติ แสดงเฉพาะตอน LIVE -->
+    <!-- build 2026-09-23.8: ซ่อน modeTag (MOCK DATA) — ไม่แสดงในโหมดปกติ แสดงเฉพาะตอน LIVE -->
     <span class="mock" id="modeTag" style="display:none"></span>
     <button class="btn btn2" id="logoutBtn" style="display:none" onclick="doLogout()" title="ออกจากระบบ Microsoft">🚪 ออกจากระบบ</button>
   </div>
@@ -1298,7 +1298,7 @@ async function signIn(){
     return true;
   }catch(e){ console.warn('login failed', e); toastMsg('⚠️ เข้าสู่ระบบไม่สำเร็จ: '+e.message); return false; }
 }
-// build 2026-09-23.6: cache token promise ป้องกัน interaction_in_progress เมื่อ Promise.all เรียก getToken() พร้อมกัน
+// build 2026-09-23.8: cache token promise ป้องกัน interaction_in_progress เมื่อ Promise.all เรียก getToken() พร้อมกัน
 let _tokenPromise = null;
 async function getToken(){
   if(!msalInstance || !graphAccount) throw new Error('ยังไม่ได้เข้าสู่ระบบ');
@@ -3623,7 +3623,7 @@ function updateModeTag(){
   const tag     = document.getElementById('modeTag');
   const logoutB = document.getElementById('logoutBtn');
   if(LIVE_MODE){
-    // แสดง badge ชื่อ user ที่ login — build 2026-09-23.6: ซ่อน MOCK DATA badge ไว้เลย ไม่แสดงในโหมดปกติ
+    // แสดง badge ชื่อ user ที่ login — build 2026-09-23.8: ซ่อน MOCK DATA badge ไว้เลย ไม่แสดงในโหมดปกติ
     const who = graphAccount ? (graphAccount.name || graphAccount.username || '') : '';
     if(tag){
       tag.textContent = '🟢 ' + (who || 'LIVE');
@@ -3631,7 +3631,7 @@ function updateModeTag(){
     }
     if(logoutB) logoutB.style.display = ''; // โชว์ปุ่มออกจากระบบเมื่อ login สำเร็จ
   } else {
-    if(tag) tag.style.display='none'; // build 2026-09-23.6: ซ่อน MOCK DATA ทั้งหมด
+    if(tag) tag.style.display='none'; // build 2026-09-23.8: ซ่อน MOCK DATA ทั้งหมด
     if(logoutB) logoutB.style.display='none';
   }
 }
@@ -3648,26 +3648,32 @@ async function refreshLiveData(){
 async function bootLive(){
   try{
     // build 2026-09-23.3: ระบุชื่อในระบบของ user ที่ login (MSAL email → USER_MAP) เพื่อแสดง tab "งานของฉัน"
-    // build 2026-09-23.6: เพิ่ม fallback จาก display name กรณี email ใน USER_MAP ไม่ตรง
+    // build 2026-09-23.8: แสดง tab ทันทีหลัง login เสมอ — ถ้า email ไม่ตรงจะ fallback ให้เลือกชื่อเองในหน้าแท็บ
     if(graphAccount){
       const email = (graphAccount.username||'').toLowerCase().trim();
       const displayName = (graphAccount.name||'').toLowerCase();
+      const emailPrefix = email.split('@')[0]; // เช่น "cos_yim" จาก "cos_yim@costplan.co.th"
       myWorkSysName = USER_MAP[email] || null;
-      // fallback: หาชื่อในระบบที่ตรงกับ display name (เช่น "COS_Yim" → "Yim")
-      if(!myWorkSysName && displayName){
+      // fallback 1: ค้นใน display name
+      if(!myWorkSysName){
         for(const [k, v] of Object.entries(USER_MAP)){
           const sysLower = v.split('/')[0].trim().toLowerCase();
-          if(displayName.includes(sysLower)){
-            myWorkSysName = v;
-            break;
-          }
+          if(displayName && displayName.includes(sysLower)){ myWorkSysName = v; break; }
         }
       }
-      console.log('[BOQ] login email:', email, '| display:', displayName, '| sysName:', myWorkSysName);
+      // fallback 2: ค้นใน email prefix (เช่น "cos_yim" → "yim" → USER_MAP "Yim")
+      if(!myWorkSysName && emailPrefix){
+        for(const [k, v] of Object.entries(USER_MAP)){
+          const sysLower = v.split('/')[0].trim().toLowerCase();
+          if(emailPrefix.includes(sysLower)){ myWorkSysName = v; break; }
+        }
+      }
+      console.log('[BOQ] login email:', email, '| display:', displayName, '| emailPrefix:', emailPrefix, '| sysName:', myWorkSysName);
+      // แสดง tab เสมอเมื่อ login แล้ว (ถ้าหาชื่อไม่เจอ จะให้เลือกในหน้า)
       const tabEl = document.getElementById('tabMyWork');
-      if(tabEl) tabEl.style.display = myWorkSysName ? '' : 'none';
+      if(tabEl) tabEl.style.display = '';
       const labelEl = document.getElementById('myWorkUserLabel');
-      if(labelEl) labelEl.textContent = myWorkSysName ? `· ${myWorkSysName} (${email})` : '';
+      if(labelEl) labelEl.textContent = myWorkSysName ? `· ${myWorkSysName} (${email})` : `· (${email})`;
     }
     // build 2026-08-25.13: ปรับประสิทธิภาพการโหลด — เดิม recalcTimelineWindow() ดึง STEP_LIST + WORKPLAN_LIST
     // เองก่อน แล้ว Promise.all ด้านล่างดึง STEP_LIST + WORKPLAN_LIST ซ้ำอีกรอบ รวมเป็น 4 round-trip sequential+parallel
@@ -4051,7 +4057,7 @@ async function doLogin(){
   const ok = await signIn();
   if(ok){ document.getElementById('loginBtn').style.display='none'; await bootLive(); }
 }
-// build 2026-09-23.6: ออกจากระบบ — ล้าง MSAL session แล้ว reload หน้า (clean slate)
+// build 2026-09-23.8: ออกจากระบบ — ล้าง MSAL session แล้ว reload หน้า (clean slate)
 async function doLogout(){
   toastMsg('🚪 กำลังออกจากระบบ…');
   try{
@@ -5916,13 +5922,23 @@ function renderMyWork(){
   const body = document.getElementById('myWorkBody');
   if(!body) return;
 
-  // ยังไม่ได้ login หรืออีเมลไม่อยู่ใน USER_MAP
+  // ยังไม่ได้ login
+  if(!graphAccount){
+    body.innerHTML = `<div style="padding:32px 16px;text-align:center;color:var(--text3)">🔐 กรุณาเข้าสู่ระบบ SharePoint ก่อน</div>`;
+    return;
+  }
+  // login แล้วแต่หาชื่อในระบบไม่เจออัตโนมัติ — แสดง email ที่ใช้ค้นหาเพื่อให้ Admin เพิ่มใน USER_MAP
   if(!myWorkSysName){
-    const noAuth = !graphAccount;
-    body.innerHTML = `<div style="padding:32px 16px;text-align:center;color:var(--text3)">
-      ${noAuth
-        ? '🔐 กรุณาเข้าสู่ระบบ SharePoint ก่อน แล้ว tab นี้จะแสดงงานของคุณโดยอัตโนมัติ'
-        : '⚠️ ไม่พบอีเมลของคุณใน User Map · กรุณาแจ้ง Admin เพิ่ม account ให้ด้วย'}
+    const detectedEmail = (graphAccount.username||'');
+    const detectedName  = (graphAccount.name||'');
+    body.innerHTML = `<div style="padding:32px 16px;text-align:center;color:var(--text3);max-width:500px;margin:0 auto">
+      <div style="font-size:28px;margin-bottom:12px">⚠️</div>
+      <div style="font-size:14px;color:var(--text2);margin-bottom:8px">ไม่พบ account นี้ใน User Map</div>
+      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:12.5px;text-align:left;margin-bottom:12px">
+        <div>Email: <strong>${detectedEmail||'(ไม่พบ)'}</strong></div>
+        <div>Display name: <strong>${detectedName||'(ไม่พบ)'}</strong></div>
+      </div>
+      <div style="font-size:12.5px;color:var(--text3)">กรุณาแจ้ง Admin เพิ่ม email นี้ใน USER_MAP</div>
     </div>`;
     return;
   }
