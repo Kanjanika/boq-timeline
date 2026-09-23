@@ -325,7 +325,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-11.9</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-23.2</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -370,10 +370,9 @@ tr.pick:hover td{background:var(--bg)}
       <button class="sort-btn" id="sortBtnAZ" onclick="setSortOrder('az')" title="เรียงชื่อโครงการ A→Z">🔤 A→Z</button>
     </span>
     <button class="btn btn2" id="refreshBtn" style="margin-left:auto" title="โหลดข้อมูลใหม่จาก SharePoint" onclick="refreshLiveData()">🔄 Refresh</button>
-    <button class="btn btn2" onclick="openBackfillAll()">🗄️ Backfill ข้อมูลจริงทั้งหมด</button>
-    <button class="btn btn2" onclick="fixExistingReviewStepDurations()">🛠️ ปรับ Step วันคงที่ให้ตรง Template</button>
-    <button class="btn btn2" onclick="openTemplateEditor()">⚙️ Step Template</button>
-    <button class="btn btn2" onclick="openCleanupDupModal()" title="ลบรายการซ้ำใน BOQ Date History และ StepNotes">🧹 Cleanup ซ้ำ</button>
+    <!-- build 2026-09-23.2: ซ่อนปุ่ม admin (Backfill / ปรับ Step / Step Template / Cleanup) ออกจากหน้าจอปกติ
+         เพราะทีมเริ่มใช้เยอะ เสี่ยงกดผิด — ฟังก์ชัน JS ยังอยู่ครบ เรียกได้จาก console ถ้า admin ต้องการ:
+         openBackfillAll() / fixExistingReviewStepDurations() / openTemplateEditor() / openCleanupDupModal() -->
   </div>
 
   <!-- build 2026-08-19.4: แถบสรุปความล่าช้า/เสี่ยงล่าช้าภาพรวมทุกโครงการ (ไม่ผูกกับตัวกรองคน/โครงการด้านบน — ต้องการให้
@@ -849,11 +848,12 @@ const DEFAULT_STEP_TEMPLATES = {
   'Blank BOQ': [
     {name:'รับแบบ+ตรวจ', ratio:2/13}, {name:'Query Sheet', ratio:4/13}, {name:'ทำ Blank BOQ', ratio:5/13}, {name:'QA Blank', ratio:2/13},
   ],
-  // Pretender ตามเอกสารเดียวกัน รวม 23 วัน (ถอดแบบ+Backup+ราคากลาง 21 + Feedback/ตรวจ 2) — PDF ไม่ได้แยกย่อย 21 วัน
-  // นั้นเป็น sub-step ไว้ชัดเจน จึงหารเท่าๆกัน 3 ทางระหว่าง Take-off/Back-up/Price+Checklist (~7 วันต่อ stage) แล้ว
-  // QA Pretender ท้ายสุด 2 วันตามจริง — ถ้าทีมมีสัดส่วนจริงที่ต่างจากนี้ ปรับเองได้ที่ "⚙️ Step Template" ในแอป
+  // Pretender ตามเอกสารเดียวกัน รวม 23 วัน (ถอดแบบ+Backup+ราคากลาง 21 + Feedback/ตรวจ 2) — build 2026-09-23.1: ปรับ
+  // สัดส่วน default ตาม workflow AR&ID จริงที่ทีมยืนยัน: Take-off (ถอดแบบวัดปริมาณ) งานหนักสุด 15 ส่วน,
+  // Back-up (ทำ Backup Sheet) 3 ส่วน, Price+Checklist (ราคากลาง+Check List) 3 ส่วน (รวม 21 วัน), QA คงที่ 2 วัน
+  // เดิมหารเท่ากัน 7:7:7 ซึ่งไม่ตรงความเป็นจริง เพราะ Take-off ใช้เวลาส่วนใหญ่ — ปรับเองได้ที่ "⚙️ Step Template" ในแอป
   'Pretender': [
-    {name:'Take-off', ratio:7/23}, {name:'Back-up', ratio:7/23}, {name:'Price+Checklist', ratio:7/23}, {name:'QA Pretender', ratio:2/23},
+    {name:'Take-off', ratio:15/21}, {name:'Back-up', ratio:3/21}, {name:'Price+Checklist', ratio:3/21}, {name:'QA Pretender', days:2},
   ],
   // ค่าเริ่มต้นของ Service Type อื่นๆ เป็นแค่ตัวอย่างคร่าวๆ ให้ PCM/Post มาปรับจำนวน Stage/ชื่อ/สัดส่วนเวลาให้ตรงงานจริงอีกที
   // ตรวจ+ส่ง: เดิมเป็น ratio (สัดส่วนของ totalDays) ทำให้บางโครงการ (เช่น AIES · VO) กลายเป็น ~4 วัน ทั้งที่ตามเอกสาร
@@ -883,6 +883,15 @@ function loadStepTemplatesFromStorage(){
     const saved = localStorage.getItem(STEP_TEMPLATES_STORAGE_KEY);
     if(saved){
       const parsed = JSON.parse(saved);
+      // build 2026-09-23.1: migration — ถ้า localStorage เก็บ Pretender แบบเก่า (7:7:7 หารเท่ากัน ratio~0.304 ต่อ stage)
+      // ให้ล้างออกให้ใช้ default ใหม่ 15:3:3 แทน (ตรวจจากค่า ratio ของ Take-off ≈ 7/23 ≈ 0.304)
+      if(parsed['Pretender']){
+        const first = parsed['Pretender'][0];
+        if(first && first.ratio !== undefined && Math.abs(first.ratio - 7/23) < 0.01){
+          delete parsed['Pretender'];
+          console.info('Step Template migration: ล้าง Pretender เก่า (7:7:7) → ใช้ default ใหม่ 15:3:3');
+        }
+      }
       STEP_TEMPLATES = {...JSON.parse(JSON.stringify(DEFAULT_STEP_TEMPLATES)), ...parsed};
     }
   }catch(e){ console.warn('โหลด Step Template จาก localStorage ไม่สำเร็จ ใช้ค่าเริ่มต้นแทน', e); }
