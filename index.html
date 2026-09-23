@@ -325,7 +325,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-23.3</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-23.4</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -335,7 +335,9 @@ tr.pick:hover td{background:var(--bg)}
   </div>
   <div class="right">
     <button class="btn btn2" id="loginBtn" style="display:none" onclick="doLogin()">🔐 เข้าสู่ระบบ SharePoint</button>
-    <span class="mock" id="modeTag">MOCK DATA · สถานะ ณ 9 ก.ย. 2026</span>
+    <!-- build 2026-09-23.4: ซ่อน modeTag (MOCK DATA) — ไม่แสดงในโหมดปกติ แสดงเฉพาะตอน LIVE -->
+    <span class="mock" id="modeTag" style="display:none"></span>
+    <button class="btn btn2" id="logoutBtn" style="display:none" onclick="doLogout()" title="ออกจากระบบ Microsoft">🚪 ออกจากระบบ</button>
   </div>
 </div>
 
@@ -3607,15 +3609,20 @@ async function analyzeManpowerWithAI(){
 
 /* ================= BOOTSTRAP (MOCK ↔ LIVE) ================= */
 function updateModeTag(){
-  const tag = document.getElementById('modeTag');
-  if(!tag) return;
+  const tag     = document.getElementById('modeTag');
+  const logoutB = document.getElementById('logoutBtn');
   if(LIVE_MODE){
-    // แปะชื่อ user ที่ login ต่อท้าย (name ถ้ามี ไม่งั้น fallback เป็น username/email) ให้เห็นชัดว่ากำลัง login เป็นใคร
+    // แสดง badge ชื่อ user ที่ login — build 2026-09-23.4: ซ่อน MOCK DATA badge ไว้เลย ไม่แสดงในโหมดปกติ
     const who = graphAccount ? (graphAccount.name || graphAccount.username || '') : '';
-    tag.textContent = '🟢 LIVE · เชื่อมต่อ SharePoint จริง' + (who ? (' · '+who) : '');
-    tag.style.background='#dcfce7'; tag.style.color='#15803d';
+    if(tag){
+      tag.textContent = '🟢 ' + (who || 'LIVE');
+      tag.style.background='#dcfce7'; tag.style.color='#15803d'; tag.style.display='';
+    }
+    if(logoutB) logoutB.style.display = ''; // โชว์ปุ่มออกจากระบบเมื่อ login สำเร็จ
+  } else {
+    if(tag) tag.style.display='none'; // build 2026-09-23.4: ซ่อน MOCK DATA ทั้งหมด
+    if(logoutB) logoutB.style.display='none';
   }
-  else { tag.textContent='MOCK DATA · สถานะ ณ 9 ก.ย. 2026'; tag.style.background='#fef3c7'; tag.style.color='#92400e'; }
 }
 // build 2026-09-08.1: Refresh ปุ่มบน Toolbar — clear cache แล้วโหลดใหม่
 async function refreshLiveData(){
@@ -4019,6 +4026,18 @@ async function doLogin(){
   if(!msalInstance){ const ok = await initAuth(); if(!ok && !isConfigured()){ toastMsg('⚠️ ยังไม่ได้กรอก Client ID/Tenant ID ใน CONFIG'); return; } }
   const ok = await signIn();
   if(ok){ document.getElementById('loginBtn').style.display='none'; await bootLive(); }
+}
+// build 2026-09-23.4: ออกจากระบบ — ล้าง MSAL session แล้ว reload หน้า (clean slate)
+async function doLogout(){
+  toastMsg('🚪 กำลังออกจากระบบ…');
+  try{
+    if(msalInstance && graphAccount){
+      // logoutPopup ล้าง session ใน browser + Azure AD ให้เรียบร้อย
+      await msalInstance.logoutPopup({ account: graphAccount });
+    }
+  }catch(e){ console.warn('logoutPopup error (อาจถูก popup blocker)', e); }
+  // reload หน้าเพื่อ reset state ทั้งหมด (ง่ายและปลอดภัยที่สุด)
+  location.reload();
 }
 async function initApp(){
   // ถ้ามีการตั้งค่า Client ID/Tenant ID ไว้แล้ว (ใช้งานจริงกับ SharePoint) ไม่ต้องโชว์ข้อมูล mock/demo ให้เห็นก่อน
