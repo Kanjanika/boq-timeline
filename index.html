@@ -325,7 +325,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-23.16</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-23.17</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -3656,18 +3656,21 @@ async function bootLive(){
       const displayName = (graphAccount.name||'').toLowerCase();
       const emailPrefix = email.split('@')[0]; // เช่น "cos_yim" จาก "cos_yim@costplan.co.th"
       myWorkSysName = USER_MAP[email] || null;
-      // fallback 1: ค้นใน display name
-      if(!myWorkSysName){
+      // fallback 1: ค้นใน display name แบบ whole-token (กัน "p" match ใน "costplan admin")
+      if(!myWorkSysName && displayName){
+        const dispTokens = displayName.split(/[\s_.\-]+/);
         for(const [k, v] of Object.entries(USER_MAP)){
-          const sysLower = v.split('/')[0].trim().toLowerCase();
-          if(displayName && displayName.includes(sysLower)){ myWorkSysName = v; break; }
+          const sysLower = v.trim().toLowerCase();
+          if(dispTokens.includes(sysLower)){ myWorkSysName = v; break; }
         }
       }
-      // fallback 2: ค้นใน email prefix (เช่น "cos_yim" → "yim" → USER_MAP "Yim")
+      // fallback 2: ค้นใน email prefix แบบ whole-token (เช่น "cos_yim"→["cos","yim"]→match "yim")
+      // build 2026-09-23.17: เปลี่ยนจาก includes() เป็น token match กัน "p" match ใน "costplan1"
       if(!myWorkSysName && emailPrefix){
+        const prefixTokens = emailPrefix.toLowerCase().split(/[_.\-]+/);
         for(const [k, v] of Object.entries(USER_MAP)){
-          const sysLower = v.split('/')[0].trim().toLowerCase();
-          if(emailPrefix.includes(sysLower)){ myWorkSysName = v; break; }
+          const sysLower = v.trim().toLowerCase();
+          if(prefixTokens.includes(sysLower)){ myWorkSysName = v; break; }
         }
       }
       console.log('[BOQ] login email:', email, '| display:', displayName, '| emailPrefix:', emailPrefix, '| sysName:', myWorkSysName);
