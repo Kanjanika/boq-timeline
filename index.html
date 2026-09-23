@@ -325,7 +325,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-23.9</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-23.10</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -335,7 +335,7 @@ tr.pick:hover td{background:var(--bg)}
   </div>
   <div class="right">
     <button class="btn btn2" id="loginBtn" style="display:none" onclick="doLogin()">🔐 เข้าสู่ระบบ SharePoint</button>
-    <!-- build 2026-09-23.9: ซ่อน modeTag (MOCK DATA) — ไม่แสดงในโหมดปกติ แสดงเฉพาะตอน LIVE -->
+    <!-- build 2026-09-23.10: ซ่อน modeTag (MOCK DATA) — ไม่แสดงในโหมดปกติ แสดงเฉพาะตอน LIVE -->
     <span class="mock" id="modeTag" style="display:none"></span>
     <button class="btn btn2" id="logoutBtn" style="display:none" onclick="doLogout()" title="ออกจากระบบ Microsoft">🚪 ออกจากระบบ</button>
   </div>
@@ -1298,7 +1298,7 @@ async function signIn(){
     return true;
   }catch(e){ console.warn('login failed', e); toastMsg('⚠️ เข้าสู่ระบบไม่สำเร็จ: '+e.message); return false; }
 }
-// build 2026-09-23.9: cache token promise ป้องกัน interaction_in_progress เมื่อ Promise.all เรียก getToken() พร้อมกัน
+// build 2026-09-23.10: cache token promise ป้องกัน interaction_in_progress เมื่อ Promise.all เรียก getToken() พร้อมกัน
 let _tokenPromise = null;
 async function getToken(){
   if(!msalInstance || !graphAccount) throw new Error('ยังไม่ได้เข้าสู่ระบบ');
@@ -3623,7 +3623,7 @@ function updateModeTag(){
   const tag     = document.getElementById('modeTag');
   const logoutB = document.getElementById('logoutBtn');
   if(LIVE_MODE){
-    // แสดง badge ชื่อ user ที่ login — build 2026-09-23.9: ซ่อน MOCK DATA badge ไว้เลย ไม่แสดงในโหมดปกติ
+    // แสดง badge ชื่อ user ที่ login — build 2026-09-23.10: ซ่อน MOCK DATA badge ไว้เลย ไม่แสดงในโหมดปกติ
     const who = graphAccount ? (graphAccount.name || graphAccount.username || '') : '';
     if(tag){
       tag.textContent = '🟢 ' + (who || 'LIVE');
@@ -3631,7 +3631,7 @@ function updateModeTag(){
     }
     if(logoutB) logoutB.style.display = ''; // โชว์ปุ่มออกจากระบบเมื่อ login สำเร็จ
   } else {
-    if(tag) tag.style.display='none'; // build 2026-09-23.9: ซ่อน MOCK DATA ทั้งหมด
+    if(tag) tag.style.display='none'; // build 2026-09-23.10: ซ่อน MOCK DATA ทั้งหมด
     if(logoutB) logoutB.style.display='none';
   }
 }
@@ -3648,7 +3648,7 @@ async function refreshLiveData(){
 async function bootLive(){
   try{
     // build 2026-09-23.3: ระบุชื่อในระบบของ user ที่ login (MSAL email → USER_MAP) เพื่อแสดง tab "งานของฉัน"
-    // build 2026-09-23.9: แสดง tab ทันทีหลัง login เสมอ — ถ้า email ไม่ตรงจะ fallback ให้เลือกชื่อเองในหน้าแท็บ
+    // build 2026-09-23.10: แสดง tab ทันทีหลัง login เสมอ — ถ้า email ไม่ตรงจะ fallback ให้เลือกชื่อเองในหน้าแท็บ
     if(graphAccount){
       const email = (graphAccount.username||'').toLowerCase().trim();
       const displayName = (graphAccount.name||'').toLowerCase();
@@ -4057,7 +4057,7 @@ async function doLogin(){
   const ok = await signIn();
   if(ok){ document.getElementById('loginBtn').style.display='none'; await bootLive(); }
 }
-// build 2026-09-23.9: ออกจากระบบ — ล้าง MSAL session แล้ว reload หน้า (clean slate)
+// build 2026-09-23.10: ออกจากระบบ — ล้าง MSAL session แล้ว reload หน้า (clean slate)
 async function doLogout(){
   toastMsg('🚪 กำลังออกจากระบบ…');
   try{
@@ -4508,6 +4508,17 @@ function renderRows(){
     const realPi = DATA.indexOf(pj); // index จริงใน DATA สำหรับ toggle/togglePkg
     if(projF && pj.id!==projF) return;
     const allRows = pj.pkgs.flatMap(k=>k.rows);
+    // build 2026-09-23.10: ซ่อนโครงการที่ไม่มี package ใดตรง filter เลย
+    if(person || checkedTeams.size > 0){
+      const projHasMatch = pj.pkgs.some(pk=>pk.rows.some(row=>{
+        const ppl=[...new Set(row.steps.map(s=>s.who))];
+        if(person && !ppl.includes(person)) return false;
+        const rowTeam = row.subteam||(row.team||'').replace(/\s*[·•]\s*ประมาณการ\s*$/,'').trim();
+        if(checkedTeams.size>0 && !checkedTeams.has(rowTeam)) return false;
+        return true;
+      }));
+      if(!projHasMatch) return;
+    }
     // build 2026-08-19.4: badge สรุปความล่าช้าที่แย่ที่สุดในโครงการนี้ ติดไว้ที่หัวโครงการเลย เผื่อโครงการถูกหุบอยู่
     // (pj.open=false) จะได้ยังเห็นว่าข้างในมีงานล่าช้า/เสี่ยงล่าช้าโดยไม่ต้องเปิดดูทีละแถว
     const projDelayBadge = delayBadgeHtml(worstDelayLevel(allRows));
@@ -4526,6 +4537,17 @@ function renderRows(){
     if(!pj.open) return;
 
     pj.pkgs.forEach((pk,ki)=>{
+      // build 2026-09-23.10: ซ่อน package ที่ไม่มี row ตรง filter (person / team)
+      if(person || checkedTeams.size > 0){
+        const hasMatch = pk.rows.some(row=>{
+          const ppl=[...new Set(row.steps.map(s=>s.who))];
+          if(person && !ppl.includes(person)) return false;
+          const rowTeam = row.subteam||(row.team||'').replace(/\s*[·•]\s*ประมาณการ\s*$/,'').trim();
+          if(checkedTeams.size>0 && !checkedTeams.has(rowTeam)) return false;
+          return true;
+        });
+        if(!hasMatch) return;
+      }
       // build 2026-08-19.4: เหมือนหัวโครงการ — badge สรุปความล่าช้าที่แย่ที่สุดใน Package นี้ ติดที่หัว Package เผื่อถูก
       // หุบอยู่ (pk.open=false)
       const pkgDelayBadge = delayBadgeHtml(worstDelayLevel(pk.rows));
@@ -5927,7 +5949,7 @@ function renderMyWork(){
     body.innerHTML = `<div style="padding:32px 16px;text-align:center;color:var(--text3)">🔐 กรุณาเข้าสู่ระบบ SharePoint ก่อน</div>`;
     return;
   }
-  // build 2026-09-23.9: re-evaluate myWorkSysName ด้วย graphAccount ปัจจุบัน
+  // build 2026-09-23.10: re-evaluate myWorkSysName ด้วย graphAccount ปัจจุบัน
   // กรณีที่ bootLive() ดึง account ผิดตัว (มีหลาย account ใน browser) แต่ getToken() สลับมา account ถูกแล้ว
   if(!myWorkSysName && graphAccount){
     const _em  = (graphAccount.username||'').toLowerCase().trim();
