@@ -325,7 +325,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-23.18</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-23.19</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -978,8 +978,7 @@ const POOLS = {
 };
 // build 2026-08-20.6: QA/ผู้ตรวจ = หัวหน้าทีม ต่อ subteam — เขียนลง StepQA ทุก step ตอน Commit อัตโนมัติ
 // (ต้องสร้าง column "StepQA" ชนิด Text และ "StepQALookupId" ชนิด Number ใน BOQ Step Tracking ก่อน)
-// build 2026-08-25.15: Yo เป็น reviewer สำรองข้ามทีม แต่ default QA_LEADS คงเดิม (ST=May, AR&ID=Yim, MEP=Stamp)
-// PCM สามารถเปลี่ยนเป็น Yo ในหน้า Timeline ได้ถ้าต้องการ
+// build 2026-09-23.19: Yo เป็น option เลือกได้ทุกทีม (ดู openStep S4/S8) แต่ default ยังเป็นหัวหน้าทีมเดิม
 const QA_LEADS = {
   ST:'May', 'AR&ID':'Yim',
   EE:'Stamp', AC:'Stamp', SN:'Stamp', FP:'Stamp',
@@ -4949,6 +4948,7 @@ function openStep(el){
   roleSel.value = st.role && [...roleSel.options].some(o=>o.value===st.role) ? st.role : roleSel.options[0].value;
   // build 2026-08-25.8: S4/S8 = ขั้นตรวจ QA → auto-fill ผู้ตรวจตามทีม และตั้งบทบาทเป็น Review
   if(s===4||s===8){
+    // build 2026-09-23.19: default QA ตามทีม, Yo เป็น option เลือกได้ทุกทีม (ไม่ใช่ default)
     const qaMap={'Budget':'Yo','MEP':'Stamp','AR&ID':'Yim','ST':'May'};
     const teamKey=Object.keys(qaMap).find(k=>(row.team||'').includes(k));
     if(teamKey){
@@ -4957,6 +4957,10 @@ function openStep(el){
         const opt=document.createElement('option');opt.text=opt.value=qaName;sel.prepend(opt);
       }
       sel.value=qaName;
+    }
+    // เพิ่ม Yo เป็น option เลือกได้ทุกทีม (build 2026-09-23.19)
+    if(![...sel.options].some(o=>o.value==='Yo')){
+      const yoOpt=document.createElement('option');yoOpt.text=yoOpt.value='Yo';sel.appendChild(yoOpt);
     }
     roleSel.value='Review';
   }
