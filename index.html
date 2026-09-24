@@ -42,6 +42,9 @@ body{font-family:'Segoe UI','Sarabun','Tahoma',sans-serif;background:var(--bg);c
 .btn2:hover{background:var(--bg);color:var(--text)}
 .btn-amber{background:var(--warn)}
 .btn-amber:hover{background:#b45309}
+.btn-teal{background:#0d9488;color:#fff}
+.btn-teal:hover{background:#0f766e}
+.btn-teal.active{background:#134e4a}
 .sort-btn{background:#fff;color:var(--text2);border:1px solid var(--border);padding:5px 11px;border-radius:6px;font-size:11.5px;cursor:pointer;font-family:inherit;font-weight:600;transition:background .15s,color .15s,border-color .15s}
 .sort-btn:hover{background:var(--bg);color:var(--text)}
 .sort-btn.active{background:#0f766e;color:#fff;border-color:#0f766e}
@@ -325,7 +328,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-24.21</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-24.22</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -500,6 +503,7 @@ tr.pick:hover td{background:var(--bg)}
         <button class="btn" onclick="doCommit(this)">✓ PCM ยืนยัน Commit</button>
         <button class="btn btn2" onclick="copyNego()">✉️ Copy ข้อความต่อรอง Post</button>
         <button class="btn btn-amber" id="btnScen" onclick="showScenario()" style="display:none">➕ ต่อรองไม่ได้ → เพิ่มกำลังคน</button>
+        <button class="btn btn-teal" id="btnDueCon" onclick="toggleDueConstraint()" style="display:none">📐 ยึด Due Date · ปรับสัดส่วน Stage</button>
       </div>
 
       <div class="scenario" id="scenBox"></div>
@@ -893,6 +897,26 @@ const DEFAULT_STEP_TEMPLATES = {
 // แยกกันคนละครั้งก็ตาม — ถ้าแก้จำนวน Stage ของ Blank BOQ ในฟอร์ม ค่านี้ไม่ได้ปรับตามอัตโนมัติ ต้องมาแก้เลขนี้เองด้วย
 const STEP_NUMBER_OFFSET = { 'Pretender': 4 };
 function getStepOffset(serviceType){ return STEP_NUMBER_OFFSET[serviceType] || 0; }
+// STAGE_COMPRESS_WEIGHTS: สัดส่วน integer สำหรับ "ยึด Due Date" mode — build 2026-09-24.22
+// เมื่อ PCM ต้องยึดตาม Due Date ของ Post ทีม Stage ทั้งหมดถูกบีบสัดส่วนลงตามอัตราส่วนนี้ (รวมถึง QA ที่ปกติคงที่)
+// ที่มา: BOQ Team - Work Flow Bidding Rev.1: Blank BOQ รวม 13 วัน (2:4:5:2), Pretender รวม 23 วัน (15:3:3:2)
+const STAGE_COMPRESS_WEIGHTS = {
+  'Blank BOQ': [2, 4, 5, 2],   // S1:S2:S3:S4 = รับแบบ:Query:ทำBOQ:QA
+  'Pretender': [15, 3, 3, 2],  // S5:S6:S7:S8 = Take-off:Back-up:Price+CL:QA
+};
+// computeCompressedDurations: scale weights ลงให้พอดี availableDays (min 1 วัน/stage)
+function computeCompressedDurations(weights, availableDays){
+  const total = weights.reduce((a,w)=>a+w, 0);
+  if(!total || availableDays<1) return weights.map(()=>1);
+  return weights.map(w => Math.max(1, Math.round(w/total*availableDays)));
+}
+// getCompressWeights: หา weights ของ service type นี้
+// ถ้ามีใน STAGE_COMPRESS_WEIGHTS → ใช้เลย; ถ้าไม่มี → ใช้ computeStageDurations ที่ needDays เป็น reference
+function getCompressWeights(serviceType, tmpl, sug, stepSplitRatios, offset){
+  if(STAGE_COMPRESS_WEIGHTS[serviceType]) return STAGE_COMPRESS_WEIGHTS[serviceType];
+  const refDays = (sug && sug.needDays) ? sug.needDays : 20;
+  return computeStageDurations(tmpl, refDays, stepSplitRatios, offset);
+}
 // STEP_TEMPLATES: สำเนาที่ใช้งานจริง (โหลดค่าที่ผู้ใช้แก้ไว้จาก localStorage ทับค่าเริ่มต้นถ้ามี — ดู loadStepTemplatesFromStorage)
 let STEP_TEMPLATES = JSON.parse(JSON.stringify(DEFAULT_STEP_TEMPLATES));
 const STEP_TEMPLATES_STORAGE_KEY = 'boq_step_templates_v1';
@@ -2196,7 +2220,7 @@ async function loadIntakeFromGraph(){
   }
   return out;
 }
-async function commitAndGenerateSteps(task, sug, selectedSubs, editedStart, editedFinish){
+async function commitAndGenerateSteps(task, sug, selectedSubs, editedStart, editedFinish, forcedDurations){
   // build .13: เลิกเดา subteam จากชื่อ Package (subteamsForRawPackage) แล้ว — selectedSubs มาจาก checkbox ที่ PCM
   // เห็น/ติ๊กเองตรงๆ ที่หน้า Commit (ดู renderIntake) ค่าเริ่มต้นติ๊กไว้ให้จาก column "Team" จริง/คำแนะนำ แต่ปรับเองได้
   // เสมอก่อนกด Commit จริง กันบั๊กแบบ "เดาได้ 2 ทีม ทั้งที่จริงมี 3" ที่เจอซ้ำๆ มาก่อนหน้านี้
@@ -2250,7 +2274,8 @@ async function commitAndGenerateSteps(task, sug, selectedSubs, editedStart, edit
   const offset = getStepOffset(task.service);
   const stepSplit = sug.refRow && sug.refRow.StepSplit ? JSON.parse(sug.refRow.StepSplit) : null;
   const totalDays = Math.max(Math.round((finish - start)/864e5),8);
-  const durations = computeStageDurations(template, totalDays, stepSplit, offset);
+  // build 2026-09-24.22: forcedDurations → "ยึด Due Date" mode ใช้ durations ที่บีบสัดส่วนแล้ว แทน computeStageDurations
+  const durations = forcedDurations || computeStageDurations(template, totalDays, stepSplit, offset);
   // build 2026-08-20.4: whoBySubteam — pre-assigned persons จาก AI Suggest (คำนวณไว้แล้วตอน loadIntake)
   // build 2026-08-20.6: MEP teams (EE/AC/SN/FP) อ่านจาก dropdown ที่ PCM เลือกแทน; QA = หัวหน้าทีม (QA_LEADS)
   const whoBySubteam = (sug && sug.whoBySubteam) || {};
@@ -2273,7 +2298,8 @@ async function commitAndGenerateSteps(task, sug, selectedSubs, editedStart, edit
       const planStart = new Date(cursor);
       // build 2026-08-19.3: เหมือน synthesizeStepsForRange — Stage แบบวันคงที่ (days!=null) นับวันเริ่มเป็นวันทำการ
       // วันที่ 1 เลย (ผู้ใช้ยืนยันเคสจริง PABKK: เริ่มพฤหัส 2 วันทำการ ต้องจบศุกร์ ไม่ใช่ข้ามไปจบจันทร์)
-      const planEnd = stage.days!=null ? addBusinessDaysInclusive(planStart, dur) : addBusinessDays(planStart, dur);
+      // build 2026-09-24.22: forcedDurations → ทุก stage ใช้ addBusinessDaysInclusive (เป็น business-days แล้ว)
+      const planEnd = (forcedDurations || stage.days!=null) ? addBusinessDaysInclusive(planStart, dur) : addBusinessDays(planStart, dur);
       const stepFields = {
         Title:`${task.name} · S${s} ${stage.name}`, ParentTaskID:String(task.itemId), Project:task.name,
         Package:task.packageName, SubTeam:st, WBSStep:`S${s}`,
@@ -2292,6 +2318,8 @@ async function commitAndGenerateSteps(task, sug, selectedSubs, editedStart, edit
   }
 }
 let _committing = false; // กัน commit ซ้ำซ้อน (เช่น ผู้ใช้กดปุ่มถี่ๆ ระหว่างรอ network) ซึ่งจะสร้าง Step ซ้ำใน
+let _dueConstraintMode = false;     // build 2026-09-24.22: โหมด "ยึด Due Date" — บีบสัดส่วน Stage
+let _dueConstraintDurations = null; // build 2026-09-24.22: durations ที่คำนวณแล้ว ส่งเข้า commitAndGenerateSteps
 // BOQ Step Tracking ทุกครั้งที่กด เพราะ commitAndGenerateSteps ไม่มี idempotency check ของตัวเอง (พบเป็นสาเหตุที่
 // เป็นไปได้ของแถวซ้ำๆ ใน Step Tracking ที่ผู้ใช้เจอ — ParentTaskID/Package เดียวกันแต่ขึ้นหลายชุด)
 async function doCommit(btn){
@@ -2317,7 +2345,8 @@ async function doCommit(btn){
   if(btn) btn.disabled = true;
   try{
     toastMsg('⏳ กำลัง Commit ไปยัง SharePoint...');
-    await commitAndGenerateSteps(it._liveTask, it._liveSug, selectedSubs, editedStart, editedFinish);
+    // build 2026-09-24.22: ส่ง forcedDurations เมื่ออยู่ใน Due Date constraint mode
+    await commitAndGenerateSteps(it._liveTask, it._liveSug, selectedSubs, editedStart, editedFinish, _dueConstraintMode ? _dueConstraintDurations : null);
     toastMsg('✓ Commit แล้ว · กำลังโหลดหน้าใหม่เพื่อดึงข้อมูลล่าสุด...');
     // เดิมเรียก bootLive() ซ้ำในหน้าเดิมทันที แต่พบว่า SharePoint/Graph API บางครั้งยังไม่ทัน index รายการ Step
     // ที่เพิ่ง POST ไปหมาดๆ (เพิ่ง commit สร้าง Step หลายสิบรายการรวดเดียว) ทำให้ตาราง Timeline เพี้ยน/ซ้อนกันตอน
@@ -5359,6 +5388,11 @@ function renderIntake(){
   // INTAKE ว่าง (ยังไม่ login/ไม่มีงานรอ Commit) — ไม่มีอะไรให้แสดง ปล่อย placeholder "—" ที่ตั้งไว้ใน HTML ไว้เฉยๆ
   // อย่าเข้าถึง it.xxx ต่อ เพราะ it จะเป็น undefined แล้ว throw ทำให้ initApp() หยุดทำงานกลางทาง (login/bootLive ไม่ทำงานเลย)
   if(!it) return;
+  // build 2026-09-24.22: reset Due Date constraint เมื่อสลับงาน
+  _dueConstraintMode=false; _dueConstraintDurations=null;
+  const _dcBox=document.getElementById('dueConstraintBox'); if(_dcBox) _dcBox.style.display='none';
+  const _dcBtn=document.getElementById('btnDueCon');
+  if(_dcBtn){ _dcBtn.textContent='📐 ยึด Due Date · ปรับสัดส่วน Stage'; _dcBtn.classList.remove('active'); _dcBtn.style.display='none'; }
   ciName.textContent=it.name; ciService.textContent=it.service;
   const ciVersionEl = document.getElementById('ciVersion');
   if(ciVersionEl) ciVersionEl.textContent = it.version || '—';
@@ -5409,8 +5443,10 @@ function renderIntake(){
     btnS.style.display='none';
   } else {
     v.className='verdict show block';
-    v.innerHTML=`<b>🔴 ไม่ทันตามที่ Post ขอ — ขาด ${Math.abs(it.gap)} สัปดาห์</b><br>AI Finish ${it.finish} vs due ${it.due}<ul><li>ขั้นที่ 1: <b>PCM ต่อรอง Post</b> เลื่อน due เป็น ${it.finish} (ใช้ปุ่ม Copy ข้อความต่อรอง)</li><li>ขั้นที่ 2: ถ้าต่อรองไม่ได้ → <b>เพิ่มกำลังคน</b> (ดู scenario ปุ่มส้ม)</li></ul>`;
+    v.innerHTML=`<b>🔴 ไม่ทันตามที่ Post ขอ — ขาด ${Math.abs(it.gap)} สัปดาห์</b><br>AI Finish ${it.finish} vs due ${it.due}<ul><li>ขั้นที่ 1: <b>PCM ต่อรอง Post</b> เลื่อน due เป็น ${it.finish} (ใช้ปุ่ม Copy ข้อความต่อรอง)</li><li>ขั้นที่ 2: ถ้าต่อรองไม่ได้ → <b>เพิ่มกำลังคน</b> (ดู scenario ปุ่มส้ม)</li><li>ขั้นที่ 3: ถ้าทั้ง 2 วิธีทำไม่ได้ → <b>ยึด Due Date</b> บีบสัดส่วน Stage ให้พอดี (ดูปุ่มสีน้ำเงิน 📐)</li></ul>`;
     btnS.style.display='inline-block';
+    // build 2026-09-24.22: แสดงปุ่ม "ยึด Due Date" เมื่องานสายกว่า Due Date
+    const _btnD=document.getElementById('btnDueCon'); if(_btnD) _btnD.style.display='inline-block';
   }
 }
 function showScenario(){
@@ -5425,6 +5461,52 @@ function showScenario(){
 }
 function copyNego(){
   navigator.clipboard.writeText(INTAKE[curIntake].nego).then(()=>toastMsg('📋 คัดลอกข้อความต่อรองแล้ว · ส่งให้ Post ได้เลย'));
+}
+
+// build 2026-09-24.22: toggle "ยึด Due Date" mode — บีบสัดส่วน Stage ตาม Due Date ของ Post
+function toggleDueConstraint(){
+  const it=INTAKE[curIntake]; if(!it||!it._liveTask||!it._liveSug) return;
+  if(_dueConstraintMode){
+    // ยกเลิก mode → คืนค่า finish เดิม
+    _dueConstraintMode=false; _dueConstraintDurations=null;
+    const fi=document.getElementById('ciFinishInput');
+    if(fi && it._liveSug.finish instanceof Date && !isNaN(it._liveSug.finish)) fi.value=toISO(it._liveSug.finish);
+    const box=document.getElementById('dueConstraintBox'); if(box) box.style.display='none';
+    const btn=document.getElementById('btnDueCon');
+    if(btn){ btn.textContent='📐 ยึด Due Date · ปรับสัดส่วน Stage'; btn.classList.remove('active'); }
+    return;
+  }
+  // เปิด mode — ตรวจสอบข้อมูลก่อน
+  const dueRaw=it._liveTask.due; if(!dueRaw||dueRaw==='—'){ toastMsg('⚠️ ไม่พบ Due Date'); return; }
+  const dueDate=new Date(dueRaw); if(isNaN(dueDate)){ toastMsg('⚠️ Due Date ไม่ถูกต้อง'); return; }
+  const sugStart=it._liveSug.start;
+  if(!sugStart||isNaN(sugStart)){ toastMsg('⚠️ ไม่พบวันเริ่มงาน'); return; }
+  const dueNext=new Date(dueDate.getTime()+864e5); // +1 วัน เพราะ countWorkingDays end exclusive
+  const availDays=countWorkingDays(sugStart, dueNext);
+  if(availDays<1){ toastMsg('⚠️ Due Date อยู่ก่อนวันที่ทีมว่างจริง ไม่สามารถ Commit'); return; }
+  // คำนวณ weights และ compressed durations
+  const tmpl=getTemplateForService(it._liveTask.service);
+  const offset=getStepOffset(it._liveTask.service);
+  const stepSplit=it._liveSug.refRow&&it._liveSug.refRow.StepSplit?JSON.parse(it._liveSug.refRow.StepSplit):null;
+  const weights=getCompressWeights(it._liveTask.service, tmpl, it._liveSug, stepSplit, offset);
+  const compressed=computeCompressedDurations(weights, availDays);
+  _dueConstraintMode=true; _dueConstraintDurations=compressed;
+  // อัปเดต finish input → Due Date
+  const fi=document.getElementById('ciFinishInput'); if(fi) fi.value=toISO(dueDate);
+  // สร้าง info box แสดงสัดส่วนที่บีบแล้ว
+  const stdTotal=weights.reduce((a,w)=>a+w,0);
+  const rows=tmpl.map((s,i)=>{
+    const sn=i+1+offset;
+    return `<span style="display:inline-flex;align-items:center;gap:3px;background:#fee2e2;border:1px solid #f87171;border-radius:5px;padding:2px 7px;margin:2px;font-size:12px">S${sn} <b>${compressed[i]}</b>วัน <span style="color:#9ca3af;font-size:10px">(ปกติ ${weights[i]}วัน)</span></span>`;
+  }).join('');
+  let box=document.getElementById('dueConstraintBox');
+  if(!box){ box=document.createElement('div'); box.id='dueConstraintBox'; document.getElementById('ciVerdict').after(box); }
+  box.style.cssText='background:#fef3c7;border:1.5px solid #f59e0b;border-radius:10px;padding:12px 14px;margin-top:8px;font-size:13px;color:#78350f';
+  box.innerHTML=`<b>📐 ยึด Due Date ${fmtY(dueDate)}</b> · บีบสัดส่วนจาก ${stdTotal} → <b>${availDays} วันทำการ</b><div style="margin:8px 0">${rows}</div><div style="font-size:12px;color:#92400e">⚠️ QA Stage จะถูกบีบตามสัดส่วนด้วย · กด <b>✓ PCM ยืนยัน Commit</b> เพื่อสร้าง Step ด้วยสัดส่วนนี้</div>`;
+  box.style.display='';
+  // อัปเดตปุ่ม
+  const btn=document.getElementById('btnDueCon');
+  if(btn){ btn.textContent='↩ ยกเลิก ยึด Due Date'; btn.classList.add('active'); }
 }
 
 /* ============ Report · Planning vs Actual (build 2026-08-25.11) ============ */
