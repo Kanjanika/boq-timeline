@@ -325,7 +325,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-23.19</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-24.20</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -3797,6 +3797,7 @@ async function bootLive(){
     // ไปเดาระดับโครงการ (serviceTypeByProjId)/default ตามลำดับเดิม แทนที่จะเดาผิดแบบเงียบๆ)
     const svcTypeById = {}, svcTypeByKey = {}, svcTypeKeyAmbiguous = {};
     const cmtStartById = {}, cmtEndById = {}; // build 2026-08-20.1: Commit Start/End ต่อ Work Plan item
+    const cmtStartFieldById = {}, cmtEndFieldById = {}; // build 2026-09-24.20: เก็บชื่อ field จริงที่ใช้ read → ใช้ซ้ำตอน PATCH
     // build 2026-08-25: Version, Status, WP Team/Assignee จาก BOQ Team Work Plan
     const versionById = {}, wpStatusById = {}, wpTeamById = {}, wpAssigneeById = {};
     workplanItemsAll.forEach(it=>{
@@ -3822,10 +3823,13 @@ async function bootLive(){
         else svcTypeByKey[key] = svcRaw;
       }
       // build 2026-08-20.1: Commit Start/End (Start_x0020_Date / Finish_x0020_Date)
+      // build 2026-09-24.20: บันทึก field name จริงที่ตอบกลับมา เพื่อใช้ PATCH ด้วยชื่อเดิม (กัน "not recognized" error)
       const cmtSRaw = f.Start_x0020_Date || f.StartDate || f.Start || null;
+      const cmtSField = f.Start_x0020_Date !== undefined ? 'Start_x0020_Date' : (f.StartDate !== undefined ? 'StartDate' : 'Start');
       const cmtERaw = f.Finish_x0020_Date || f.FinishDate || f.Finish || null;
-      if(cmtSRaw) cmtStartById[String(it.id)] = cmtSRaw;
-      if(cmtERaw) cmtEndById[String(it.id)] = cmtERaw;
+      const cmtEField = f.Finish_x0020_Date !== undefined ? 'Finish_x0020_Date' : (f.FinishDate !== undefined ? 'FinishDate' : 'Finish');
+      if(cmtSRaw){ cmtStartById[String(it.id)] = cmtSRaw; cmtStartFieldById[String(it.id)] = cmtSField; }
+      if(cmtERaw){ cmtEndById[String(it.id)] = cmtERaw; cmtEndFieldById[String(it.id)] = cmtEField; }
       // build 2026-08-25: Version, Status, WP Team, WP Assignee
       const verRaw = (f.Version||'').toString().trim();
       if(verRaw) versionById[String(it.id)] = verRaw;
@@ -3908,6 +3912,9 @@ async function bootLive(){
           const cmtEForRow = (row.parentTaskId && cmtEndById[row.parentTaskId]) || null;
           row.cmtStartRaw = cmtSForRow;
           row.cmtEndRaw = cmtEForRow;
+          // build 2026-09-24.20: เก็บ field name จริง → ใช้ตอน PATCH (กัน "Field not recognized" error)
+          row.cmtStartField = (row.parentTaskId && cmtStartFieldById[row.parentTaskId]) || 'StartDate';
+          row.cmtEndField   = (row.parentTaskId && cmtEndFieldById[row.parentTaskId])   || 'FinishDate';
           row.cmtStart = cmtSForRow && !isNaN(new Date(cmtSForRow)) ? fmtY(new Date(cmtSForRow)) : '';
           row.cmtEnd = cmtEForRow && !isNaN(new Date(cmtEForRow)) ? fmtY(new Date(cmtEForRow)) : '';
           // build 2026-08-25: Version, Status, WP Team/Assignee จาก BOQ Team Work Plan
@@ -4397,9 +4404,10 @@ async function confirmDateEdit(){
     if(changes.length === 0){ closeDateEditModal(); toastMsg('ℹ️ ไม่มีการเปลี่ยนแปลง'); return; }
     // PATCH BOQ Team Work Plan
     const patchFields = {};
-    if(changes.find(c=>c.field==='CommitStart')) patchFields.Start_x0020_Date = newCS;
-    if(changes.find(c=>c.field==='CommitEnd')) patchFields.Finish_x0020_Date = newCE;
-    if(changes.find(c=>c.field==='DueDate')) patchFields.Due_x0020_Date = newDue;
+    // build 2026-09-24.20: ใช้ field name จริงที่ SharePoint ตอบกลับมาตอน read (กัน "Field not recognized" error)
+    if(changes.find(c=>c.field==='CommitStart')) patchFields[row.cmtStartField||'StartDate'] = newCS;
+    if(changes.find(c=>c.field==='CommitEnd'))   patchFields[row.cmtEndField||'FinishDate']  = newCE;
+    if(changes.find(c=>c.field==='DueDate'))     patchFields.Due_x0020_Date = newDue;
     await graphFetch(`/sites/${SITE_ID}/lists/${WORKPLAN_LIST}/items/${row.parentTaskId}`, {
       method:'PATCH', body: JSON.stringify({fields: patchFields})
     });
