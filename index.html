@@ -328,7 +328,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-24.22</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-24.23</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -368,7 +368,8 @@ tr.pick:hover td{background:var(--bg)}
     </div>
     <span class="lbl">โครงการ:</span>
     <select id="projFilter" onchange="renderRows()"><option value="">— ทั้งหมด —</option></select>
-    <button class="btn btn2" onclick="expandAll(true)">▾ เปิดทั้งหมด</button>
+    <button class="btn btn2" onclick="expandProjects()">▾ เปิดโครงการ</button>
+    <button class="btn btn2" onclick="expandAll(true)">▾ เปิด Package</button>
     <button class="btn btn2" onclick="expandAll(false)">▸ หุบทั้งหมด</button>
     <span style="display:inline-flex;gap:4px;align-items:center">
       <button class="sort-btn active" id="sortBtnOrder" onclick="setSortOrder('order')" title="เรียงตามลำดับที่งานเข้ามา (ค่าเริ่มต้น)">📋 ลำดับเข้า</button>
@@ -4848,6 +4849,7 @@ async function confirmMarkPackageDone(){
   }
 }
 function expandAll(v){DATA.forEach(p=>{p.open=v;p.pkgs.forEach(k=>k.open=v)});renderRows()}
+function expandProjects(){DATA.forEach(p=>{p.open=true;p.pkgs.forEach(k=>k.open=false)});renderRows()}
 
 /* ============ TEAM CHECKLIST HELPERS (build 2026-08-25.4) ============ */
 function getCheckedTeams(){
