@@ -329,7 +329,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-25.34</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-25.36</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -721,6 +721,11 @@ tr.pick:hover td{background:var(--bg)}
             <option value="">— เลือก —</option>
           </select>
         </div>
+        <div>
+          <label style="font-size:11px;color:var(--text3);font-weight:600">Person in Charge</label>
+          <input id="wpfPersonInCharge" type="text" placeholder="ชื่อผู้รับผิดชอบ"
+            style="width:100%;margin-top:3px;border:1px solid var(--border);border-radius:7px;padding:6px 9px;background:var(--bg1);color:var(--text1);font-size:13px;box-sizing:border-box">
+        </div>
 
         <!-- Section: Dates -->
         <div style="font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.06em;padding-bottom:3px;border-bottom:1px solid var(--border);margin-top:4px">วันที่</div>
@@ -743,6 +748,23 @@ tr.pick:hover td{background:var(--bg)}
             <label style="font-size:11px;color:var(--text3);font-weight:600">Committed Finish</label>
             <input id="wpfCommittedFinish" type="date" style="width:100%;margin-top:3px;border:1px solid var(--border);border-radius:7px;padding:6px 9px;background:var(--bg1);color:var(--text1);font-size:13px">
           </div>
+        </div>
+
+        <!-- Section: Details / Attachments / Link -->
+        <div style="font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.06em;padding-bottom:3px;border-bottom:1px solid var(--border);margin-top:4px">รายละเอียดเพิ่มเติม</div>
+        <div>
+          <label style="font-size:11px;color:var(--text3);font-weight:600">Details if have</label>
+          <textarea id="wpfDetails" rows="3" placeholder="รายละเอียดเพิ่มเติม..."
+            style="width:100%;margin-top:3px;border:1px solid var(--border);border-radius:7px;padding:6px 9px;background:var(--bg1);color:var(--text1);font-size:13px;resize:vertical;box-sizing:border-box"></textarea>
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--text3);font-weight:600">Attachments</label>
+          <div id="wpfAttachments" style="margin-top:5px;min-height:24px;font-size:12px;color:var(--text3)">—</div>
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--text3);font-weight:600">Link ข้อมูลส่งให้ Team BOQ</label>
+          <input id="wpfLinkBoq" type="url" placeholder="https://..."
+            style="width:100%;margin-top:3px;border:1px solid var(--border);border-radius:7px;padding:6px 9px;background:var(--bg1);color:var(--text1);font-size:13px;box-sizing:border-box">
         </div>
 
         <!-- Section: Documents -->
@@ -5907,12 +5929,35 @@ function openWpEdit(id){
   document.getElementById('wpfStatus').value = f.Status || 'Not Started';
   document.getElementById('wpfCommitStatus').value = f.CommitStatus || '';
   document.getElementById('wpfDept').value = f.Department || '';
+  document.getElementById('wpfPersonInCharge').value = f.PersonInCharge || '';
   document.getElementById('wpfStart').value = toDateInput(f.StartDate);
+
   document.getElementById('wpfFinish').value = toDateInput(f.FinishDate);
   document.getElementById('wpfDue').value = toDateInput(f.Due_x0020_Date);
   document.getElementById('wpfCommittedFinish').value = toDateInput(f.CommittedFinish);
+  document.getElementById('wpfDetails').value = f.Details || '';
+  // Hyperlink field: Graph API returns {Url, Description} or just a URL string
+  const linkRaw = f.Link_x0020__x0e02_x0e49_x0e2d_x0e21_x0e39_x0e25_x0e2a_x0e48_x0e07_x0e43_x0e2b_x0e49_Team_x0020_BOQ || f.LinkBoqTeam || f.LinkTeamBOQ || '';
+  const linkUrl = (linkRaw && typeof linkRaw === 'object') ? (linkRaw.Url || '') : linkRaw;
+  document.getElementById('wpfLinkBoq').value = linkUrl;
   document.getElementById('wpfRemark').value = f.BOQRemark || '';
   document.getElementById('wpSaveStatus').textContent = '';
+  // Load attachments
+  const attEl = document.getElementById('wpfAttachments');
+  if(id && attEl){
+    attEl.innerHTML = '<span style="color:var(--text3)">⏳ กำลังโหลด...</span>';
+    graphFetch(`/sites/${SITE_ID}/lists/${WORKPLAN_LIST}/items/${id}/attachments`).then(res=>{
+      const files = (res && res.value) || [];
+      if(!files.length){ attEl.innerHTML = '<span style="color:var(--text3)">— ไม่มีไฟล์แนบ —</span>'; return; }
+      attEl.innerHTML = files.map(a=>
+        `<a href="${a.contentUrl}" target="_blank" rel="noopener"
+           style="display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--primary);text-decoration:none;background:var(--bg1);border:1px solid var(--border);border-radius:6px;padding:3px 8px;margin:2px">
+          📎 ${a.name}</a>`
+      ).join('');
+    }).catch(()=>{ attEl.innerHTML = '<span style="color:var(--text3)">— โหลดไม่สำเร็จ —</span>'; });
+  } else if(attEl){
+    attEl.innerHTML = '<span style="color:var(--text3)">— บันทึกก่อนเพื่อเพิ่มไฟล์แนบ —</span>';
+  }
 
   // Team checkboxes (WP uses ST/AR&ID/MEP/Budget)
   const teamVals = parseMultiChoice(f.Team || '');
@@ -5943,8 +5988,11 @@ function openWpNew(){
   openWpEdit(null); // inits dropdowns & checkboxes, sets title to '＋ เพิ่มงานใหม่'
   // reset all text/select fields
   ['wpfProjName','wpfProjType','wpfSize','wpfService','wpfPackage','wpfVersion',
-   'wpfCommitStatus','wpfDept','wpfStart','wpfFinish','wpfDue','wpfCommittedFinish','wpfRemark'
+   'wpfCommitStatus','wpfDept','wpfPersonInCharge','wpfStart','wpfFinish','wpfDue','wpfCommittedFinish',
+   'wpfDetails','wpfLinkBoq','wpfRemark'
   ].forEach(fid=>{ const el=document.getElementById(fid); if(el) el.value=''; });
+  const attEl2 = document.getElementById('wpfAttachments');
+  if(attEl2) attEl2.innerHTML = '<span style="color:var(--text3)">— บันทึกก่อนเพื่อเพิ่มไฟล์แนบ —</span>';
   document.getElementById('wpfStatus').value = 'Not Started';
   // uncheck all checkbox groups
   document.querySelectorAll('#wpfTeamBoxes input[type=checkbox]').forEach(cb=>cb.checked=false);
@@ -5986,6 +6034,10 @@ async function saveWpItem(){
     CommitStatus:         gv('wpfCommitStatus'),
     Team:                 teamVal || null,
     Department:           gv('wpfDept'),
+    PersonInCharge:       gv('wpfPersonInCharge'),
+    Details:              gv('wpfDetails'),
+    // Hyperlink field — verify exact SP internal name with "ดูคอลัมน์" inspector if blank
+    LinkBoqTeam:          gv('wpfLinkBoq') ? { Url: gv('wpfLinkBoq'), Description: 'Link' } : null,
     StartDate:            gv('wpfStart'),
     FinishDate:           gv('wpfFinish'),
     Due_x0020_Date:       gv('wpfDue'),
