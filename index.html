@@ -329,7 +329,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-25.36</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-25.37</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -723,8 +723,27 @@ tr.pick:hover td{background:var(--bg)}
         </div>
         <div>
           <label style="font-size:11px;color:var(--text3);font-weight:600">Person in Charge</label>
-          <input id="wpfPersonInCharge" type="text" placeholder="ชื่อผู้รับผิดชอบ"
-            style="width:100%;margin-top:3px;border:1px solid var(--border);border-radius:7px;padding:6px 9px;background:var(--bg1);color:var(--text1);font-size:13px;box-sizing:border-box">
+          <select id="wpfPersonInCharge" style="width:100%;margin-top:3px;border:1px solid var(--border);border-radius:7px;padding:6px 9px;background:var(--bg1);color:var(--text1);font-size:13px">
+            <option value="">— เลือก —</option>
+            <option value="Best">Best</option>
+            <option value="Fah">Fah</option>
+            <option value="Hongyok">Hongyok</option>
+            <option value="Ize">Ize</option>
+            <option value="Jack">Jack</option>
+            <option value="June">June</option>
+            <option value="Mai">Mai</option>
+            <option value="May">May</option>
+            <option value="Memie">Memie</option>
+            <option value="P">P</option>
+            <option value="Pang">Pang</option>
+            <option value="Pari">Pari</option>
+            <option value="Si">Si</option>
+            <option value="Stamp">Stamp</option>
+            <option value="Su">Su</option>
+            <option value="Wim">Wim</option>
+            <option value="Yim">Yim</option>
+            <option value="Yo">Yo</option>
+          </select>
         </div>
 
         <!-- Section: Dates -->
@@ -5929,7 +5948,10 @@ function openWpEdit(id){
   document.getElementById('wpfStatus').value = f.Status || 'Not Started';
   document.getElementById('wpfCommitStatus').value = f.CommitStatus || '';
   document.getElementById('wpfDept').value = f.Department || '';
-  document.getElementById('wpfPersonInCharge').value = f.PersonInCharge || '';
+  // Person_x0020_in_x0020_Charge is a Person field — Graph returns {LookupId, LookupValue} object
+  const picRaw = f.Person_x0020_in_x0020_Charge;
+  const picName = picRaw ? resolveAssigneeName(picRaw, f.Person_x0020_in_x0020_ChargeLookupId) : '';
+  document.getElementById('wpfPersonInCharge').value = (picName && picName !== '-') ? picName : '';
   document.getElementById('wpfStart').value = toDateInput(f.StartDate);
 
   document.getElementById('wpfFinish').value = toDateInput(f.FinishDate);
@@ -5937,7 +5959,8 @@ function openWpEdit(id){
   document.getElementById('wpfCommittedFinish').value = toDateInput(f.CommittedFinish);
   document.getElementById('wpfDetails').value = f.Details || '';
   // Hyperlink field: Graph API returns {Url, Description} or just a URL string
-  const linkRaw = f.Link_x0020__x0e02_x0e49_x0e2d_x0e21_x0e39_x0e25_x0e2a_x0e48_x0e07_x0e43_x0e2b_x0e49_Team_x0020_BOQ || f.LinkBoqTeam || f.LinkTeamBOQ || '';
+  // Link_x0020_ = "Link ข้อมูลส่งให้ Team BOQ" — actual SP internal name confirmed via column inspector
+  const linkRaw = f['Link_x0020_'] || f.Link_x0020__x0e02_x0e49_x0e2d_x0e21_x0e39_x0e25_x0e2a_x0e48_x0e07_x0e43_x0e2b_x0e49_Team_x0020_BOQ || '';
   const linkUrl = (linkRaw && typeof linkRaw === 'object') ? (linkRaw.Url || '') : linkRaw;
   document.getElementById('wpfLinkBoq').value = linkUrl;
   document.getElementById('wpfRemark').value = f.BOQRemark || '';
@@ -6034,10 +6057,11 @@ async function saveWpItem(){
     CommitStatus:         gv('wpfCommitStatus'),
     Team:                 teamVal || null,
     Department:           gv('wpfDept'),
-    PersonInCharge:       gv('wpfPersonInCharge'),
+    // Person_x0020_in_x0020_Charge is a Person field — must write via LookupId (numeric SP User ID)
+    Person_x0020_in_x0020_ChargeLookupId: gv('wpfPersonInCharge') ? getUserId(gv('wpfPersonInCharge')) : null,
     Details:              gv('wpfDetails'),
-    // Hyperlink field — verify exact SP internal name with "ดูคอลัมน์" inspector if blank
-    LinkBoqTeam:          gv('wpfLinkBoq') ? { Url: gv('wpfLinkBoq'), Description: 'Link' } : null,
+    // Link_x0020_ = "Link ข้อมูลส่งให้ Team BOQ" — actual SP internal name from column inspector
+    'Link_x0020_':        gv('wpfLinkBoq') ? { Url: gv('wpfLinkBoq'), Description: 'Link' } : null,
     StartDate:            gv('wpfStart'),
     FinishDate:           gv('wpfFinish'),
     Due_x0020_Date:       gv('wpfDue'),
