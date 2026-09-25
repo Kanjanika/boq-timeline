@@ -329,7 +329,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-25.40</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-25.41</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -735,28 +735,10 @@ tr.pick:hover td{background:var(--bg)}
           </select>
         </div>
         <div>
-          <label style="font-size:11px;color:var(--text3);font-weight:600">Person in Charge</label>
-          <select id="wpfPersonInCharge" style="width:100%;margin-top:3px;border:1px solid var(--border);border-radius:7px;padding:6px 9px;background:var(--bg1);color:var(--text1);font-size:13px">
-            <option value="">— เลือก —</option>
-            <option value="Best">Best</option>
-            <option value="Fah">Fah</option>
-            <option value="Hongyok">Hongyok</option>
-            <option value="Ize">Ize</option>
-            <option value="Jack">Jack</option>
-            <option value="June">June</option>
-            <option value="Mai">Mai</option>
-            <option value="May">May</option>
-            <option value="Memie">Memie</option>
-            <option value="P">P</option>
-            <option value="Pang">Pang</option>
-            <option value="Pari">Pari</option>
-            <option value="Si">Si</option>
-            <option value="Stamp">Stamp</option>
-            <option value="Su">Su</option>
-            <option value="Wim">Wim</option>
-            <option value="Yim">Yim</option>
-            <option value="Yo">Yo</option>
-          </select>
+          <label style="font-size:11px;color:var(--text3);font-weight:600">Person in Charge <span style="font-weight:400;opacity:.7">(อ่านอย่างเดียว)</span></label>
+          <input type="text" id="wpfPersonInCharge" readonly
+            style="width:100%;margin-top:3px;border:1px solid var(--border);border-radius:7px;padding:6px 9px;background:var(--bg2);color:var(--text2);font-size:13px;box-sizing:border-box;cursor:default"
+            placeholder="—">
         </div>
 
         <!-- Section: Dates -->
@@ -1617,10 +1599,29 @@ async function graphFetch(path, opts={}){
   if(!res.ok){ const t=await res.text().catch(()=>res.statusText); throw new Error(`Graph ${res.status}: ${t}`); }
   return res.status===204? null : res.json();
 }
-// spFetch: เรียก SharePoint REST API /_api/... โดยตรง (ใช้ Graph token เดิมซึ่ง scope Sites.ReadWrite.All รองรับทั้ง Graph และ SP REST)
+// getSpToken: ดึง token สำหรับ SharePoint REST API โดยเฉพาะ (audience = https://costplan1.sharepoint.com)
+// ต่างจาก getToken() ซึ่ง audience = https://graph.microsoft.com — ใช้ token ข้ามกันไม่ได้ (จะได้ 401)
+// scope 'https://costplan1.sharepoint.com/Sites.ReadWrite.All' ต้องมี API permission ใน Azure AD app ด้วย
+let _spTokenPromise = null;
+async function getSpToken(){
+  if(_spTokenPromise) return _spTokenPromise;
+  _spTokenPromise = (async()=>{
+    if(!msalInstance || !graphAccount) throw new Error('ยังไม่ได้เข้าสู่ระบบ');
+    const SP_SCOPES = ['https://costplan1.sharepoint.com/Sites.ReadWrite.All'];
+    try{
+      const r = await msalInstance.acquireTokenSilent({scopes:SP_SCOPES, account:graphAccount});
+      return r.accessToken;
+    }catch(e){
+      const r = await msalInstance.acquireTokenPopup({scopes:SP_SCOPES, account:graphAccount});
+      return r.accessToken;
+    }
+  })().finally(()=>{ _spTokenPromise=null; });
+  return _spTokenPromise;
+}
+// spFetch: เรียก SharePoint REST API /_api/... โดยตรง ด้วย SP-scoped token (ไม่ใช่ Graph token)
 // ใช้สำหรับฟีเจอร์ที่ Graph v1.0 ไม่รองรับ เช่น list item AttachmentFiles
 async function spFetch(apiPath){
-  const token = await getToken();
+  const token = await getSpToken();
   const res = await fetch(`${SP_SITE_URL}${apiPath}`,{
     headers:{
       'Authorization':`Bearer ${token}`,
@@ -6025,10 +6026,11 @@ function openWpEdit(id){
   document.getElementById('wpfStatus').value = f.Status || 'Not Started';
   document.getElementById('wpfCommitStatus').value = f.CommitStatus || '';
   document.getElementById('wpfDept').value = f.Department || '';
-  // Person_x0020_in_x0020_Charge is a Person field — Graph returns {LookupId, LookupValue} object
+  // Person_x0020_in_x0020_Charge คือคนจาก Team Post ที่สั่งงานเข้ามา — ไม่ใช่ BOQ team member
+  // Graph returns {LookupId, LookupValue} object; แสดงชื่อจาก LookupValue โดยตรง (อ่านอย่างเดียว)
   const picRaw = f.Person_x0020_in_x0020_Charge;
-  const picName = picRaw ? resolveAssigneeName(picRaw, f.Person_x0020_in_x0020_ChargeLookupId) : '';
-  document.getElementById('wpfPersonInCharge').value = (picName && picName !== '-') ? picName : '';
+  const picName = picRaw ? (picRaw.LookupValue || '') : '';
+  document.getElementById('wpfPersonInCharge').value = picName;
   document.getElementById('wpfStart').value = toDateInput(f.StartDate);
 
   document.getElementById('wpfFinish').value = toDateInput(f.FinishDate);
@@ -6149,8 +6151,7 @@ async function saveWpItem(){
     // Assignee — multi-value Person field; AssigneeStringId uses SP lookup format (id;# per value)
     AssigneeStringId:     assigneeIds.length ? assigneeStringId : null,
     Department:           gv('wpfDept'),
-    // Person_x0020_in_x0020_Charge is a Person field — must write via LookupId (numeric SP User ID)
-    Person_x0020_in_x0020_ChargeLookupId: gv('wpfPersonInCharge') ? getUserId(gv('wpfPersonInCharge')) : null,
+    // Person_x0020_in_x0020_Charge — คนจาก Team Post ที่สั่งงาน, แสดงอ่านอย่างเดียว ไม่เขียนจาก BOQ app
     Details:              gv('wpfDetails'),
     // Link_x0020_ = "Link ข้อมูลส่งให้ Team BOQ" — actual SP internal name from column inspector
     'Link_x0020_':        gv('wpfLinkBoq') ? { Url: gv('wpfLinkBoq'), Description: 'Link' } : null,
