@@ -9,9 +9,10 @@
 :root{
   --primary:#0f766e;--primary-dk:#115e59;--primary-lt:#f0fdfa;
   --ok:#059669;--warn:#d97706;--bad:#dc2626;
-  --text:#0f172a;--text2:#475569;--text3:#94a3b8;
-  --border:#e2e8f0;--bg:#f8fafc;
+  --text:#0f172a;--text1:#0f172a;--text2:#475569;--text3:#94a3b8;
+  --border:#e2e8f0;--bg:#f8fafc;--bg2:#f1f5f9;--bg1:#ffffff;
   --blank:#0e7490;--pre:#c2410c;--qa:#7e22ce;
+  --sel:#eff6ff;
 }
 body{font-family:'Segoe UI','Sarabun','Tahoma',sans-serif;background:var(--bg);color:var(--text);font-size:13.5px;line-height:1.5}
 
@@ -328,13 +329,14 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-24.23</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-25.24</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
     <div class="tab" data-p="pgReport">📊 Planning vs Actual · รายงาน</div>
     <div class="tab" data-p="pgToday">📋 งานวันนี้</div>
     <div class="tab" data-p="pgMyWork" id="tabMyWork" style="display:none">👤 งานของฉัน</div>
+    <div class="tab" data-p="pgWorkPlan" id="tabWorkPlan" style="display:none">📝 Work Plan</div>
   </div>
   <div class="right">
     <button class="btn btn2" id="loginBtn" style="display:none" onclick="doLogin()">🔐 เข้าสู่ระบบ SharePoint</button>
@@ -573,6 +575,109 @@ tr.pick:hover td{background:var(--bg)}
     <button class="btn btn2" onclick="renderMyWork()">🔄 รีเฟรช</button>
   </div>
   <div id="myWorkBody" style="margin-top:14px"></div>
+</div>
+
+<!-- ============ PAGE · BOQ Team Work Plan (build 2026-09-25.24) ============ -->
+<div class="page" id="pgWorkPlan">
+  <!-- Toolbar -->
+  <div class="tools" style="flex-wrap:wrap;row-gap:8px;align-items:center">
+    <span style="font-weight:700;font-size:14px">📝 BOQ Team Work Plan</span>
+    <span id="wpCountLabel" style="font-size:12px;color:var(--text3);margin-left:6px"></span>
+    <span style="flex:1"></span>
+    <input id="wpSearch" type="search" placeholder="🔍 ค้นหาชื่อโครงการ..." oninput="filterWpRows()"
+      style="border:1px solid var(--border);border-radius:8px;padding:5px 10px;font-size:13px;background:var(--bg2);color:var(--text1);width:200px;outline:none">
+    <select id="wpStatusFilter" onchange="filterWpRows()"
+      style="border:1px solid var(--border);border-radius:8px;padding:5px 8px;font-size:13px;background:var(--bg2);color:var(--text1)">
+      <option value="">— สถานะทั้งหมด —</option>
+      <option>Not Started</option>
+      <option>Review เอกสาร</option>
+      <option>In Progress</option>
+      <option>ตรวจก่อนส่งออก</option>
+      <option>Done</option>
+      <option>On Hold</option>
+      <option>Reject</option>
+      <option>Replace</option>
+    </select>
+    <button class="btn btn-teal" onclick="openWpNew()">＋ เพิ่มงานใหม่</button>
+    <button class="btn btn2" onclick="loadWorkPlan()">🔄 รีเฟรช</button>
+  </div>
+
+  <!-- Main area: table + edit panel side by side -->
+  <div style="display:flex;gap:14px;margin-top:12px;align-items:flex-start">
+    <!-- Table -->
+    <div style="flex:1;min-width:0;overflow-x:auto">
+      <div id="wpBody" style="font-size:13px"></div>
+    </div>
+    <!-- Edit Panel (hidden by default) -->
+    <div id="wpEditPanel" style="display:none;min-width:300px;max-width:340px;background:var(--bg2);border:1.5px solid var(--border);border-radius:12px;padding:16px 18px;font-size:13px;flex-shrink:0">
+      <div style="font-weight:700;font-size:14px;margin-bottom:12px" id="wpEditTitle">แก้ไขรายการ</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div>
+          <label style="font-size:11px;color:var(--text3);font-weight:600">ชื่อโครงการ *</label>
+          <input id="wpfTitle" type="text" style="width:100%;margin-top:3px;border:1px solid var(--border);border-radius:7px;padding:6px 9px;background:var(--bg1);color:var(--text1);font-size:13px">
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--text3);font-weight:600">Service Type</label>
+          <select id="wpfService" style="width:100%;margin-top:3px;border:1px solid var(--border);border-radius:7px;padding:6px 9px;background:var(--bg1);color:var(--text1);font-size:13px">
+            <option value="">— เลือก —</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--text3);font-weight:600">Package</label>
+          <input id="wpfPackage" type="text" style="width:100%;margin-top:3px;border:1px solid var(--border);border-radius:7px;padding:6px 9px;background:var(--bg1);color:var(--text1);font-size:13px" placeholder="เช่น Blank BOQ, Pretender">
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--text3);font-weight:600">Team</label>
+          <div id="wpfTeamBoxes" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:5px"></div>
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--text3);font-weight:600">Due Date (Post ขอส่ง)</label>
+          <input id="wpfDue" type="date" style="width:100%;margin-top:3px;border:1px solid var(--border);border-radius:7px;padding:6px 9px;background:var(--bg1);color:var(--text1);font-size:13px">
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--text3);font-weight:600">Status</label>
+          <select id="wpfStatus" style="width:100%;margin-top:3px;border:1px solid var(--border);border-radius:7px;padding:6px 9px;background:var(--bg1);color:var(--text1);font-size:13px">
+            <option>Not Started</option>
+            <option>Review เอกสาร</option>
+            <option>In Progress</option>
+            <option>ตรวจก่อนส่งออก</option>
+            <option>Done</option>
+            <option>On Hold</option>
+            <option>Reject</option>
+            <option>Replace</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:8px">
+          <div style="flex:1">
+            <label style="font-size:11px;color:var(--text3);font-weight:600">Version</label>
+            <input id="wpfVersion" type="text" style="width:100%;margin-top:3px;border:1px solid var(--border);border-radius:7px;padding:6px 9px;background:var(--bg1);color:var(--text1);font-size:13px" placeholder="เช่น No.1">
+          </div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <div style="flex:1">
+            <label style="font-size:11px;color:var(--text3);font-weight:600">Project Type</label>
+            <select id="wpfProjType" style="width:100%;margin-top:3px;border:1px solid var(--border);border-radius:7px;padding:6px 9px;background:var(--bg1);color:var(--text1);font-size:13px">
+              <option value="">— เลือก —</option>
+            </select>
+          </div>
+          <div style="flex:1">
+            <label style="font-size:11px;color:var(--text3);font-weight:600">ขนาด (ตร.ม.)</label>
+            <select id="wpfSize" style="width:100%;margin-top:3px;border:1px solid var(--border);border-radius:7px;padding:6px 9px;background:var(--bg1);color:var(--text1);font-size:13px">
+              <option value="">— เลือก —</option>
+              <option>0-10000</option>
+              <option>10001-30000</option>
+              <option>30000up</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:14px;display:flex;gap:8px">
+        <button class="btn btn-teal" id="wpSaveBtn" onclick="saveWpItem()">💾 บันทึก</button>
+        <button class="btn btn2" onclick="closeWpEdit()">✕ ยกเลิก</button>
+        <span id="wpSaveStatus" style="font-size:12px;color:var(--text3);align-self:center"></span>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- ============ MODAL · STEP ============ -->
@@ -3706,6 +3811,9 @@ async function bootLive(){
       // แสดง tab เสมอเมื่อ login แล้ว (ถ้าหาชื่อไม่เจอ จะให้เลือกในหน้า)
       const tabEl = document.getElementById('tabMyWork');
       if(tabEl) tabEl.style.display = '';
+      // build 2026-09-25.24: แสดง tab Work Plan เมื่อ login แล้ว
+      const tabWp = document.getElementById('tabWorkPlan');
+      if(tabWp) tabWp.style.display = '';
       const labelEl = document.getElementById('myWorkUserLabel');
       if(labelEl) labelEl.textContent = myWorkSysName ? `· ${myWorkSysName} (${email})` : `· (${email})`;
     }
@@ -5353,6 +5461,252 @@ async function reopenStep(){
 document.getElementById('mbg').addEventListener('click',e=>{if(e.target.id==='mbg')closeModal()});
 function toastMsg(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('on');setTimeout(()=>t.classList.remove('on'),2400)}
 
+/* ============ BOQ Team Work Plan Page (build 2026-09-25.24) ============ */
+let _wpItems = [];        // raw items from WORKPLAN_LIST (all, unfiltered)
+let _wpEditId = null;     // ID of item being edited (null = new)
+let _wpLoading = false;
+
+async function loadWorkPlan(){
+  if(_wpLoading) return;
+  _wpLoading = true;
+  const body = document.getElementById('wpBody');
+  if(body) body.innerHTML = '<div style="padding:20px;color:var(--text3)">⏳ กำลังโหลด...</div>';
+  try{
+    _wpItems = await graphFetchAllItems(
+      `/sites/${SITE_ID}/lists/${WORKPLAN_LIST}/items?$expand=fields&$top=200`
+    );
+    renderWpTable();
+  }catch(e){
+    if(body) body.innerHTML = `<div style="padding:20px;color:#ef4444">❌ โหลดข้อมูลไม่สำเร็จ: ${e.message}</div>`;
+  }
+  _wpLoading = false;
+}
+
+function filterWpRows(){
+  const q = (document.getElementById('wpSearch')||{}).value||'';
+  const sf = (document.getElementById('wpStatusFilter')||{}).value||'';
+  const rows = document.querySelectorAll('#wpBody tr.wp-row');
+  let visible = 0;
+  rows.forEach(r=>{
+    const name = (r.dataset.name||'').toLowerCase();
+    const status = (r.dataset.status||'').toLowerCase();
+    const matchQ = !q || name.includes(q.toLowerCase());
+    const matchS = !sf || status === sf.toLowerCase();
+    r.style.display = (matchQ && matchS) ? '' : 'none';
+    if(matchQ && matchS) visible++;
+  });
+  const lbl = document.getElementById('wpCountLabel');
+  if(lbl) lbl.textContent = `${visible} / ${_wpItems.length} รายการ`;
+}
+
+function renderWpTable(){
+  const body = document.getElementById('wpBody');
+  if(!body) return;
+  const lbl = document.getElementById('wpCountLabel');
+  if(lbl) lbl.textContent = `${_wpItems.length} รายการ`;
+
+  const statusColor = s => {
+    const m = {
+      'not started':'#64748b','review เอกสาร':'#7c3aed','review':'#7c3aed',
+      'in progress':'#2563eb','ตรวจก่อนส่งออก':'#d97706','done':'#16a34a',
+      'on hold':'#dc2626','reject':'#dc2626','replace':'#9333ea'
+    };
+    return m[(s||'').toLowerCase()] || '#64748b';
+  };
+
+  const thSt = 'padding:7px 10px;text-align:left;font-size:11px;color:var(--text3);font-weight:700;border-bottom:2px solid var(--border);white-space:nowrap;position:sticky;top:0;background:var(--bg2);z-index:1';
+  const html = [
+    `<table style="border-collapse:collapse;width:100%;min-width:700px">`,
+    `<thead><tr>`,
+    `<th style="${thSt}">#</th>`,
+    `<th style="${thSt}">ชื่อโครงการ</th>`,
+    `<th style="${thSt}">Service Type</th>`,
+    `<th style="${thSt}">Package</th>`,
+    `<th style="${thSt}">Team</th>`,
+    `<th style="${thSt}">Due Date</th>`,
+    `<th style="${thSt}">Status</th>`,
+    `<th style="${thSt}">Version</th>`,
+    `<th style="${thSt}">Commit</th>`,
+    `<th style="${thSt}"></th>`,
+    `</tr></thead><tbody>`,
+  ];
+
+  const fmtD = s => {
+    if(!s) return '<span style="color:var(--text3)">—</span>';
+    const d = new Date(s);
+    return isNaN(d) ? s : `${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()+543}`;
+  };
+
+  _wpItems.forEach((it, idx) => {
+    const f = it.fields || {};
+    const name = f.Title || f.Project_x0020_Name || '—';
+    const service = f.Service_x0020_Type || f.ServiceType || '—';
+    const pkg = f.Package || f.WorkPackage || '—';
+    const team = f.Team || '—';
+    const due = f.Due_x0020_Date || f.DueDate || null;
+    const status = f.Status || '';
+    const version = f.Version || '—';
+    const commitStatus = f.CommitStatus || '';
+    const color = statusColor(status);
+    const commitBadge = commitStatus.toLowerCase()==='committed'
+      ? `<span style="background:#dcfce7;color:#15803d;border-radius:5px;padding:1px 6px;font-size:10px;font-weight:700">✓ Committed</span>`
+      : `<span style="color:var(--text3);font-size:10px">—</span>`;
+    const tdSt = 'padding:7px 10px;border-bottom:1px solid var(--border);vertical-align:middle;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+    const rowSel = _wpEditId === String(it.id) ? 'background:var(--sel,#eff6ff)' : '';
+    html.push(
+      `<tr class="wp-row" data-id="${it.id}" data-name="${name.toLowerCase()}" data-status="${status.toLowerCase()}"`,
+      ` style="cursor:pointer;${rowSel}" onmouseover="if(this.dataset.id!=='${_wpEditId}')this.style.background='var(--bg2)'"`,
+      ` onmouseout="if(this.dataset.id!=='${_wpEditId}')this.style.background=''"`,
+      ` onclick="openWpEdit('${it.id}')">`,
+      `<td style="${tdSt};color:var(--text3);font-size:11px">${idx+1}</td>`,
+      `<td style="${tdSt};font-weight:600;max-width:200px">${name}</td>`,
+      `<td style="${tdSt}">${service}</td>`,
+      `<td style="${tdSt}">${pkg}</td>`,
+      `<td style="${tdSt}">${team}</td>`,
+      `<td style="${tdSt}">${fmtD(due)}</td>`,
+      `<td style="${tdSt}"><span style="background:${color}20;color:${color};border-radius:5px;padding:2px 7px;font-size:11px;font-weight:600">${status||'—'}</span></td>`,
+      `<td style="${tdSt}">${version}</td>`,
+      `<td style="${tdSt}">${commitBadge}</td>`,
+      `<td style="${tdSt}"><button class="btn btn2" style="padding:3px 8px;font-size:11px" onclick="event.stopPropagation();openWpEdit('${it.id}')">✏️ แก้ไข</button></td>`,
+      `</tr>`
+    );
+  });
+
+  html.push('</tbody></table>');
+  body.innerHTML = html.join('');
+  filterWpRows();
+}
+
+function openWpEdit(id){
+  _wpEditId = id ? String(id) : null;
+  const panel = document.getElementById('wpEditPanel');
+  if(!panel) return;
+  panel.style.display = '';
+
+  // Populate service type dropdown
+  const svc = document.getElementById('wpfService');
+  if(svc && !svc.options.length || svc.options[0].value===''){
+    svc.innerHTML = `<option value="">— เลือก —</option>` + SERVICE_TYPES.map(s=>`<option>${s}</option>`).join('');
+  }
+  // Project Type dropdown
+  const pt = document.getElementById('wpfProjType');
+  if(pt && pt.options.length<=1){
+    pt.innerHTML = `<option value="">— เลือก —</option>` + PROJECT_TYPES_WEEKS.map(s=>`<option>${s}</option>`).join('');
+  }
+  // Team checkboxes
+  const tBox = document.getElementById('wpfTeamBoxes');
+  if(tBox && !tBox.children.length){
+    tBox.innerHTML = ALL_SUBTEAMS.map(s=>
+      `<label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:12px;background:var(--bg1);border:1px solid var(--border);border-radius:6px;padding:3px 8px">
+        <input type="checkbox" data-team="${s}"> ${s}</label>`
+    ).join('');
+  }
+
+  const it = id ? _wpItems.find(x=>String(x.id)===String(id)) : null;
+  const f = it ? (it.fields||{}) : {};
+
+  document.getElementById('wpEditTitle').textContent = it ? `✏️ ${f.Title||'—'}` : '＋ เพิ่มงานใหม่';
+  document.getElementById('wpfTitle').value = f.Title || f.Project_x0020_Name || '';
+  document.getElementById('wpfService').value = f.Service_x0020_Type || f.ServiceType || '';
+  document.getElementById('wpfPackage').value = f.Package || f.WorkPackage || '';
+  document.getElementById('wpfDue').value = (f.Due_x0020_Date||f.DueDate) ? toISO(new Date(f.Due_x0020_Date||f.DueDate)) : '';
+  document.getElementById('wpfStatus').value = f.Status || 'Not Started';
+  document.getElementById('wpfVersion').value = f.Version || '';
+  document.getElementById('wpfProjType').value = f.ProjectType || '';
+  document.getElementById('wpfSize').value = f.ProjectSize || '';
+  document.getElementById('wpSaveStatus').textContent = '';
+
+  // Team checkboxes
+  const teamVals = parseTeamField(f.Team || '');
+  document.querySelectorAll('#wpfTeamBoxes input[type=checkbox]').forEach(cb=>{
+    cb.checked = teamVals.includes(cb.dataset.team);
+  });
+
+  // highlight selected row
+  document.querySelectorAll('#wpBody tr.wp-row').forEach(r=>{
+    r.style.background = String(r.dataset.id)===String(id) ? 'var(--sel,#eff6ff)' : '';
+  });
+}
+
+function openWpNew(){
+  _wpEditId = null;
+  openWpEdit(null);
+  document.getElementById('wpEditTitle').textContent = '＋ เพิ่มงานใหม่';
+  // reset form
+  ['wpfTitle','wpfService','wpfPackage','wpfDue','wpfVersion','wpfProjType','wpfSize'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.value='';
+  });
+  document.getElementById('wpfStatus').value='Not Started';
+  document.querySelectorAll('#wpfTeamBoxes input[type=checkbox]').forEach(cb=>cb.checked=false);
+  document.getElementById('wpSaveStatus').textContent='';
+  document.querySelectorAll('#wpBody tr.wp-row').forEach(r=>r.style.background='');
+}
+
+function closeWpEdit(){
+  _wpEditId = null;
+  const panel = document.getElementById('wpEditPanel'); if(panel) panel.style.display='none';
+  document.querySelectorAll('#wpBody tr.wp-row').forEach(r=>r.style.background='');
+}
+
+async function saveWpItem(){
+  const title = (document.getElementById('wpfTitle').value||'').trim();
+  if(!title){ toastMsg('⚠️ กรุณากรอกชื่อโครงการ'); return; }
+
+  const checkedTeams = [...document.querySelectorAll('#wpfTeamBoxes input[type=checkbox]:checked')]
+    .map(cb=>cb.dataset.team).join(', ');
+
+  const patchFields = {
+    Title: title,
+    Service_x0020_Type: document.getElementById('wpfService').value || null,
+    Package: document.getElementById('wpfPackage').value || null,
+    Team: checkedTeams || null,
+    Due_x0020_Date: document.getElementById('wpfDue').value || null,
+    Status: document.getElementById('wpfStatus').value || 'Not Started',
+    Version: document.getElementById('wpfVersion').value || null,
+    ProjectType: document.getElementById('wpfProjType').value || null,
+    ProjectSize: document.getElementById('wpfSize').value || null,
+  };
+  // clean null keys so PATCH doesn't clear them unintentionally when creating
+  if(_wpEditId){
+    Object.keys(patchFields).forEach(k=>{ if(patchFields[k]===null) delete patchFields[k]; });
+  }
+
+  const statusEl = document.getElementById('wpSaveStatus');
+  const btn = document.getElementById('wpSaveBtn');
+  if(statusEl) statusEl.textContent = '⏳ กำลังบันทึก...';
+  if(btn) btn.disabled = true;
+
+  try{
+    if(_wpEditId){
+      // PATCH existing
+      await graphFetch(`/sites/${SITE_ID}/lists/${WORKPLAN_LIST}/items/${_wpEditId}`, {
+        method:'PATCH',
+        body: JSON.stringify({ fields: patchFields })
+      });
+      // update local cache
+      const idx = _wpItems.findIndex(x=>String(x.id)===_wpEditId);
+      if(idx>=0) Object.assign(_wpItems[idx].fields, patchFields);
+      if(statusEl) statusEl.textContent = '✅ บันทึกแล้ว';
+      toastMsg('✅ บันทึกสำเร็จ');
+    } else {
+      // POST new item
+      const res = await graphFetch(`/sites/${SITE_ID}/lists/${WORKPLAN_LIST}/items`, {
+        method:'POST',
+        body: JSON.stringify({ fields: patchFields })
+      });
+      if(res) _wpItems.unshift(res);
+      if(statusEl) statusEl.textContent = '✅ สร้างสำเร็จ';
+      toastMsg('✅ สร้างรายการใหม่สำเร็จ');
+      closeWpEdit();
+    }
+    renderWpTable();
+  }catch(e){
+    if(statusEl) statusEl.textContent = `❌ ${e.message}`;
+    toastMsg(`❌ บันทึกไม่สำเร็จ: ${e.message}`);
+  }
+  if(btn) btn.disabled = false;
+}
+
 /* ============ Tabs ============ */
 document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
   document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
@@ -5361,6 +5715,7 @@ document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
   if(t.dataset.p==='pgReport') renderReport(); // build 2026-08-25.11: render รายงานทุกครั้งที่สลับมา tab นี้
   if(t.dataset.p==='pgToday') renderTodayTasks(); // build 2026-09-11.2: render งานวันนี้ทุกครั้งที่สลับมา tab นี้
   if(t.dataset.p==='pgMyWork') renderMyWork(); // build 2026-09-23.3: render งานของฉันทุกครั้งที่สลับมา tab นี้
+  if(t.dataset.p==='pgWorkPlan' && !_wpItems.length) loadWorkPlan(); // build 2026-09-25.24: โหลด Work Plan ครั้งแรก
 }));
 
 /* ============ COMMIT CHECK · AI Suggest ============ */
