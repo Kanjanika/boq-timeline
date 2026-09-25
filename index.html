@@ -329,7 +329,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-25.29</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-25.30</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -577,7 +577,7 @@ tr.pick:hover td{background:var(--bg)}
   <div id="myWorkBody" style="margin-top:14px"></div>
 </div>
 
-<!-- ============ PAGE · BOQ Team Work Plan (build 2026-09-25.29) ============ -->
+<!-- ============ PAGE · BOQ Team Work Plan (build 2026-09-25.30) ============ -->
 <div class="page" id="pgWorkPlan">
   <!-- Toolbar -->
   <div class="tools" style="flex-wrap:wrap;row-gap:8px;align-items:center">
@@ -5690,8 +5690,8 @@ function renderWpTable(){
     `<thead><tr>`,
     `<th style="${thSt}">#</th>`,
     `<th style="${thSt}">ชื่อโครงการ</th>`,
-    `<th style="${thSt}">Service Type</th>`,
     `<th style="${thSt}">Package</th>`,
+    `<th style="${thSt}">Service Type</th>`,
     `<th style="${thSt}">Team</th>`,
     `<th style="${thSt}">Due Date</th>`,
     `<th style="${thSt}">Status</th>`,
@@ -5730,8 +5730,8 @@ function renderWpTable(){
       ` onclick="openWpEdit('${it.id}')">`,
       `<td style="${tdSt};color:var(--text3);font-size:11px">${idx+1}</td>`,
       `<td style="${tdSt};font-weight:600;max-width:200px">${name}</td>`,
-      `<td style="${tdSt}">${service}</td>`,
       `<td style="${tdSt}">${pkg}</td>`,
+      `<td style="${tdSt}">${service}</td>`,
       `<td style="${tdSt}">${team}</td>`,
       `<td style="${tdSt}">${fmtD(due)}</td>`,
       `<td style="${tdSt}"><span style="background:${color}20;color:${color};border-radius:5px;padding:2px 7px;font-size:11px;font-weight:600">${status||'—'}</span></td>`,
