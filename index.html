@@ -329,7 +329,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-25.27</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-25.28</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -577,7 +577,7 @@ tr.pick:hover td{background:var(--bg)}
   <div id="myWorkBody" style="margin-top:14px"></div>
 </div>
 
-<!-- ============ PAGE · BOQ Team Work Plan (build 2026-09-25.27) ============ -->
+<!-- ============ PAGE · BOQ Team Work Plan (build 2026-09-25.28) ============ -->
 <div class="page" id="pgWorkPlan">
   <!-- Toolbar -->
   <div class="tools" style="flex-wrap:wrap;row-gap:8px;align-items:center">
@@ -636,11 +636,7 @@ tr.pick:hover td{background:var(--bg)}
         <!-- Section: Project Info -->
         <div style="font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.06em;padding-bottom:3px;border-bottom:1px solid var(--border)">โครงการ</div>
         <div>
-          <label style="font-size:11px;color:var(--text3);font-weight:600">ชื่อโครงการ (Title) *</label>
-          <input id="wpfTitle" type="text" style="width:100%;margin-top:3px;border:1px solid var(--border);border-radius:7px;padding:6px 9px;background:var(--bg1);color:var(--text1);font-size:13px">
-        </div>
-        <div>
-          <label style="font-size:11px;color:var(--text3);font-weight:600">Project Name (SP)</label>
+          <label style="font-size:11px;color:var(--text3);font-weight:600">Project Name *</label>
           <select id="wpfProjName" style="width:100%;margin-top:3px;border:1px solid var(--border);border-radius:7px;padding:6px 9px;background:var(--bg1);color:var(--text1);font-size:13px">
             <option value="">— เลือก —</option>
           </select>
@@ -5801,9 +5797,8 @@ function openWpEdit(id){
 
   const toDateInput = v => { try{ return v ? toISO(new Date(v)) : ''; }catch(e){ return ''; } };
 
-  document.getElementById('wpEditTitle').textContent = it ? `✏️ ${f.Title||'—'}` : '＋ เพิ่มงานใหม่';
-  document.getElementById('wpfTitle').value = f.Title || '';
-  document.getElementById('wpfProjName').value = f.Project_x0020_Name || '';
+  document.getElementById('wpEditTitle').textContent = it ? `✏️ ${f.Project_x0020_Name||f.Title||'—'}` : '＋ เพิ่มงานใหม่';
+  document.getElementById('wpfProjName').value = f.Project_x0020_Name || f.Title || '';
   document.getElementById('wpfProjType').value = f.ProjectType || '';
   document.getElementById('wpfSize').value = f.ProjectSize || '';
   document.getElementById('wpfService').value = f.Service_x0020_Type || '';
@@ -5847,7 +5842,7 @@ function openWpNew(){
   _wpEditId = null;
   openWpEdit(null); // inits dropdowns & checkboxes, sets title to '＋ เพิ่มงานใหม่'
   // reset all text/select fields
-  ['wpfTitle','wpfProjName','wpfProjType','wpfSize','wpfService','wpfPackage','wpfVersion',
+  ['wpfProjName','wpfProjType','wpfSize','wpfService','wpfPackage','wpfVersion',
    'wpfCommitStatus','wpfDept','wpfStart','wpfFinish','wpfDue','wpfCommittedFinish','wpfRemark'
   ].forEach(fid=>{ const el=document.getElementById(fid); if(el) el.value=''; });
   document.getElementById('wpfStatus').value = 'Not Started';
@@ -5866,8 +5861,8 @@ function closeWpEdit(){
 }
 
 async function saveWpItem(){
-  const title = (document.getElementById('wpfTitle').value||'').trim();
-  if(!title){ toastMsg('⚠️ กรุณากรอกชื่อโครงการ'); return; }
+  const title = (document.getElementById('wpfProjName').value||'').trim();
+  if(!title){ toastMsg('⚠️ กรุณาเลือก Project Name'); return; }
 
   // collect checkbox groups
   const teamVal = [...document.querySelectorAll('#wpfTeamBoxes input[type=checkbox]:checked')]
@@ -5880,8 +5875,8 @@ async function saveWpItem(){
   const gv = id => (document.getElementById(id)||{}).value || null;
 
   const patchFields = {
-    Title:                title,
-    Project_x0020_Name:   gv('wpfProjName'),
+    Title:                title,           // SP requires Title; set same as Project Name
+    Project_x0020_Name:   title,
     ProjectType:          gv('wpfProjType'),
     ProjectSize:          gv('wpfSize'),
     Service_x0020_Type:   gv('wpfService'),
