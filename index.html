@@ -5882,7 +5882,7 @@ function renderWpTable(){
     thBtn('due','Due Date'),
     thBtn('status','Status'),
     `<th style="${thBase}">Commit</th>`,
-    `<th style="${thBase}"></th>`,
+    `<th style="${thBase};width:32px;text-align:center"></th>`,
     `</tr></thead><tbody>`,
   ];
 
@@ -5955,7 +5955,7 @@ function renderWpRow(it, idx, html, tdSt, fmtD, statusColor){
     `<td style="${tdSt}">${fmtD(due)}</td>`,
     `<td style="${tdSt}"><span style="background:${color}20;color:${color};border-radius:5px;padding:2px 7px;font-size:11px;font-weight:600">${status||'—'}</span></td>`,
     `<td style="${tdSt}">${commitBadge}</td>`,
-    `<td style="${tdSt}"><button class="btn btn2" style="padding:3px 8px;font-size:11px" onclick="event.stopPropagation();openWpEdit('${it.id}')">✏️ แก้ไข</button></td>`,
+    `<td style="padding:4px 6px;border-bottom:1px solid var(--border);vertical-align:middle;text-align:center;width:32px;min-width:32px"><button title="แก้ไข" style="background:none;border:1px solid var(--border);border-radius:6px;cursor:pointer;padding:3px 6px;font-size:13px;line-height:1;color:var(--text2)" onclick="event.stopPropagation();openWpEdit('${it.id}')">✏️</button></td>`,
     `</tr>`
   );
 }
