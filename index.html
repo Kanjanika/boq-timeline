@@ -329,7 +329,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-25.30</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-25.31</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -577,7 +577,7 @@ tr.pick:hover td{background:var(--bg)}
   <div id="myWorkBody" style="margin-top:14px"></div>
 </div>
 
-<!-- ============ PAGE · BOQ Team Work Plan (build 2026-09-25.30) ============ -->
+<!-- ============ PAGE · BOQ Team Work Plan (build 2026-09-25.31) ============ -->
 <div class="page" id="pgWorkPlan">
   <!-- Toolbar -->
   <div class="tools" style="flex-wrap:wrap;row-gap:8px;align-items:center">
@@ -609,6 +609,15 @@ tr.pick:hover td{background:var(--bg)}
         <label class="team-check-item"><input type="checkbox" class="wp-sf-cb" value="" checked onchange="filterWpRows();updateWpSfLabel()"> (ไม่มี Status)</label>
       </div>
     </div>
+    <select id="wpGroupBy" onchange="_wpGroupBy=this.value||null;renderWpTable()"
+      style="border:1px solid var(--border);border-radius:8px;padding:5px 10px;font-size:13px;background:var(--bg2);color:var(--text1)">
+      <option value="">🗂 ไม่จัดกลุ่ม</option>
+      <option value="name">กลุ่มตาม: ชื่อโครงการ</option>
+      <option value="pkg">กลุ่มตาม: Package</option>
+      <option value="svc">กลุ่มตาม: Service Type</option>
+      <option value="team">กลุ่มตาม: Team</option>
+      <option value="status">กลุ่มตาม: Status</option>
+    </select>
     <button class="btn btn-teal" onclick="openWpNew()">＋ เพิ่มงานใหม่</button>
     <button class="btn btn2" onclick="inspectWpColumns()">🔍 ดูคอลัมน์</button>
     <button class="btn btn2" onclick="loadWorkPlan()">🔄 รีเฟรช</button>
@@ -5560,6 +5569,8 @@ function toastMsg(m){const t=document.getElementById('toast');t.textContent=m;t.
 let _wpItems = [];        // raw items from WORKPLAN_LIST (all, unfiltered)
 let _wpEditId = null;     // ID of item being edited (null = new)
 let _wpLoading = false;
+let _wpSort = { col: null, dir: 1 };   // col = field key, dir: 1=asc / -1=desc
+let _wpGroupBy = null;                 // null or field key for grouping
 
 async function loadWorkPlan(){
   if(_wpLoading) return;
@@ -5604,20 +5615,38 @@ function updateWpSfLabel(){
 }
 function filterWpRows(){
   const q = (document.getElementById('wpSearch')||{}).value||'';
-  // gather checked status values
+  const ql = q.toLowerCase();
   const checkedSet = new Set([...document.querySelectorAll('.wp-sf-cb:checked')].map(c=>c.value.toLowerCase()));
   const rows = document.querySelectorAll('#wpBody tr.wp-row');
   let visible = 0;
   rows.forEach(r=>{
-    const name = (r.dataset.name||'').toLowerCase();
+    const name   = (r.dataset.name  ||'').toLowerCase();
     const status = (r.dataset.status||'').toLowerCase();
-    const matchQ = !q || name.includes(q.toLowerCase());
-    const matchS = checkedSet.has(status) || checkedSet.has('') && !status;
-    r.style.display = (matchQ && matchS) ? '' : 'none';
-    if(matchQ && matchS) visible++;
+    const pkg    = (r.dataset.pkg   ||'').toLowerCase();
+    const svc    = (r.dataset.svc   ||'').toLowerCase();
+    const matchQ = !ql || name.includes(ql) || pkg.includes(ql) || svc.includes(ql);
+    const matchS = checkedSet.has(status) || (checkedSet.has('') && !status);
+    const show   = matchQ && matchS;
+    r.style.display = show ? '' : 'none';
+    if(show) visible++;
+  });
+  // hide group headers whose every wp-row sibling is hidden
+  document.querySelectorAll('#wpBody tr.wp-group-hdr').forEach(hdr=>{
+    let next = hdr.nextElementSibling;
+    let anyVisible = false;
+    while(next && next.classList.contains('wp-row')){
+      if(next.style.display !== 'none') anyVisible = true;
+      next = next.nextElementSibling;
+    }
+    hdr.style.display = anyVisible ? '' : 'none';
   });
   const lbl = document.getElementById('wpCountLabel');
   if(lbl) lbl.textContent = `${visible} / ${_wpItems.length} รายการ`;
+}
+function wpSortBy(col){
+  if(_wpSort.col === col) _wpSort.dir *= -1;
+  else { _wpSort.col = col; _wpSort.dir = 1; }
+  renderWpTable();
 }
 
 async function inspectWpColumns(){
@@ -5684,67 +5713,129 @@ function renderWpTable(){
     return m[(s||'').toLowerCase()] || '#64748b';
   };
 
-  const thSt = 'padding:7px 10px;text-align:left;font-size:11px;color:var(--text3);font-weight:700;border-bottom:2px solid var(--border);white-space:nowrap;position:sticky;top:0;background:var(--bg2);z-index:1';
-  const html = [
-    `<table style="border-collapse:collapse;width:100%;min-width:700px">`,
-    `<thead><tr>`,
-    `<th style="${thSt}">#</th>`,
-    `<th style="${thSt}">ชื่อโครงการ</th>`,
-    `<th style="${thSt}">Package</th>`,
-    `<th style="${thSt}">Service Type</th>`,
-    `<th style="${thSt}">Team</th>`,
-    `<th style="${thSt}">Due Date</th>`,
-    `<th style="${thSt}">Status</th>`,
-    `<th style="${thSt}">Version</th>`,
-    `<th style="${thSt}">Commit</th>`,
-    `<th style="${thSt}"></th>`,
-    `</tr></thead><tbody>`,
-  ];
-
   const fmtD = s => {
     if(!s) return '<span style="color:var(--text3)">—</span>';
     const d = new Date(s);
     return isNaN(d) ? s : `${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()+543}`;
   };
 
-  _wpItems.forEach((it, idx) => {
+  // Extract sortable/groupable value from an item
+  const getField = (it, col) => {
     const f = it.fields || {};
-    const name = f.Title || f.Project_x0020_Name || '—';
-    const service = f.Service_x0020_Type || f.ServiceType || '—';
-    const pkg = f.Package || f.WorkPackage || '—';
-    const team = f.Team || '—';
-    const due = f.Due_x0020_Date || f.DueDate || null;
-    const status = f.Status || '';
-    const version = f.Version || '—';
-    const commitStatus = f.CommitStatus || '';
-    const color = statusColor(status);
-    const commitBadge = commitStatus.toLowerCase()==='committed'
-      ? `<span style="background:#dcfce7;color:#15803d;border-radius:5px;padding:1px 6px;font-size:10px;font-weight:700">✓ Committed</span>`
-      : `<span style="color:var(--text3);font-size:10px">—</span>`;
-    const tdSt = 'padding:7px 10px;border-bottom:1px solid var(--border);vertical-align:middle;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
-    const rowSel = _wpEditId === String(it.id) ? 'background:var(--sel,#eff6ff)' : '';
-    html.push(
-      `<tr class="wp-row" data-id="${it.id}" data-name="${name.toLowerCase()}" data-status="${status.toLowerCase()}"`,
-      ` style="cursor:pointer;${rowSel}" onmouseover="if(this.dataset.id!=='${_wpEditId}')this.style.background='var(--bg2)'"`,
-      ` onmouseout="if(this.dataset.id!=='${_wpEditId}')this.style.background=''"`,
-      ` onclick="openWpEdit('${it.id}')">`,
-      `<td style="${tdSt};color:var(--text3);font-size:11px">${idx+1}</td>`,
-      `<td style="${tdSt};font-weight:600;max-width:200px">${name}</td>`,
-      `<td style="${tdSt}">${pkg}</td>`,
-      `<td style="${tdSt}">${service}</td>`,
-      `<td style="${tdSt}">${team}</td>`,
-      `<td style="${tdSt}">${fmtD(due)}</td>`,
-      `<td style="${tdSt}"><span style="background:${color}20;color:${color};border-radius:5px;padding:2px 7px;font-size:11px;font-weight:600">${status||'—'}</span></td>`,
-      `<td style="${tdSt}">${version}</td>`,
-      `<td style="${tdSt}">${commitBadge}</td>`,
-      `<td style="${tdSt}"><button class="btn btn2" style="padding:3px 8px;font-size:11px" onclick="event.stopPropagation();openWpEdit('${it.id}')">✏️ แก้ไข</button></td>`,
-      `</tr>`
-    );
-  });
+    if(col==='name')   return (f.Title || f.Project_x0020_Name || '').toLowerCase();
+    if(col==='pkg')    return (f.Package || f.WorkPackage || '').toLowerCase();
+    if(col==='svc')    return (f.Service_x0020_Type || f.ServiceType || '').toLowerCase();
+    if(col==='team')   return (f.Team || '').toLowerCase();
+    if(col==='due')    return f.Due_x0020_Date || f.DueDate || '';
+    if(col==='status') return (f.Status || '').toLowerCase();
+    if(col==='ver')    return (f.Version || '').toLowerCase();
+    return '';
+  };
+
+  // Sort a copy
+  let items = [..._wpItems];
+  if(_wpSort.col){
+    const d = _wpSort.dir;
+    items.sort((a,b)=>{
+      const va = getField(a, _wpSort.col);
+      const vb = getField(b, _wpSort.col);
+      return va < vb ? -d : va > vb ? d : 0;
+    });
+  }
+
+  // Clickable th with sort arrow
+  const thBase = 'padding:7px 10px;text-align:left;font-size:11px;color:var(--text3);font-weight:700;border-bottom:2px solid var(--border);white-space:nowrap;position:sticky;top:0;background:var(--bg2);z-index:1';
+  const arrow = col => {
+    if(_wpSort.col !== col) return '<span style="opacity:.3;font-size:10px"> ⇅</span>';
+    return _wpSort.dir===1 ? '<span style="font-size:10px"> ↑</span>' : '<span style="font-size:10px"> ↓</span>';
+  };
+  const thBtn = (col, label) =>
+    `<th style="${thBase};cursor:pointer;user-select:none" onclick="wpSortBy('${col}')">${label}${arrow(col)}</th>`;
+
+  const html = [
+    `<table style="border-collapse:collapse;width:100%;min-width:700px">`,
+    `<thead><tr>`,
+    `<th style="${thBase}">#</th>`,
+    thBtn('name','ชื่อโครงการ'),
+    thBtn('pkg','Package'),
+    thBtn('svc','Service Type'),
+    thBtn('team','Team'),
+    thBtn('due','Due Date'),
+    thBtn('status','Status'),
+    thBtn('ver','Version'),
+    `<th style="${thBase}">Commit</th>`,
+    `<th style="${thBase}"></th>`,
+    `</tr></thead><tbody>`,
+  ];
+
+  const tdSt = 'padding:7px 10px;border-bottom:1px solid var(--border);vertical-align:middle;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+
+  // Group if needed
+  if(_wpGroupBy){
+    const groups = new Map();
+    items.forEach(it=>{
+      const key = getField(it, _wpGroupBy) || '(ไม่ระบุ)';
+      if(!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(it);
+    });
+    let rowNum = 0;
+    groups.forEach((gItems, key)=>{
+      // Group header
+      html.push(
+        `<tr class="wp-group-hdr" style="background:var(--bg1)">`,
+        `<td colspan="10" style="padding:5px 12px;font-size:12px;font-weight:700;color:var(--primary);border-bottom:1px solid var(--border)">`,
+        `📁 ${key} <span style="font-size:11px;font-weight:400;color:var(--text3)">(${gItems.length} รายการ)</span>`,
+        `</td></tr>`
+      );
+      gItems.forEach(it => renderWpRow(it, ++rowNum, html, tdSt, fmtD, statusColor));
+    });
+  } else {
+    items.forEach((it, idx) => renderWpRow(it, idx+1, html, tdSt, fmtD, statusColor));
+  }
 
   html.push('</tbody></table>');
   body.innerHTML = html.join('');
   filterWpRows();
+}
+
+function renderWpRow(it, idx, html, tdSt, fmtD, statusColor){
+  const f = it.fields || {};
+  const name        = f.Title || f.Project_x0020_Name || '—';
+  const service     = f.Service_x0020_Type || f.ServiceType || '—';
+  const pkg         = f.Package || f.WorkPackage || '—';
+  const team        = f.Team || '—';
+  const due         = f.Due_x0020_Date || f.DueDate || null;
+  const status      = f.Status || '';
+  const version     = f.Version || '—';
+  const commitStatus= f.CommitStatus || '';
+  const color       = statusColor(status);
+  const commitBadge = commitStatus.toLowerCase()==='committed'
+    ? `<span style="background:#dcfce7;color:#15803d;border-radius:5px;padding:1px 6px;font-size:10px;font-weight:700">✓ Committed</span>`
+    : `<span style="color:var(--text3);font-size:10px">—</span>`;
+  const rowSel = _wpEditId === String(it.id) ? 'background:var(--sel,#eff6ff)' : '';
+  html.push(
+    `<tr class="wp-row"`,
+    ` data-id="${it.id}"`,
+    ` data-name="${name.toLowerCase()}"`,
+    ` data-status="${status.toLowerCase()}"`,
+    ` data-pkg="${pkg.toLowerCase()}"`,
+    ` data-svc="${service.toLowerCase()}"`,
+    ` style="cursor:pointer;${rowSel}"`,
+    ` onmouseover="if(this.dataset.id!=='${_wpEditId}')this.style.background='var(--bg2)'"`,
+    ` onmouseout="if(this.dataset.id!=='${_wpEditId}')this.style.background=''"`,
+    ` onclick="openWpEdit('${it.id}')">`,
+    `<td style="${tdSt};color:var(--text3);font-size:11px">${idx}</td>`,
+    `<td style="${tdSt};font-weight:600;max-width:200px">${name}</td>`,
+    `<td style="${tdSt}">${pkg}</td>`,
+    `<td style="${tdSt}">${service}</td>`,
+    `<td style="${tdSt}">${team}</td>`,
+    `<td style="${tdSt}">${fmtD(due)}</td>`,
+    `<td style="${tdSt}"><span style="background:${color}20;color:${color};border-radius:5px;padding:2px 7px;font-size:11px;font-weight:600">${status||'—'}</span></td>`,
+    `<td style="${tdSt}">${version}</td>`,
+    `<td style="${tdSt}">${commitBadge}</td>`,
+    `<td style="${tdSt}"><button class="btn btn2" style="padding:3px 8px;font-size:11px" onclick="event.stopPropagation();openWpEdit('${it.id}')">✏️ แก้ไข</button></td>`,
+    `</tr>`
+  );
 }
 
 function openWpEdit(id){
