@@ -329,7 +329,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-25.24</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-25.25</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -577,7 +577,7 @@ tr.pick:hover td{background:var(--bg)}
   <div id="myWorkBody" style="margin-top:14px"></div>
 </div>
 
-<!-- ============ PAGE · BOQ Team Work Plan (build 2026-09-25.24) ============ -->
+<!-- ============ PAGE · BOQ Team Work Plan (build 2026-09-25.25) ============ -->
 <div class="page" id="pgWorkPlan">
   <!-- Toolbar -->
   <div class="tools" style="flex-wrap:wrap;row-gap:8px;align-items:center">
@@ -585,21 +585,41 @@ tr.pick:hover td{background:var(--bg)}
     <span id="wpCountLabel" style="font-size:12px;color:var(--text3);margin-left:6px"></span>
     <span style="flex:1"></span>
     <input id="wpSearch" type="search" placeholder="🔍 ค้นหาชื่อโครงการ..." oninput="filterWpRows()"
-      style="border:1px solid var(--border);border-radius:8px;padding:5px 10px;font-size:13px;background:var(--bg2);color:var(--text1);width:200px;outline:none">
-    <select id="wpStatusFilter" onchange="filterWpRows()"
-      style="border:1px solid var(--border);border-radius:8px;padding:5px 8px;font-size:13px;background:var(--bg2);color:var(--text1)">
-      <option value="">— สถานะทั้งหมด —</option>
-      <option>Not Started</option>
-      <option>Review เอกสาร</option>
-      <option>In Progress</option>
-      <option>ตรวจก่อนส่งออก</option>
-      <option>Done</option>
-      <option>On Hold</option>
-      <option>Reject</option>
-      <option>Replace</option>
-    </select>
+      style="border:1px solid var(--border);border-radius:8px;padding:5px 10px;font-size:13px;background:var(--bg2);color:var(--text1);width:190px;outline:none">
+    <!-- Status checkbox filter -->
+    <div style="position:relative">
+      <button class="team-filter-btn" id="wpSfBtn" onclick="toggleWpStatusPanel()">
+        <span id="wpSfLabel">— สถานะทั้งหมด —</span> ▾
+      </button>
+      <div class="team-filter-panel" id="wpStatusPanel" style="display:none;min-width:180px">
+        <div style="padding:4px 12px 2px;display:flex;gap:8px;font-size:11px">
+          <span style="cursor:pointer;color:var(--primary);font-weight:600" onclick="wpSfAll(true)">เลือกทั้งหมด</span>
+          <span style="color:var(--text3)">|</span>
+          <span style="cursor:pointer;color:var(--primary);font-weight:600" onclick="wpSfAll(false)">ล้าง</span>
+        </div>
+        <hr class="team-divider">
+        <label class="team-check-item"><input type="checkbox" class="wp-sf-cb" value="Not Started" checked onchange="filterWpRows();updateWpSfLabel()"> Not Started</label>
+        <label class="team-check-item"><input type="checkbox" class="wp-sf-cb" value="Review เอกสาร" checked onchange="filterWpRows();updateWpSfLabel()"> Review เอกสาร</label>
+        <label class="team-check-item"><input type="checkbox" class="wp-sf-cb" value="In Progress" checked onchange="filterWpRows();updateWpSfLabel()"> In Progress</label>
+        <label class="team-check-item"><input type="checkbox" class="wp-sf-cb" value="ตรวจก่อนส่งออก" checked onchange="filterWpRows();updateWpSfLabel()"> ตรวจก่อนส่งออก</label>
+        <label class="team-check-item"><input type="checkbox" class="wp-sf-cb" value="Done" onchange="filterWpRows();updateWpSfLabel()"> Done</label>
+        <label class="team-check-item"><input type="checkbox" class="wp-sf-cb" value="On Hold" checked onchange="filterWpRows();updateWpSfLabel()"> On Hold</label>
+        <label class="team-check-item"><input type="checkbox" class="wp-sf-cb" value="Reject" onchange="filterWpRows();updateWpSfLabel()"> Reject</label>
+        <label class="team-check-item"><input type="checkbox" class="wp-sf-cb" value="Replace" onchange="filterWpRows();updateWpSfLabel()"> Replace</label>
+        <label class="team-check-item"><input type="checkbox" class="wp-sf-cb" value="" checked onchange="filterWpRows();updateWpSfLabel()"> (ไม่มี Status)</label>
+      </div>
+    </div>
     <button class="btn btn-teal" onclick="openWpNew()">＋ เพิ่มงานใหม่</button>
+    <button class="btn btn2" onclick="inspectWpColumns()">🔍 ดูคอลัมน์</button>
     <button class="btn btn2" onclick="loadWorkPlan()">🔄 รีเฟรช</button>
+  </div>
+  <!-- Column inspector panel -->
+  <div id="wpColPanel" style="display:none;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-top:10px;font-size:12px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+      <b>🔍 คอลัมน์ทั้งหมดของ BOQ Team Work Plan</b>
+      <button class="btn btn2" style="padding:2px 8px;font-size:11px" onclick="document.getElementById('wpColPanel').style.display='none'">✕</button>
+    </div>
+    <div id="wpColBody">⏳ กำลังโหลด...</div>
   </div>
 
   <!-- Main area: table + edit panel side by side -->
@@ -5482,21 +5502,96 @@ async function loadWorkPlan(){
   _wpLoading = false;
 }
 
+function toggleWpStatusPanel(){
+  const p = document.getElementById('wpStatusPanel');
+  if(!p) return;
+  p.style.display = p.style.display==='none' ? '' : 'none';
+  // close when clicking outside
+  if(p.style.display!=='none'){
+    setTimeout(()=>{
+      const close = e => { if(!p.contains(e.target) && e.target.id!=='wpSfBtn'){ p.style.display='none'; document.removeEventListener('click',close); }};
+      document.addEventListener('click', close);
+    }, 50);
+  }
+}
+function wpSfAll(v){
+  document.querySelectorAll('.wp-sf-cb').forEach(cb=>{ cb.checked=v; });
+  filterWpRows(); updateWpSfLabel();
+}
+function updateWpSfLabel(){
+  const all = [...document.querySelectorAll('.wp-sf-cb')];
+  const checked = all.filter(c=>c.checked);
+  const lbl = document.getElementById('wpSfLabel');
+  if(!lbl) return;
+  if(checked.length===0) lbl.textContent='ไม่แสดงสถานะใดๆ';
+  else if(checked.length===all.length) lbl.textContent='— สถานะทั้งหมด —';
+  else lbl.textContent = `สถานะ: ${checked.length} รายการ`;
+}
 function filterWpRows(){
   const q = (document.getElementById('wpSearch')||{}).value||'';
-  const sf = (document.getElementById('wpStatusFilter')||{}).value||'';
+  // gather checked status values
+  const checkedSet = new Set([...document.querySelectorAll('.wp-sf-cb:checked')].map(c=>c.value.toLowerCase()));
   const rows = document.querySelectorAll('#wpBody tr.wp-row');
   let visible = 0;
   rows.forEach(r=>{
     const name = (r.dataset.name||'').toLowerCase();
     const status = (r.dataset.status||'').toLowerCase();
     const matchQ = !q || name.includes(q.toLowerCase());
-    const matchS = !sf || status === sf.toLowerCase();
+    const matchS = checkedSet.has(status) || checkedSet.has('') && !status;
     r.style.display = (matchQ && matchS) ? '' : 'none';
     if(matchQ && matchS) visible++;
   });
   const lbl = document.getElementById('wpCountLabel');
   if(lbl) lbl.textContent = `${visible} / ${_wpItems.length} รายการ`;
+}
+
+async function inspectWpColumns(){
+  const panel = document.getElementById('wpColPanel');
+  const body = document.getElementById('wpColBody');
+  if(!panel || !body) return;
+  panel.style.display = '';
+  body.innerHTML = '⏳ กำลังโหลดข้อมูลจาก Graph...';
+  try{
+    const res = await graphFetch(`/sites/${SITE_ID}/lists/${WORKPLAN_LIST}/columns`);
+    const cols = (res && res.value) || [];
+    // sort: non-hidden first, then by name
+    cols.sort((a,b)=> (a.hidden===b.hidden?0:a.hidden?1:-1) || a.name.localeCompare(b.name));
+    const typeLabel = c => {
+      if(c.text) return 'Text';
+      if(c.choice) return `Choice (${(c.choice.choices||[]).join(' / ')})`;
+      if(c.dateTime) return 'Date';
+      if(c.personOrGroup) return 'Person';
+      if(c.boolean) return 'Boolean';
+      if(c.number) return 'Number';
+      if(c.lookup) return 'Lookup';
+      if(c.calculated) return 'Calculated';
+      return c.columnGroup || '?';
+    };
+    const rows = cols.map(c=>{
+      const hidden = c.hidden ? 'opacity:.4' : '';
+      const ro = c.readOnly ? '<span style="color:#f59e0b;font-size:10px">readonly</span>' : '';
+      const req = c.required ? '<span style="color:#ef4444;font-size:10px">required</span>' : '';
+      return `<tr style="${hidden}">
+        <td style="padding:4px 8px;border-bottom:1px solid var(--border);font-family:monospace;font-size:11px;color:#0284c7">${c.name}</td>
+        <td style="padding:4px 8px;border-bottom:1px solid var(--border);color:var(--text3);font-size:11px">${c.displayName||''}</td>
+        <td style="padding:4px 8px;border-bottom:1px solid var(--border);font-size:11px">${typeLabel(c)}</td>
+        <td style="padding:4px 8px;border-bottom:1px solid var(--border);font-size:11px">${ro} ${req}</td>
+      </tr>`;
+    }).join('');
+    body.innerHTML = `<div style="margin-bottom:6px;color:var(--text3)">พบ ${cols.length} คอลัมน์ (สีจางๆ = hidden)</div>
+      <div style="max-height:340px;overflow-y:auto">
+      <table style="border-collapse:collapse;width:100%">
+        <thead><tr>
+          <th style="padding:4px 8px;text-align:left;font-size:11px;color:var(--text3);border-bottom:2px solid var(--border)">Internal Name</th>
+          <th style="padding:4px 8px;text-align:left;font-size:11px;color:var(--text3);border-bottom:2px solid var(--border)">Display Name</th>
+          <th style="padding:4px 8px;text-align:left;font-size:11px;color:var(--text3);border-bottom:2px solid var(--border)">Type / Choices</th>
+          <th style="padding:4px 8px;text-align:left;font-size:11px;color:var(--text3);border-bottom:2px solid var(--border)"></th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div>`;
+  }catch(e){
+    body.innerHTML = `<span style="color:#ef4444">❌ ${e.message}</span>`;
+  }
 }
 
 function renderWpTable(){
