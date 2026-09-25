@@ -329,7 +329,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-25.37</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-25.38</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -714,6 +714,10 @@ tr.pick:hover td{background:var(--bg)}
         <div>
           <label style="font-size:11px;color:var(--text3);font-weight:600">Team (multi)</label>
           <div id="wpfTeamBoxes" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:5px"></div>
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--text3);font-weight:600">Assignee (multi)</label>
+          <div id="wpfAssigneeBoxes" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:5px"></div>
         </div>
         <div>
           <label style="font-size:11px;color:var(--text3);font-weight:600">Department</label>
@@ -5744,6 +5748,21 @@ async function inspectWpColumns(){
   }
 }
 
+// extractWpAssignee: อ่าน Assignee (Person or Group, อาจ multi-value) จาก SP fields
+// Graph API ส่งกลับเป็น object {LookupId, LookupValue} หรือ array ของ objects สำหรับ multi-value
+function extractWpAssignee(f){
+  const raw = f.Assignee;
+  if(!raw) return '';
+  if(Array.isArray(raw)){
+    return raw.map(a=>{
+      const n = resolveAssigneeName(a, a.LookupId);
+      return (n && n!=='-') ? n : (a.LookupValue || '');
+    }).filter(Boolean).join(', ');
+  }
+  const n = resolveAssigneeName(raw, raw.LookupId);
+  return (n && n!=='-') ? n : (typeof raw==='string' ? raw : '');
+}
+
 function renderWpTable(){
   const body = document.getElementById('wpBody');
   if(!body) return;
@@ -5775,7 +5794,8 @@ function renderWpTable(){
     if(col==='due')    return f.Due_x0020_Date || f.DueDate || '';
     if(col==='status') return (f.Status || '').toLowerCase();
     if(col==='ver')    return (f.Version || '').toLowerCase();
-    if(col==='desc')   return (f.Description || '').toLowerCase();
+    if(col==='desc')     return (f.Description || '').toLowerCase();
+    if(col==='assignee') return extractWpAssignee(f).toLowerCase();
     return '';
   };
 
@@ -5809,6 +5829,7 @@ function renderWpTable(){
     thBtn('ver','Version'),
     thBtn('desc','Description'),
     thBtn('team','Team'),
+    thBtn('assignee','Assignee'),
     thBtn('due','Due Date'),
     thBtn('status','Status'),
     `<th style="${thBase}">Commit</th>`,
@@ -5831,7 +5852,7 @@ function renderWpTable(){
       // Group header
       html.push(
         `<tr class="wp-group-hdr" style="background:var(--bg1)">`,
-        `<td colspan="11" style="padding:5px 12px;font-size:12px;font-weight:700;color:var(--primary);border-bottom:1px solid var(--border)">`,
+        `<td colspan="12" style="padding:5px 12px;font-size:12px;font-weight:700;color:var(--primary);border-bottom:1px solid var(--border)">`,
         `📁 <span style="text-transform:uppercase">${key}</span> <span style="font-size:11px;font-weight:400;color:var(--text3)">(${gItems.length} รายการ)</span>`,
         `</td></tr>`
       );
@@ -5853,6 +5874,7 @@ function renderWpRow(it, idx, html, tdSt, fmtD, statusColor){
   const pkg         = f.Package || f.WorkPackage || '—';
   const desc        = f.Description || '';
   const team        = f.Team || '—';
+  const assignee    = extractWpAssignee(f);
   const due         = f.Due_x0020_Date || f.DueDate || null;
   const status      = f.Status || '';
   const version     = f.Version || '—';
@@ -5880,6 +5902,7 @@ function renderWpRow(it, idx, html, tdSt, fmtD, statusColor){
     `<td style="${tdSt}">${version}</td>`,
     `<td style="${tdSt};max-width:180px;color:var(--text2)">${desc || '<span style="color:var(--text3)">—</span>'}</td>`,
     `<td style="${tdSt}">${team}</td>`,
+    `<td style="${tdSt}">${assignee || '<span style="color:var(--text3)">—</span>'}</td>`,
     `<td style="${tdSt}">${fmtD(due)}</td>`,
     `<td style="${tdSt}"><span style="background:${color}20;color:${color};border-radius:5px;padding:2px 7px;font-size:11px;font-weight:600">${status||'—'}</span></td>`,
     `<td style="${tdSt}">${commitBadge}</td>`,
@@ -5917,6 +5940,15 @@ function openWpEdit(id){
       `<label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:12px;background:var(--bg1);border:1px solid var(--border);border-radius:6px;padding:3px 8px">
         <input type="checkbox" data-team="${s}"> ${s}</label>`
     ).join('');
+
+  const aBox = document.getElementById('wpfAssigneeBoxes');
+  if(aBox && !aBox.children.length){
+    const asgns = ['Best','Fah','Hongyok','Ize','Jack','June','Mai','May','Memie','P','Pang','Pari','Si','Stamp','Su','Wim','Yim','Yo'];
+    aBox.innerHTML = asgns.map(s=>
+      `<label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:12px;background:var(--bg1);border:1px solid var(--border);border-radius:6px;padding:3px 8px">
+        <input type="checkbox" data-asgn="${s}"> ${s}</label>`
+    ).join('');
+  }
 
   const dsBox = document.getElementById('wpfDocStatusBoxes');
   if(dsBox && !dsBox.children.length)
@@ -5988,6 +6020,12 @@ function openWpEdit(id){
     cb.checked = teamVals.includes(cb.dataset.team);
   });
 
+  // Assignee checkboxes — Assignee is a Person field (multi-value); extractWpAssignee resolves names
+  const assigneeNames = extractWpAssignee(f).split(',').map(s=>s.trim()).filter(Boolean);
+  document.querySelectorAll('#wpfAssigneeBoxes input[type=checkbox]').forEach(cb=>{
+    cb.checked = assigneeNames.includes(cb.dataset.asgn);
+  });
+
   // DocumentStatsus checkboxes (SP typo: "Statsus" not "Status")
   const dsVals = parseMultiChoice(f.DocumentStatsus || '');
   document.querySelectorAll('#wpfDocStatusBoxes input[type=checkbox]').forEach(cb=>{
@@ -6042,6 +6080,10 @@ async function saveWpItem(){
     .map(cb=>cb.dataset.ds).join(', ');
   const docPostVal = [...document.querySelectorAll('#wpfDocPostBoxes input[type=checkbox]:checked')]
     .map(cb=>cb.dataset.dp).join(', ');
+  // Assignee — multi-value Person field; write via AssigneeStringId (SP lookup multi-value format)
+  const assigneeIds = [...document.querySelectorAll('#wpfAssigneeBoxes input[type=checkbox]:checked')]
+    .map(cb=>getUserId(cb.dataset.asgn)).filter(id=>id!==null);
+  const assigneeStringId = assigneeIds.map(id=>`${id};#`).join(';#');
 
   const gv = id => (document.getElementById(id)||{}).value || null;
 
@@ -6056,6 +6098,8 @@ async function saveWpItem(){
     Status:               gv('wpfStatus') || 'Not Started',
     CommitStatus:         gv('wpfCommitStatus'),
     Team:                 teamVal || null,
+    // Assignee — multi-value Person field; AssigneeStringId uses SP lookup format (id;# per value)
+    AssigneeStringId:     assigneeIds.length ? assigneeStringId : null,
     Department:           gv('wpfDept'),
     // Person_x0020_in_x0020_Charge is a Person field — must write via LookupId (numeric SP User ID)
     Person_x0020_in_x0020_ChargeLookupId: gv('wpfPersonInCharge') ? getUserId(gv('wpfPersonInCharge')) : null,
