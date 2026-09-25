@@ -329,7 +329,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-25.49</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-25.50</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -6185,6 +6185,7 @@ async function saveWpItem(){
   try{
     let savedItemId = _wpEditId;
     if(_wpEditId){
+      console.log('[WP Save] PATCH payload:', JSON.stringify({fields:patchFields},null,2));
       await graphFetch(`/sites/${SITE_ID}/lists/${WORKPLAN_LIST}/items/${_wpEditId}`, {
         method:'PATCH',
         body: JSON.stringify({ fields: patchFields })
