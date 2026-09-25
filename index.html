@@ -329,7 +329,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-25.41</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-25.42</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -6141,10 +6141,9 @@ async function saveWpItem(){
     .map(cb=>cb.dataset.ds).join(', ');
   const docPostVal = [...document.querySelectorAll('#wpfDocPostBoxes input[type=checkbox]:checked')]
     .map(cb=>cb.dataset.dp).join(', ');
-  // Assignee — multi-value Person field; write via AssigneeStringId (SP lookup multi-value format)
+  // Assignee — multi-value Person field (Graph API format uses array of {id} objects, not ;# REST format)
   const assigneeIds = [...document.querySelectorAll('#wpfAssigneeBoxes input[type=checkbox]:checked')]
     .map(cb=>getUserId(cb.dataset.asgn)).filter(id=>id!==null);
-  const assigneeStringId = assigneeIds.map(id=>`${id};#`).join(';#');
 
   const gv = id => (document.getElementById(id)||{}).value || null;
 
@@ -6159,8 +6158,6 @@ async function saveWpItem(){
     Status:               gv('wpfStatus') || 'Not Started',
     CommitStatus:         gv('wpfCommitStatus'),
     Team:                 teamVal || null,
-    // Assignee — multi-value Person field; AssigneeStringId uses SP lookup format (id;# per value)
-    AssigneeStringId:     assigneeIds.length ? assigneeStringId : null,
     Department:           gv('wpfDept'),
     // Person_x0020_in_x0020_Charge — คนจาก Team Post ที่สั่งงาน, แสดงอ่านอย่างเดียว ไม่เขียนจาก BOQ app
     Details:              gv('wpfDetails'),
@@ -6174,6 +6171,12 @@ async function saveWpItem(){
     DocumenttoPost:       docPostVal || null,
     BOQRemark:            gv('wpfRemark'),
   };
+  // Assignee — Graph API format for multi-value Person field: array of {id} objects with odata type hint
+  // (AssigneeStringId with ;# format is REST API only — Graph API returns 400 with that format)
+  if (assigneeIds.length) {
+    patchFields['Assignee@odata.type'] = 'Collection(Edm.Int32)';
+    patchFields['Assignee'] = assigneeIds.map(id => ({id}));
+  }
   // For PATCH: remove null keys so we don't accidentally clear fields we aren't editing
   if(_wpEditId){
     Object.keys(patchFields).forEach(k=>{ if(patchFields[k]===null) delete patchFields[k]; });
