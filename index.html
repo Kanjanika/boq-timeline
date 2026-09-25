@@ -329,7 +329,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-25.50</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-25.51</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -6158,7 +6158,8 @@ async function saveWpItem(){
     Status:               gv('wpfStatus') || 'Not Started',
     CommitStatus:         gv('wpfCommitStatus'),
     Team:                 teamVal || null,
-    Department:           gv('wpfDept'),
+    // Department removed — may conflict with SP system field; TBD correct internal name
+    // Department:           gv('wpfDept'),
     // Person_x0020_in_x0020_Charge — คนจาก Team Post ที่สั่งงาน, แสดงอ่านอย่างเดียว ไม่เขียนจาก BOQ app
     Details:              gv('wpfDetails'),
     // Link_x0020_ = "Link ข้อมูลส่งให้ Team BOQ" — actual SP internal name from column inspector
