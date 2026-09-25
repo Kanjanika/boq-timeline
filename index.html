@@ -329,7 +329,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-25.26</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-25.27</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -577,7 +577,7 @@ tr.pick:hover td{background:var(--bg)}
   <div id="myWorkBody" style="margin-top:14px"></div>
 </div>
 
-<!-- ============ PAGE · BOQ Team Work Plan (build 2026-09-25.26) ============ -->
+<!-- ============ PAGE · BOQ Team Work Plan (build 2026-09-25.27) ============ -->
 <div class="page" id="pgWorkPlan">
   <!-- Toolbar -->
   <div class="tools" style="flex-wrap:wrap;row-gap:8px;align-items:center">
@@ -5760,19 +5760,19 @@ function openWpEdit(id){
   // --- Init dropdowns (once) ---
   const svc = document.getElementById('wpfService');
   if(svc && svc.options.length<=1)
-    svc.innerHTML = `<option value="">— เลือก —</option>` + WP_SERVICE_TYPES.map(s=>`<option>${escHtml(s)}</option>`).join('');
+    svc.innerHTML = `<option value="">— เลือก —</option>` + WP_SERVICE_TYPES.map(s=>`<option>${s}</option>`).join('');
 
   const pn = document.getElementById('wpfProjName');
   if(pn && pn.options.length<=1)
-    pn.innerHTML = `<option value="">— เลือก —</option>` + WP_PROJECT_NAMES.map(s=>`<option>${escHtml(s)}</option>`).join('');
+    pn.innerHTML = `<option value="">— เลือก —</option>` + WP_PROJECT_NAMES.map(s=>`<option>${s}</option>`).join('');
 
   const pt = document.getElementById('wpfProjType');
   if(pt && pt.options.length<=1)
-    pt.innerHTML = `<option value="">— เลือก —</option>` + WP_PROJECT_TYPES.map(s=>`<option>${escHtml(s)}</option>`).join('');
+    pt.innerHTML = `<option value="">— เลือก —</option>` + WP_PROJECT_TYPES.map(s=>`<option>${s}</option>`).join('');
 
   const dept = document.getElementById('wpfDept');
   if(dept && dept.options.length<=1)
-    dept.innerHTML = `<option value="">— เลือก —</option>` + WP_DEPT_CHOICES.map(s=>`<option>${escHtml(s)}</option>`).join('');
+    dept.innerHTML = `<option value="">— เลือก —</option>` + WP_DEPT_CHOICES.map(s=>`<option>${s}</option>`).join('');
 
   const tBox = document.getElementById('wpfTeamBoxes');
   if(tBox && !tBox.children.length)
