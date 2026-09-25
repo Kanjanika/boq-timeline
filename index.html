@@ -329,7 +329,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-25.38</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-25.40</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -717,7 +717,16 @@ tr.pick:hover td{background:var(--bg)}
         </div>
         <div>
           <label style="font-size:11px;color:var(--text3);font-weight:600">Assignee (multi)</label>
-          <div id="wpfAssigneeBoxes" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:5px"></div>
+          <div style="position:relative;margin-top:3px" id="wpfAssigneeWrap">
+            <button type="button" id="wpfAssigneeBtn" onclick="toggleWpAssigneeDropdown(event)"
+              style="width:100%;border:1px solid var(--border);border-radius:7px;padding:6px 9px;background:var(--bg1);color:var(--text1);font-size:13px;text-align:left;cursor:pointer;display:flex;justify-content:space-between;align-items:center;box-sizing:border-box">
+              <span id="wpfAssigneeBtnLabel" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">— เลือก —</span>
+              <span style="color:var(--text3);margin-left:6px;font-size:10px">▾</span>
+            </button>
+            <div id="wpfAssigneeDropdown" style="display:none;position:absolute;top:calc(100% + 2px);left:0;right:0;background:var(--bg1);border:1px solid var(--border);border-radius:7px;z-index:300;padding:8px;box-shadow:0 4px 16px rgba(0,0,0,.14)">
+              <div id="wpfAssigneeBoxes" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px"></div>
+            </div>
+          </div>
         </div>
         <div>
           <label style="font-size:11px;color:var(--text3);font-weight:600">Department</label>
@@ -1343,6 +1352,8 @@ const WORKPLAN_LIST = '1a597455-0cf9-484b-a414-bd7b4f6df69e'; // BOQ Team Work P
 const STEP_LIST      = 'acd6ed66-f49c-4002-bb64-474bc904c91e'; // BOQ Step Tracking
 const PROCREF_LIST   = '79daccb5-6f30-4c8c-99a4-6f95ae59142a'; // Procurement Plan Reference
 const GRAPH = 'https://graph.microsoft.com/v1.0';
+const GRAPH_BETA = 'https://graph.microsoft.com/beta';
+const SP_SITE_URL = 'https://costplan1.sharepoint.com/sites/BOQTeam'; // ใช้กับ SharePoint REST API /_api/
 // build 2026-08-20.1: BOQ Date History list — resolved dynamically by name so no GUID needs to be hardcoded
 let HISTORY_LIST = null;
 
@@ -1605,6 +1616,19 @@ async function graphFetch(path, opts={}){
   });
   if(!res.ok){ const t=await res.text().catch(()=>res.statusText); throw new Error(`Graph ${res.status}: ${t}`); }
   return res.status===204? null : res.json();
+}
+// spFetch: เรียก SharePoint REST API /_api/... โดยตรง (ใช้ Graph token เดิมซึ่ง scope Sites.ReadWrite.All รองรับทั้ง Graph และ SP REST)
+// ใช้สำหรับฟีเจอร์ที่ Graph v1.0 ไม่รองรับ เช่น list item AttachmentFiles
+async function spFetch(apiPath){
+  const token = await getToken();
+  const res = await fetch(`${SP_SITE_URL}${apiPath}`,{
+    headers:{
+      'Authorization':`Bearer ${token}`,
+      'Accept':'application/json;odata=nometadata'
+    }
+  });
+  if(!res.ok){ const t=await res.text().catch(()=>res.statusText); throw new Error(`SP ${res.status}: ${t}`); }
+  return res.json();
 }
 // Graph มักตัด response เป็นหลายหน้า (@odata.nextLink) โดยเฉพาะตอน $expand=fields แม้จะขอ $top ใหญ่ๆ ก็ตาม
 // ถ้าดึงแค่หน้าแรกหน้าเดียว รายการที่อยู่หน้าถัดไป (เช่นโครงการจริงที่เพิ่ง Post เข้ามาใหม่) จะหายไปเงียบๆ
@@ -5699,6 +5723,27 @@ function wpSortBy(col){
   renderWpTable();
 }
 
+// Assignee dropdown helpers
+function updateWpAssigneeBtnLabel(){
+  const checked = [...document.querySelectorAll('#wpfAssigneeBoxes input[type=checkbox]:checked')]
+    .map(cb=>cb.dataset.asgn).filter(Boolean);
+  const lbl = document.getElementById('wpfAssigneeBtnLabel');
+  if(lbl) lbl.textContent = checked.length ? checked.join(', ') : '— เลือก —';
+}
+function toggleWpAssigneeDropdown(e){
+  e && e.stopPropagation();
+  const dd = document.getElementById('wpfAssigneeDropdown');
+  if(!dd) return;
+  dd.style.display = dd.style.display === 'none' ? '' : 'none';
+}
+document.addEventListener('click', function(e){
+  const wrap = document.getElementById('wpfAssigneeWrap');
+  if(wrap && !wrap.contains(e.target)){
+    const dd = document.getElementById('wpfAssigneeDropdown');
+    if(dd) dd.style.display = 'none';
+  }
+});
+
 async function inspectWpColumns(){
   const panel = document.getElementById('wpColPanel');
   const body = document.getElementById('wpColBody');
@@ -5945,8 +5990,8 @@ function openWpEdit(id){
   if(aBox && !aBox.children.length){
     const asgns = ['Best','Fah','Hongyok','Ize','Jack','June','Mai','May','Memie','P','Pang','Pari','Si','Stamp','Su','Wim','Yim','Yo'];
     aBox.innerHTML = asgns.map(s=>
-      `<label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:12px;background:var(--bg1);border:1px solid var(--border);border-radius:6px;padding:3px 8px">
-        <input type="checkbox" data-asgn="${s}"> ${s}</label>`
+      `<label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12.5px;padding:4px 6px;border-radius:5px;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''">
+        <input type="checkbox" data-asgn="${s}" onchange="updateWpAssigneeBtnLabel()"> ${s}</label>`
     ).join('');
   }
 
@@ -5997,19 +6042,21 @@ function openWpEdit(id){
   document.getElementById('wpfLinkBoq').value = linkUrl;
   document.getElementById('wpfRemark').value = f.BOQRemark || '';
   document.getElementById('wpSaveStatus').textContent = '';
-  // Load attachments
+  // Load attachments via SharePoint REST API (Graph v1.0 ไม่มี endpoint นี้)
   const attEl = document.getElementById('wpfAttachments');
   if(id && attEl){
     attEl.innerHTML = '<span style="color:var(--text3)">⏳ กำลังโหลด...</span>';
-    graphFetch(`/sites/${SITE_ID}/lists/${WORKPLAN_LIST}/items/${id}/attachments`).then(res=>{
+    spFetch(`/_api/web/lists(guid'${WORKPLAN_LIST}')/items(${id})/AttachmentFiles`).then(res=>{
       const files = (res && res.value) || [];
       if(!files.length){ attEl.innerHTML = '<span style="color:var(--text3)">— ไม่มีไฟล์แนบ —</span>'; return; }
-      attEl.innerHTML = files.map(a=>
-        `<a href="${a.contentUrl}" target="_blank" rel="noopener"
-           style="display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--primary);text-decoration:none;background:var(--bg1);border:1px solid var(--border);border-radius:6px;padding:3px 8px;margin:2px">
-          📎 ${a.name}</a>`
-      ).join('');
-    }).catch(()=>{ attEl.innerHTML = '<span style="color:var(--text3)">— โหลดไม่สำเร็จ —</span>'; });
+      attEl.innerHTML = files.map(a=>{
+        const url = `https://costplan1.sharepoint.com${a.ServerRelativeUrl}`;
+        const name = a.FileName || a.FileName;
+        return `<a href="${url}" target="_blank" rel="noopener"
+           style="display:block;font-size:12px;color:var(--primary);text-decoration:none;padding:3px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+          📎 ${name}</a>`;
+      }).join('');
+    }).catch(e=>{ attEl.innerHTML = `<span style="color:var(--text3)">— โหลดไม่สำเร็จ —</span>`; console.warn('Attachments error:',e); });
   } else if(attEl){
     attEl.innerHTML = '<span style="color:var(--text3)">— บันทึกก่อนเพื่อเพิ่มไฟล์แนบ —</span>';
   }
@@ -6025,6 +6072,7 @@ function openWpEdit(id){
   document.querySelectorAll('#wpfAssigneeBoxes input[type=checkbox]').forEach(cb=>{
     cb.checked = assigneeNames.includes(cb.dataset.asgn);
   });
+  updateWpAssigneeBtnLabel();
 
   // DocumentStatsus checkboxes (SP typo: "Statsus" not "Status")
   const dsVals = parseMultiChoice(f.DocumentStatsus || '');
