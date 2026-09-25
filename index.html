@@ -329,7 +329,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-25.45</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-25.46</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -6173,10 +6173,13 @@ async function saveWpItem(){
     DocumenttoPost:       docPostVal || null,
     BOQRemark:            gv('wpfRemark'),
   };
-  // Assignee — Graph API Person field: send as array of {email} objects
-  // (LookupId integer formats all return 400 for multi-value Person; email-based identity is correct for Graph API)
+  // Assignee — Graph API Person field: loginName format with i:0#.f|membership| claims prefix
+  // (LookupId and bare {email} formats all return 400; loginName is the SP identity format Graph expects)
   if (assigneeNames.length) {
-    const aObjs = assigneeNames.map(n=>_nickEmail[n]).filter(Boolean).map(email=>({email}));
+    const aObjs = assigneeNames
+      .map(n => _nickEmail[n])
+      .filter(Boolean)
+      .map(email => ({ loginName: `i:0#.f|membership|${email}` }));
     if (aObjs.length) patchFields['Assignee'] = aObjs;
   }
   // debug: log exact payload before PATCH so we can confirm format
