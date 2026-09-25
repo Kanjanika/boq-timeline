@@ -6027,9 +6027,13 @@ function openWpEdit(id){
   document.getElementById('wpfCommitStatus').value = f.CommitStatus || '';
   document.getElementById('wpfDept').value = f.Department || '';
   // Person_x0020_in_x0020_Charge คือคนจาก Team Post ที่สั่งงานเข้ามา — ไม่ใช่ BOQ team member
-  // Graph returns {LookupId, LookupValue} object; แสดงชื่อจาก LookupValue โดยตรง (อ่านอย่างเดียว)
+  // Graph expand=fields คืนค่า Person field เป็น string หรือ {LookupId, LookupValue} object ขึ้นกับ context
+  // รองรับทั้งสองรูปแบบ: string → ใช้ตรงๆ, object → ดึง LookupValue
   const picRaw = f.Person_x0020_in_x0020_Charge;
-  const picName = picRaw ? (picRaw.LookupValue || '') : '';
+  console.log('[PIC debug] raw=', picRaw, '| LookupId=', f.Person_x0020_in_x0020_ChargeLookupId, '| keys=', Object.keys(f).filter(k=>k.toLowerCase().includes('person')));
+  const picName = picRaw
+    ? (typeof picRaw === 'object' ? (picRaw.LookupValue || '') : String(picRaw))
+    : '';
   document.getElementById('wpfPersonInCharge').value = picName;
   document.getElementById('wpfStart').value = toDateInput(f.StartDate);
 
