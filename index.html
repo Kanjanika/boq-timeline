@@ -329,7 +329,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-25.48</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-25.49</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -6135,8 +6135,8 @@ async function saveWpItem(){
   if(!title){ toastMsg('⚠️ กรุณาเลือก Project Name'); return; }
 
   // collect checkbox groups
-  const teamArr = [...document.querySelectorAll('#wpfTeamBoxes input[type=checkbox]:checked')]
-    .map(cb=>cb.dataset.team).filter(Boolean);   // send as array — Graph API Multi-Choice requires array
+  const teamVal = [...document.querySelectorAll('#wpfTeamBoxes input[type=checkbox]:checked')]
+    .map(cb=>cb.dataset.team).filter(Boolean).join(', '); // Team is text field → string
   const docStatusVal = [...document.querySelectorAll('#wpfDocStatusBoxes input[type=checkbox]:checked')]
     .map(cb=>cb.dataset.ds).join(', ');
   const docPostVal = [...document.querySelectorAll('#wpfDocPostBoxes input[type=checkbox]:checked')]
@@ -6157,7 +6157,7 @@ async function saveWpItem(){
     Version:              gv('wpfVersion'),
     Status:               gv('wpfStatus') || 'Not Started',
     CommitStatus:         gv('wpfCommitStatus'),
-    Team:                 teamArr.length ? teamArr : null,
+    Team:                 teamVal || null,
     Department:           gv('wpfDept'),
     // Person_x0020_in_x0020_Charge — คนจาก Team Post ที่สั่งงาน, แสดงอ่านอย่างเดียว ไม่เขียนจาก BOQ app
     Details:              gv('wpfDetails'),
@@ -6218,7 +6218,7 @@ async function saveWpItem(){
                 'IF-MATCH': '*',
               },
               body: JSON.stringify({
-                'AssigneeId':{'results': assigneeIds}
+                'AssigneeId': assigneeIds   // odata=nometadata: plain array [12,33], no {results} wrapper
               })
             }
           );
