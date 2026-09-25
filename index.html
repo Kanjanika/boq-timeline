@@ -6030,9 +6030,12 @@ function openWpEdit(id){
   // Graph expand=fields คืนค่า Person field เป็น string หรือ {LookupId, LookupValue} object ขึ้นกับ context
   // รองรับทั้งสองรูปแบบ: string → ใช้ตรงๆ, object → ดึง LookupValue
   const picRaw = f.Person_x0020_in_x0020_Charge;
-  console.log('[PIC debug] raw=', picRaw, '| LookupId=', f.Person_x0020_in_x0020_ChargeLookupId, '| keys=', Object.keys(f).filter(k=>k.toLowerCase().includes('person')));
+  console.log('[PIC debug] raw JSON=', JSON.stringify(picRaw), '| LookupId=', f.Person_x0020_in_x0020_ChargeLookupId);
   const picName = picRaw
-    ? (typeof picRaw === 'object' ? (picRaw.LookupValue || '') : String(picRaw))
+    ? (typeof picRaw === 'object'
+        ? (picRaw.LookupValue || picRaw.lookupValue || picRaw.displayName || picRaw.DisplayName
+           || picRaw.Title || picRaw.title || picRaw.Email || picRaw.email || picRaw.Name || '')
+        : String(picRaw))
     : '';
   document.getElementById('wpfPersonInCharge').value = picName;
   document.getElementById('wpfStart').value = toDateInput(f.StartDate);
