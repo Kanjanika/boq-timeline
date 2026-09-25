@@ -329,7 +329,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-25.31</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-25.34</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -2439,11 +2439,16 @@ async function commitAndGenerateSteps(task, sug, selectedSubs, editedStart, edit
   // เป็นแค่ค่า AI แนะนำที่แก้ไม่ได้) fallback เป็นค่า AI แนะนำ (sug.start/sug.finish) ถ้าไม่ได้ส่งมา
   const start = editedStart || sug.start;
   const finish = editedFinish || sug.finish;
+  // build 2026-09-25.33: map subs → WP Team choices (EE/AC/SN/FP → 'MEP') แล้วเขียนลง Work Plan Team field ด้วย
+  const MEP_SUB_SET = new Set(MEP_SUBTEAMS);
+  const WP_TEAM_VALID = new Set(['ST','AR&ID','MEP','Budget']);
+  const wpTeamVal = [...new Set(subs.map(s => MEP_SUB_SET.has(s) ? 'MEP' : s))].filter(s => WP_TEAM_VALID.has(s)).join(', ');
   await graphFetch(`/sites/${SITE_ID}/lists/${WORKPLAN_LIST}/items/${task.itemId}`, {
     method:'PATCH',
     body: JSON.stringify({ fields: {
       CommitStatus:'Committed', Status:'Not Started', CommittedFinish: toISO(finish),  // build 2026-08-25.10: เพิ่ม Status:'Not Started' เพื่อให้รายการใหม่ผ่าน isActive และแสดงใน Timeline ทันที
-      AISuggestStart: toISO(start), AISuggestFinish: toISO(finish), AISuggestAssignee: sug.who
+      AISuggestStart: toISO(start), AISuggestFinish: toISO(finish), AISuggestAssignee: sug.who,
+      Team: wpTeamVal || null  // build 2026-09-25.33: กรอก Team ใน Work Plan ตามทีมที่ PCM ติ๊กไว้ตอน Commit
     }})
   });
   // build 2026-08-25 BugFix: เดิมลบ Step ด้วย Project+Package ครอบคลุมทั้งหมด ทำให้ Commit Pretender ลบ Blank BOQ
@@ -5729,6 +5734,7 @@ function renderWpTable(){
     if(col==='due')    return f.Due_x0020_Date || f.DueDate || '';
     if(col==='status') return (f.Status || '').toLowerCase();
     if(col==='ver')    return (f.Version || '').toLowerCase();
+    if(col==='desc')   return (f.Description || '').toLowerCase();
     return '';
   };
 
@@ -5759,10 +5765,11 @@ function renderWpTable(){
     thBtn('name','ชื่อโครงการ'),
     thBtn('pkg','Package'),
     thBtn('svc','Service Type'),
+    thBtn('ver','Version'),
+    thBtn('desc','Description'),
     thBtn('team','Team'),
     thBtn('due','Due Date'),
     thBtn('status','Status'),
-    thBtn('ver','Version'),
     `<th style="${thBase}">Commit</th>`,
     `<th style="${thBase}"></th>`,
     `</tr></thead><tbody>`,
@@ -5783,8 +5790,8 @@ function renderWpTable(){
       // Group header
       html.push(
         `<tr class="wp-group-hdr" style="background:var(--bg1)">`,
-        `<td colspan="10" style="padding:5px 12px;font-size:12px;font-weight:700;color:var(--primary);border-bottom:1px solid var(--border)">`,
-        `📁 ${key} <span style="font-size:11px;font-weight:400;color:var(--text3)">(${gItems.length} รายการ)</span>`,
+        `<td colspan="11" style="padding:5px 12px;font-size:12px;font-weight:700;color:var(--primary);border-bottom:1px solid var(--border)">`,
+        `📁 <span style="text-transform:uppercase">${key}</span> <span style="font-size:11px;font-weight:400;color:var(--text3)">(${gItems.length} รายการ)</span>`,
         `</td></tr>`
       );
       gItems.forEach(it => renderWpRow(it, ++rowNum, html, tdSt, fmtD, statusColor));
@@ -5803,6 +5810,7 @@ function renderWpRow(it, idx, html, tdSt, fmtD, statusColor){
   const name        = f.Title || f.Project_x0020_Name || '—';
   const service     = f.Service_x0020_Type || f.ServiceType || '—';
   const pkg         = f.Package || f.WorkPackage || '—';
+  const desc        = f.Description || '';
   const team        = f.Team || '—';
   const due         = f.Due_x0020_Date || f.DueDate || null;
   const status      = f.Status || '';
@@ -5825,13 +5833,14 @@ function renderWpRow(it, idx, html, tdSt, fmtD, statusColor){
     ` onmouseout="if(this.dataset.id!=='${_wpEditId}')this.style.background=''"`,
     ` onclick="openWpEdit('${it.id}')">`,
     `<td style="${tdSt};color:var(--text3);font-size:11px">${idx}</td>`,
-    `<td style="${tdSt};font-weight:600;max-width:200px">${name}</td>`,
+    `<td style="${tdSt};font-weight:600;max-width:200px;text-transform:uppercase">${name}</td>`,
     `<td style="${tdSt}">${pkg}</td>`,
     `<td style="${tdSt}">${service}</td>`,
+    `<td style="${tdSt}">${version}</td>`,
+    `<td style="${tdSt};max-width:180px;color:var(--text2)">${desc || '<span style="color:var(--text3)">—</span>'}</td>`,
     `<td style="${tdSt}">${team}</td>`,
     `<td style="${tdSt}">${fmtD(due)}</td>`,
     `<td style="${tdSt}"><span style="background:${color}20;color:${color};border-radius:5px;padding:2px 7px;font-size:11px;font-weight:600">${status||'—'}</span></td>`,
-    `<td style="${tdSt}">${version}</td>`,
     `<td style="${tdSt}">${commitBadge}</td>`,
     `<td style="${tdSt}"><button class="btn btn2" style="padding:3px 8px;font-size:11px" onclick="event.stopPropagation();openWpEdit('${it.id}')">✏️ แก้ไข</button></td>`,
     `</tr>`
