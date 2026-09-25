@@ -329,7 +329,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-25.46</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-25.47</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -6144,8 +6144,6 @@ async function saveWpItem(){
   // Assignee — checked nickname list (e.g. ['Hongyok','Jack'])
   const assigneeNames = [...document.querySelectorAll('#wpfAssigneeBoxes input[type=checkbox]:checked')]
     .map(cb=>cb.dataset.asgn).filter(Boolean);
-  // Build nickname→email map by reversing USER_MAP (email→nickname)
-  const _nickEmail = Object.fromEntries(Object.entries(USER_MAP).map(([e,n])=>[n,e]));
 
   const gv = id => (document.getElementById(id)||{}).value || null;
 
@@ -6172,18 +6170,8 @@ async function saveWpItem(){
     DocumentStatsus:      docStatusVal || null,  // SP typo: "Statsus"
     DocumenttoPost:       docPostVal || null,
     BOQRemark:            gv('wpfRemark'),
+    // Assignee saved separately via SP REST API (Graph API does not support multi-value Person field write)
   };
-  // Assignee — Graph API Person field: loginName format with i:0#.f|membership| claims prefix
-  // (LookupId and bare {email} formats all return 400; loginName is the SP identity format Graph expects)
-  if (assigneeNames.length) {
-    const aObjs = assigneeNames
-      .map(n => _nickEmail[n])
-      .filter(Boolean)
-      .map(email => ({ loginName: `i:0#.f|membership|${email}` }));
-    if (aObjs.length) patchFields['Assignee'] = aObjs;
-  }
-  // debug: log exact payload before PATCH so we can confirm format
-  if(_wpEditId) console.log('[WP Save] PATCH fields:', JSON.stringify(patchFields));
   // For PATCH: remove null keys so we don't accidentally clear fields we aren't editing
   if(_wpEditId){
     Object.keys(patchFields).forEach(k=>{ if(patchFields[k]===null) delete patchFields[k]; });
@@ -6195,6 +6183,7 @@ async function saveWpItem(){
   if(btn) btn.disabled = true;
 
   try{
+    let savedItemId = _wpEditId;
     if(_wpEditId){
       await graphFetch(`/sites/${SITE_ID}/lists/${WORKPLAN_LIST}/items/${_wpEditId}`, {
         method:'PATCH',
@@ -6202,14 +6191,53 @@ async function saveWpItem(){
       });
       const idx = _wpItems.findIndex(x=>String(x.id)===_wpEditId);
       if(idx>=0) Object.assign(_wpItems[idx].fields, patchFields);
-      if(statusEl) statusEl.textContent = '✅ บันทึกแล้ว';
-      toastMsg('✅ บันทึกสำเร็จ');
     } else {
       const res = await graphFetch(`/sites/${SITE_ID}/lists/${WORKPLAN_LIST}/items`, {
         method:'POST',
         body: JSON.stringify({ fields: patchFields })
       });
-      if(res) _wpItems.unshift(res);
+      if(res){ _wpItems.unshift(res); savedItemId = res.id; }
+    }
+
+    // Assignee — SP REST API MERGE (multi-value Person field; Graph API rejects all formats for write)
+    if(savedItemId && assigneeNames.length){
+      const assigneeIds = assigneeNames.map(n=>getUserId(n)).filter(Boolean);
+      if(assigneeIds.length){
+        try{
+          const spToken = await getSpToken();
+          const spResp = await fetch(
+            `${SP_SITE_URL}/_api/web/lists/getById('${WORKPLAN_LIST}')/items(${savedItemId})`,
+            {
+              method:'POST',
+              headers:{
+                'Authorization': `Bearer ${spToken}`,
+                'Accept': 'application/json;odata=verbose',
+                'Content-Type': 'application/json;odata=verbose',
+                'X-HTTP-Method': 'MERGE',
+                'IF-MATCH': '*',
+              },
+              body: JSON.stringify({
+                '__metadata':{'type':'SP.Data.Work_x0020_PlanListItem'},
+                'AssigneeId':{'results': assigneeIds}
+              })
+            }
+          );
+          if(!spResp.ok && spResp.status!==204){
+            const errText = await spResp.text();
+            console.warn('[WP Save] Assignee SP REST error:', spResp.status, errText);
+            toastMsg('⚠️ บันทึกแล้ว แต่ Assignee อาจไม่บันทึก (' + spResp.status + ')');
+          }
+        }catch(eAsgn){
+          console.warn('[WP Save] Assignee error:', eAsgn);
+          toastMsg('⚠️ บันทึกแล้ว แต่ Assignee error: ' + eAsgn.message);
+        }
+      }
+    }
+
+    if(_wpEditId){
+      if(statusEl) statusEl.textContent = '✅ บันทึกแล้ว';
+      toastMsg('✅ บันทึกสำเร็จ');
+    } else {
       if(statusEl) statusEl.textContent = '✅ สร้างสำเร็จ';
       toastMsg('✅ สร้างรายการใหม่สำเร็จ');
       closeWpEdit();
