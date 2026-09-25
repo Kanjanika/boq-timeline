@@ -329,7 +329,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-25.42</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-25.43</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -6171,11 +6171,10 @@ async function saveWpItem(){
     DocumenttoPost:       docPostVal || null,
     BOQRemark:            gv('wpfRemark'),
   };
-  // Assignee — Graph API format for multi-value Person field: array of {id} objects with odata type hint
-  // (AssigneeStringId with ;# format is REST API only — Graph API returns 400 with that format)
+  // Assignee — Graph API multi-value Person field: array of {LookupId} objects (mirrors what Graph returns on read)
+  // Note: @odata.type annotation causes "invalidRequest"; {LookupId} is correct shape for Graph API Person fields
   if (assigneeIds.length) {
-    patchFields['Assignee@odata.type'] = 'Collection(Edm.Int32)';
-    patchFields['Assignee'] = assigneeIds.map(id => ({id}));
+    patchFields['Assignee'] = assigneeIds.map(id => ({LookupId: id}));
   }
   // For PATCH: remove null keys so we don't accidentally clear fields we aren't editing
   if(_wpEditId){
