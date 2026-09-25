@@ -639,7 +639,10 @@ tr.pick:hover td{background:var(--bg)}
     </div>
     <!-- Edit Panel (hidden by default) — build 2026-09-25.26: expanded to match actual SP columns -->
     <div id="wpEditPanel" style="display:none;min-width:320px;max-width:360px;background:var(--bg2);border:1.5px solid var(--border);border-radius:12px;padding:16px 18px;font-size:13px;flex-shrink:0;max-height:90vh;overflow-y:auto">
-      <div style="font-weight:700;font-size:14px;margin-bottom:12px" id="wpEditTitle">แก้ไขรายการ</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div style="font-weight:700;font-size:14px" id="wpEditTitle">แก้ไขรายการ</div>
+        <button onclick="closeWpEdit()" title="ปิด" style="background:none;border:none;cursor:pointer;font-size:16px;color:var(--text3);line-height:1;padding:2px 4px;border-radius:5px;transition:background .15s" onmouseover="this.style.background='var(--border)'" onmouseout="this.style.background='none'">✕</button>
+      </div>
       <div style="display:flex;flex-direction:column;gap:10px">
 
         <!-- Section: Project Info -->
