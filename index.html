@@ -329,7 +329,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-25.51</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-28.52</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -6164,10 +6164,11 @@ async function saveWpItem(){
     Details:              gv('wpfDetails'),
     // Link_x0020_ = "Link ข้อมูลส่งให้ Team BOQ" — actual SP internal name from column inspector
     'Link_x0020_':        gv('wpfLinkBoq') ? { url: gv('wpfLinkBoq'), description: 'Link' } : null,
-    StartDate:            gv('wpfStart'),
-    FinishDate:           gv('wpfFinish'),
-    Due_x0020_Date:       gv('wpfDue'),
-    CommittedFinish:      gv('wpfCommittedFinish'),
+    // Date fields: Graph API requires ISO 8601 with Z for DateTime SP columns
+    StartDate:            gv('wpfStart') ? gv('wpfStart')+'T00:00:00Z' : null,
+    FinishDate:           gv('wpfFinish') ? gv('wpfFinish')+'T00:00:00Z' : null,
+    Due_x0020_Date:       gv('wpfDue') ? gv('wpfDue')+'T00:00:00Z' : null,
+    CommittedFinish:      gv('wpfCommittedFinish') ? gv('wpfCommittedFinish')+'T00:00:00Z' : null,
     DocumentStatsus:      docStatusVal || null,  // SP typo: "Statsus"
     DocumenttoPost:       docPostVal || null,
     BOQRemark:            gv('wpfRemark'),
