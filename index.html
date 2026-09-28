@@ -329,7 +329,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-28.54</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-28.55</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -6161,9 +6161,8 @@ async function saveWpItem(){
     Status:               gv('wpfStatus') || 'Not Started',
     CommitStatus:         gv('wpfCommitStatus'),
     Team:                 teamVal || null,
-    Department:           gv('wpfDept'),
-    // Details: WRONG field name — "Field 'Details' is not recognized" → find correct SP internal name
-    // Details:              gv('wpfDetails'),
+    // Department removed — suspected SP system field conflict (causes InvalidClientInput 400)
+    // Details removed — confirmed wrong SP internal field name (Graph 400: "Field 'Details' is not recognized")
     // SP REST hyperlink uses capital Url/Description (unlike Graph API lowercase url)
     'Link_x0020_':        gv('wpfLinkBoq') ? { Url: gv('wpfLinkBoq'), Description: 'Link' } : null,
     StartDate:            toDate(gv('wpfStart')),
@@ -6209,6 +6208,9 @@ async function saveWpItem(){
       );
       if(!spResp.ok && spResp.status !== 204){
         const errText = await spResp.text();
+        console.error('[WP Save] SP REST full error body:', errText);
+        // Parse to find the specific field name
+        try{ const errObj = JSON.parse(errText); console.error('[WP Save] SP REST error detail:', JSON.stringify(errObj,null,2)); }catch(_){}
         throw new Error(`SP REST ${spResp.status}: ${errText}`);
       }
       const idx = _wpItems.findIndex(x=>String(x.id)===_wpEditId);
