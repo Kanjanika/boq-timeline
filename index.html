@@ -330,7 +330,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-29.71</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-29.72</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -2556,7 +2556,9 @@ async function commitAndGenerateSteps(task, sug, selectedSubs, editedStart, edit
   // build 2026-09-25.33: map subs → WP Team choices (EE/AC/SN/FP → 'MEP') แล้วเขียนลง Work Plan Team field ด้วย
   const MEP_SUB_SET = new Set(MEP_SUBTEAMS);
   const WP_TEAM_VALID = new Set(['ST','AR&ID','MEP','Budget']);
-  const wpTeamVal = [...new Set(subs.map(s => MEP_SUB_SET.has(s) ? 'MEP' : s))].filter(s => WP_TEAM_VALID.has(s)).join(', ');
+  // build 2026-09-29.72: เปลี่ยนจาก .join(', ') → [0] เพราะ Team column ใน Work Plan เป็น single-choice field
+  // ถ้าส่ง "AR&ID, Budget" (มีคอมม่า) SharePoint จะตอบ 500 generalException ทันที — เอาทีมแรกที่ valid ไว้พอ
+  const wpTeamVal = [...new Set(subs.map(s => MEP_SUB_SET.has(s) ? 'MEP' : s))].filter(s => WP_TEAM_VALID.has(s))[0] || '';
   // build 2026-09-29.70: strip :version suffix อีกครั้งที่นี่ (belt-and-suspenders) — _liveTask ที่ cache ไว้ก่อน fix .68
   // อาจยังมี itemId แบบ "439:1" อยู่ ทำให้ PATCH URL เป็น /items/439:1 → Graph 500 generalException
   const safeTaskId = String(task.itemId).split(':')[0];
