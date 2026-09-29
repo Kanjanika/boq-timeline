@@ -330,7 +330,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-29.70</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-29.71</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -2561,13 +2561,22 @@ async function commitAndGenerateSteps(task, sug, selectedSubs, editedStart, edit
   // อาจยังมี itemId แบบ "439:1" อยู่ ทำให้ PATCH URL เป็น /items/439:1 → Graph 500 generalException
   const safeTaskId = String(task.itemId).split(':')[0];
   console.log('[commitAndGenerateSteps] task.itemId raw:', task.itemId, '→ safeTaskId:', safeTaskId);
+  // build 2026-09-29.71: สร้าง PATCH body แบบ dynamic — ใช้ undefined (JSON.stringify จะ drop ออก) แทน null
+  // เพราะ SharePoint บาง field (เช่น Team, AISuggestAssignee) ถ้าส่ง null ไปตรงๆ จะได้ 500 generalException
+  // แทนที่จะเป็น 400 Bad Request ที่มีรายละเอียด — งงมากถ้าไม่รู้สาเหตุ
+  const patchFields = {
+    CommitStatus: 'Committed',
+    Status: 'Not Started',  // build 2026-08-25.10: เพื่อให้รายการใหม่ผ่าน isActive และแสดงใน Timeline ทันที
+    CommittedFinish: finish ? toISO(finish) : undefined,
+    AISuggestStart: start ? toISO(start) : undefined,
+    AISuggestFinish: finish ? toISO(finish) : undefined,
+    AISuggestAssignee: sug.who || undefined,
+    Team: wpTeamVal || undefined,  // build 2026-09-25.33: กรอก Team ใน Work Plan ตามทีมที่ PCM ติ๊กไว้ตอน Commit
+  };
+  console.log('[commitAndGenerateSteps] PATCH', safeTaskId, JSON.stringify({fields: patchFields}));
   await graphFetch(`/sites/${SITE_ID}/lists/${WORKPLAN_LIST}/items/${safeTaskId}`, {
     method:'PATCH',
-    body: JSON.stringify({ fields: {
-      CommitStatus:'Committed', Status:'Not Started', CommittedFinish: toISO(finish),  // build 2026-08-25.10: เพิ่ม Status:'Not Started' เพื่อให้รายการใหม่ผ่าน isActive และแสดงใน Timeline ทันที
-      AISuggestStart: toISO(start), AISuggestFinish: toISO(finish), AISuggestAssignee: sug.who,
-      Team: wpTeamVal || null  // build 2026-09-25.33: กรอก Team ใน Work Plan ตามทีมที่ PCM ติ๊กไว้ตอน Commit
-    }})
+    body: JSON.stringify({ fields: patchFields })
   });
   // build 2026-08-25 BugFix: เดิมลบ Step ด้วย Project+Package ครอบคลุมทั้งหมด ทำให้ Commit Pretender ลบ Blank BOQ
   // ของ Package เดียวกันทิ้งด้วย เพราะ Blank BOQ กับ Pretender ใช้ Project+Package เดียวกัน แต่เป็น Work Plan item คนละชิ้น
