@@ -330,7 +330,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-29.83</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-29.84</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -6588,37 +6588,43 @@ function renderPostView(){
   const hc = 'padding:7px 8px;font-size:11px;color:var(--text3);font-weight:600;white-space:nowrap;overflow:hidden';
   const dc = 'padding:5px 8px;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
   const headRow = `<div style="${GRID};background:var(--bg2);border-bottom:1px solid var(--border)">
-      <div style="${hc}">โครงการ · Package</div><div style="${hc}">Service Type</div><div style="${hc}">ผู้สั่งงาน</div>
+      <div style="${hc};position:sticky;left:0;z-index:2;background:var(--bg2);box-shadow:1px 0 0 var(--border)">โครงการ · Package</div><div style="${hc}">Service Type</div><div style="${hc}">ผู้สั่งงาน</div>
       <div style="${hc}">Due Date</div><div style="${hc}">BOQ รับปากส่ง</div><div style="${hc}">สถานะ</div>
       <div style="position:relative;height:28px;border-left:1px solid var(--border)">${sc ? sc.head : ''}</div>
     </div>`;
+  // build 2026-09-29.84: ทุก Department อยู่ในกล่องเลื่อนกล่องเดียว → scrollbar แนวนอนอันเดียว เลื่อนพร้อมกันทุกแผนก
+  // หัวคอลัมน์ + วันที่ ติดด้านบน (sticky) ไม่เลื่อนตาม mouse scroll
   const section = d => {
     const list = groups[d].slice().sort((a,b)=> (a.done-b.done) || ((a.dueD||Infinity) - (b.dueD||Infinity)) || a.proj.localeCompare(b.proj));
-    return `<div style="margin-top:14px;border:1px solid var(--border);border-radius:10px;overflow:hidden;background:var(--bg1,#fff)">
-      <div style="padding:9px 12px;font-weight:700;font-size:13.5px;color:var(--primary);border-bottom:1px solid var(--border)">🏢 ${esc(d)} <span style="color:var(--text3);font-weight:500;font-size:12px">· ${list.length} งาน</span></div>
-      <div style="overflow-x:auto"><div style="min-width:1140px">
-        ${headRow}
+    return `<div style="padding:8px 0;font-weight:700;font-size:13px;color:var(--primary);background:var(--bg1,#fff);border-top:2px solid var(--border);border-bottom:1px solid var(--border)"><span style="position:sticky;left:12px;padding-left:12px">🏢 ${esc(d)} <span style="color:var(--text3);font-weight:500;font-size:12px">· ${list.length} งาน</span></span></div>
         ${list.map(r=>`<div onclick="openPostViewDetail('${esc(r.id)}')" title="กดเพื่อดูรายละเอียด"
-            style="${GRID};border-bottom:1px solid var(--border);cursor:pointer;min-height:40px;${r.late?'background:#fff5f5':''}"
-            onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='${r.late?'#fff5f5':''}'">
-          <div style="${dc};line-height:1.25"><div style="font-weight:600;overflow:hidden;text-overflow:ellipsis">${esc(r.proj)}</div><div style="font-size:10.5px;color:var(--text3);overflow:hidden;text-overflow:ellipsis">${esc(r.pkg)}</div></div>
+            style="${GRID};border-bottom:1px solid var(--border);cursor:pointer;min-height:40px;background:${r.late?'#fff5f5':'var(--bg1,#fff)'}"
+            onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='${r.late?'#fff5f5':'var(--bg1,#fff)'}'">
+          <div style="${dc};line-height:1.25;position:sticky;left:0;z-index:2;background:inherit;align-self:stretch;display:flex;flex-direction:column;justify-content:center;box-shadow:1px 0 0 var(--border)"><div style="font-weight:600;overflow:hidden;text-overflow:ellipsis">${esc(r.proj)}</div><div style="font-size:10.5px;color:var(--text3);overflow:hidden;text-overflow:ellipsis">${esc(r.pkg)}</div></div>
           <div style="${dc};color:var(--primary)" title="${esc(r.svc)}">${esc(r.svc)}</div>
           <div style="${dc};font-weight:600" title="${esc(r.pic)}">${esc(r.pic)}</div>
           <div style="${dc};${r.late?'color:#dc2626;font-weight:700':''}">${fmtDate(r.due)}${r.late?' ⚠':''}</div>
           <div style="${dc}">${fmtDate(r.committed)}</div>
           <div style="${dc}">${statusBadge(r)}</div>
           <div style="position:relative;align-self:stretch;min-height:40px;border-left:1px solid var(--border)">${sc ? pvTimelineBar(r, sc) : ''}</div>
-        </div>`).join('')}
-      </div></div></div>`;
+        </div>`).join('')}`;
   };
   const lg = (c,t)=>`<span style="display:inline-flex;align-items:center;gap:4px"><span style="width:12px;height:8px;border-radius:2px;background:${c}"></span>${t}</span>`;
   const legend = lg('#94a3b8','รอเริ่ม') + lg('#2563eb','กำลังทำ') + lg('#7c3aed','Review') + lg('#dc2626','เลยกำหนด') + lg('#16a34a','เสร็จ')
     + `<span><span style="color:#b45309">◆</span> Due Date</span><span><span style="color:#0f766e">●</span> BOQ รับปากส่ง</span>`
     + `<span style="display:inline-flex;align-items:center;gap:4px"><span style="width:2px;height:12px;background:#ef4444"></span>วันนี้</span>`;
+  const _prevSc = document.getElementById('pvScroll');
+  const _keep = _prevSc ? [_prevSc.scrollLeft, _prevSc.scrollTop] : null;
   body.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:10px">${order.map(d=>card(d,groups[d])).join('')}</div>
     <div style="display:flex;flex-wrap:wrap;gap:12px;font-size:11px;color:var(--text2);margin-top:12px;justify-content:flex-end">${legend}</div>
-    ${order.map(section).join('')}
+    <div id="pvScroll" style="margin-top:10px;border:1px solid var(--border);border-radius:10px;overflow:auto;max-height:calc(100vh - 300px);min-height:260px;background:var(--bg1,#fff)">
+      <div style="min-width:1160px">
+        <div style="position:sticky;top:0;z-index:6">${headRow}</div>
+        ${order.map(section).join('')}
+      </div>
+    </div>
     <p style="margin:12px 4px;font-size:11.5px;color:var(--text3)">👁 หน้านี้ดูได้อย่างเดียว · กดที่แถวเพื่อดูรายละเอียด · แถวสีแดง = เลย Due Date แล้วยังไม่เสร็จ · แท่ง = วันเริ่ม → วันเสร็จตามแผน (ถ้าไม่มีวันเสร็จ ใช้ Due Date) · Timeline แสดง 30 วันก่อน ถึง 120 วันหลังวันนี้</p>`;
+  if(_keep){ const ns = document.getElementById('pvScroll'); if(ns){ ns.scrollLeft = _keep[0]; ns.scrollTop = _keep[1]; } }
 }
 
 // build 2026-09-29.83: สเกล Timeline ร่วมกันทุก Department
