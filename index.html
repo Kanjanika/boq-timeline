@@ -330,7 +330,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-29.74</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-29.75</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -6339,7 +6339,9 @@ async function saveWpItem(){
       if(docPostValsArr.length) mergeBody['DocumenttoPost'] = docPostValsArr;
       else delete mergeBody['DocumenttoPost'];
       // Person/Lookup field: needs {results:[...]} even with odata=nometadata
-      if(assigneeIds.length) mergeBody['AssigneeId'] = {results: assigneeIds};
+      // build 2026-09-29.75: SP ตอบ 400 "unexpected 'StartObject' ... 'StartArray' was expected" → odata=nometadata
+      // ต้องส่ง Person multi เป็น array ธรรมดา [104] ไม่ใช่ {results:[104]} (แบบ results ใช้กับ odata=verbose เท่านั้น)
+      if(assigneeIds.length) mergeBody['AssigneeId'] = assigneeIds;
       else delete mergeBody['AssigneeId'];
       console.log('[WP Save .61] mergeBody:', JSON.stringify(mergeBody, null, 2));
       const debugFields = Object.entries(mergeBody).map(([k,v])=>`${k}:${Array.isArray(v)?'array':typeof v}`).join(' | ');
@@ -6392,7 +6394,7 @@ async function saveWpItem(){
           const spToken2 = await getSpToken();
           await fetch(`${SP_SITE_URL}/_api/web/lists/getById('${WORKPLAN_LIST}')/items(${savedItemId})`,
             { method:'POST', headers:{'Authorization':`Bearer ${spToken2}`,'Accept':'application/json;odata=nometadata','Content-Type':'application/json;odata=nometadata','X-HTTP-Method':'MERGE','IF-MATCH':'*'},
-              body: JSON.stringify({AssigneeId: {results: assigneeIds}}) });
+              body: JSON.stringify({AssigneeId: assigneeIds}) });
         }catch(eA){ console.warn('[WP Save .61] Assignee on new item error:', eA); }
       }
     }
