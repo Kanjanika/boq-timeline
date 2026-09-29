@@ -329,7 +329,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-29.58</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-29.59</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -1235,7 +1235,7 @@ function resolveRowServiceLabel(stepNums, hintServiceType){
 // ต่างหาก (Best/Yo มาจาก ST, Stamp/Jack มาจาก MEP อยู่แล้ว — คนคนเดียวอยู่ได้หลาย pool ตามที่ ALL_TEAM_MEMBERS ด้านล่าง
 // รองรับอยู่แล้ว) ตามที่ผู้ใช้ยืนยันรายชื่อจริงของทีม Budget มา
 const POOLS = {
-  // build 2026-09-29.58: Yo เพิ่มเป็นผู้ร่วมทีมทุกทีม (ST/AR/MEP/BUDGET) ตามคำขอผู้ใช้
+  // build 2026-09-29.59: Yo เพิ่มเป็นผู้ร่วมทีมทุกทีม (ST/AR/MEP/BUDGET) ตามคำขอผู้ใช้
   // (เดิม build 2026-08-25.15 เอา Yo ออกจาก ST/AR/MEP เหลือแค่ BUDGET+QA_LEADS แต่ตอนนี้เพิ่มกลับครบทุก pool)
   ST:['P','Ize','May','Yo'],
   AR:['June','Si','Pang','Memie','Mai','Yim','Su','Yo'],
@@ -5658,7 +5658,7 @@ async function loadWorkPlan(){
     _wpItems = await graphFetchAllItems(
       `/sites/${SITE_ID}/lists/${WORKPLAN_LIST}/items?$expand=fields&$top=200`
     );
-    // build 2026-09-29.58: debug — แสดง field keys ของ item แรกเพื่อหาชื่อ internal ที่ถูกต้อง
+    // build 2026-09-29.59: debug — แสดง field keys ของ item แรกเพื่อหาชื่อ internal ที่ถูกต้อง
     if(_wpItems.length) console.log('[WP Load] SP field keys:', Object.keys(_wpItems[0].fields||{}).sort().join(', '));
     renderWpTable();
   }catch(e){
@@ -6048,7 +6048,7 @@ function openWpEdit(id){
   document.getElementById('wpfFinish').value = toDateInput(f.FinishDate);
   document.getElementById('wpfDue').value = toDateInput(f.Due_x0020_Date);
   document.getElementById('wpfCommittedFinish').value = toDateInput(f.CommittedFinish);
-  // build 2026-09-29.58: "Details if have" — SP internal name อาจเป็น Details_x0020_if_x0020_have ไม่ใช่ Details
+  // build 2026-09-29.59: "Details if have" — SP internal name อาจเป็น Details_x0020_if_x0020_have ไม่ใช่ Details
   document.getElementById('wpfDetails').value = f.Details_x0020_if_x0020_have || f.Details || '';
   // Hyperlink field: Graph API returns {Url, Description} or just a URL string
   // Link_x0020_ = "Link ข้อมูลส่งให้ Team BOQ" — actual SP internal name confirmed via column inspector
@@ -6136,13 +6136,17 @@ async function saveWpItem(){
   const title = (document.getElementById('wpfProjName').value||'').trim();
   if(!title){ toastMsg('⚠️ กรุณาเลือก Project Name'); return; }
 
-  // collect checkbox groups
-  const teamVal = [...document.querySelectorAll('#wpfTeamBoxes input[type=checkbox]:checked')]
-    .map(cb=>cb.dataset.team).filter(Boolean).join(', '); // Team is text field → string
-  const docStatusVal = [...document.querySelectorAll('#wpfDocStatusBoxes input[type=checkbox]:checked')]
-    .map(cb=>cb.dataset.ds).join(', ');
-  const docPostVal = [...document.querySelectorAll('#wpfDocPostBoxes input[type=checkbox]:checked')]
-    .map(cb=>cb.dataset.dp).join(', ');
+  // collect checkbox groups — keep as arrays (SP REST multi-choice needs {results:[...]})
+  const teamValsArr = [...document.querySelectorAll('#wpfTeamBoxes input[type=checkbox]:checked')]
+    .map(cb=>cb.dataset.team).filter(Boolean);
+  const docStatusValsArr = [...document.querySelectorAll('#wpfDocStatusBoxes input[type=checkbox]:checked')]
+    .map(cb=>cb.dataset.ds).filter(Boolean);
+  const docPostValsArr = [...document.querySelectorAll('#wpfDocPostBoxes input[type=checkbox]:checked')]
+    .map(cb=>cb.dataset.dp).filter(Boolean);
+  // string versions for local cache (parseMultiChoice reads comma-separated strings)
+  const teamVal = teamValsArr.join(', ');
+  const docStatusVal = docStatusValsArr.join(', ');
+  const docPostVal = docPostValsArr.join(', ');
   // Assignee — checked nickname list (e.g. ['Hongyok','Jack'])
   const assigneeNames = [...document.querySelectorAll('#wpfAssigneeBoxes input[type=checkbox]:checked')]
     .map(cb=>cb.dataset.asgn).filter(Boolean);
@@ -6163,9 +6167,9 @@ async function saveWpItem(){
     Status:               gv('wpfStatus') || 'Not Started',
     CommitStatus:         gv('wpfCommitStatus'),
     Team:                 teamVal || null,
-    // build 2026-09-29.58: Department re-added — confirmed valid SP Choice field (Team Benz/Meen/Prang/Sak/Pair/BOQ)
+    // build 2026-09-29.59: Department re-added — confirmed valid SP Choice field (Team Benz/Meen/Prang/Sak/Pair/BOQ)
     Department:           gv('wpfDept'),
-    // build 2026-09-29.58: Details_x0020_if_x0020_have = SP internal name for "Details if have" column
+    // build 2026-09-29.59: Details_x0020_if_x0020_have = SP internal name for "Details if have" column
     Details_x0020_if_x0020_have: gv('wpfDetails'),
     // SP REST hyperlink uses capital Url/Description (unlike Graph API lowercase url)
     'Link_x0020_':        gv('wpfLinkBoq') ? { Url: gv('wpfLinkBoq'), Description: 'Link' } : null,
@@ -6193,8 +6197,16 @@ async function saveWpItem(){
       // Switch from Graph PATCH → SP REST MERGE (Graph returns 500 generalException on this list)
       // Include AssigneeId directly in the same call (no separate round-trip needed)
       const mergeBody = {...patchFields};
-      // build 2026-09-29.58: use {results:[...]} format for multi-value Person field (safer than plain array)
+      // build 2026-09-29.59: SP REST multi-choice fields require {results:[...]} format, NOT plain string
+      // Error was: "An unexpected 'PrimitiveValue' node was found ... A 'StartArray' node was expected"
+      if(teamValsArr.length) mergeBody['Team'] = {results: teamValsArr};
+      else delete mergeBody['Team'];
+      if(docStatusValsArr.length) mergeBody['DocumentStatsus'] = {results: docStatusValsArr};
+      else delete mergeBody['DocumentStatsus'];
+      if(docPostValsArr.length) mergeBody['DocumenttoPost'] = {results: docPostValsArr};
+      else delete mergeBody['DocumenttoPost'];
       if(assigneeIds.length) mergeBody['AssigneeId'] = {results: assigneeIds};
+      else delete mergeBody['AssigneeId'];
       console.log('[WP Save] SP REST MERGE:', JSON.stringify(mergeBody, null, 2));
       const spToken = await getSpToken();
       const spResp = await fetch(
