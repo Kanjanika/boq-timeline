@@ -330,7 +330,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-29.69</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-29.70</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -2557,7 +2557,11 @@ async function commitAndGenerateSteps(task, sug, selectedSubs, editedStart, edit
   const MEP_SUB_SET = new Set(MEP_SUBTEAMS);
   const WP_TEAM_VALID = new Set(['ST','AR&ID','MEP','Budget']);
   const wpTeamVal = [...new Set(subs.map(s => MEP_SUB_SET.has(s) ? 'MEP' : s))].filter(s => WP_TEAM_VALID.has(s)).join(', ');
-  await graphFetch(`/sites/${SITE_ID}/lists/${WORKPLAN_LIST}/items/${task.itemId}`, {
+  // build 2026-09-29.70: strip :version suffix อีกครั้งที่นี่ (belt-and-suspenders) — _liveTask ที่ cache ไว้ก่อน fix .68
+  // อาจยังมี itemId แบบ "439:1" อยู่ ทำให้ PATCH URL เป็น /items/439:1 → Graph 500 generalException
+  const safeTaskId = String(task.itemId).split(':')[0];
+  console.log('[commitAndGenerateSteps] task.itemId raw:', task.itemId, '→ safeTaskId:', safeTaskId);
+  await graphFetch(`/sites/${SITE_ID}/lists/${WORKPLAN_LIST}/items/${safeTaskId}`, {
     method:'PATCH',
     body: JSON.stringify({ fields: {
       CommitStatus:'Committed', Status:'Not Started', CommittedFinish: toISO(finish),  // build 2026-08-25.10: เพิ่ม Status:'Not Started' เพื่อให้รายการใหม่ผ่าน isActive และแสดงใน Timeline ทันที
@@ -2575,7 +2579,7 @@ async function commitAndGenerateSteps(task, sug, selectedSubs, editedStart, edit
     // build 2026-09-08.1: $select เฉพาะ fields ที่ใช้ในการค้นหาและลบ
     const oldItems = await graphFetchAllItems(`/sites/${SITE_ID}/lists/${STEP_LIST}/items?$expand=fields($select=Project,Package,SubTeam,WBSStep,ParentTaskID)&$top=200`);
     const targetProjId = canonicalProjId(task.name), targetPkgId = canonicalProjId(task.packageName);
-    const taskItemIdStr = String(task.itemId);
+    const taskItemIdStr = safeTaskId; // build 2026-09-29.70: ใช้ safeTaskId แทน String(task.itemId) เพื่อให้ match กับ ParentTaskID ที่บันทึกไว้ด้วย safeTaskId
     // เลขช่วง Step ของ Service นี้ (ใช้เช็ค legacy item ที่ไม่มี ParentTaskID)
     const tmplLen = getTemplateForService(task.service).length;
     const stepOffset = getStepOffset(task.service);
@@ -2631,7 +2635,7 @@ async function commitAndGenerateSteps(task, sug, selectedSubs, editedStart, edit
       // build 2026-09-24.22: forcedDurations → ทุก stage ใช้ addBusinessDaysInclusive (เป็น business-days แล้ว)
       const planEnd = (forcedDurations || stage.days!=null) ? addBusinessDaysInclusive(planStart, dur) : addBusinessDays(planStart, dur);
       const stepFields = {
-        Title:`${task.name} · S${s} ${stage.name}`, ParentTaskID:String(task.itemId), Project:task.name,
+        Title:`${task.name} · S${s} ${stage.name}`, ParentTaskID:safeTaskId, Project:task.name,
         Package:task.packageName, SubTeam:st, WBSStep:`S${s}`,
         PlanStart: toISO(planStart), PlanEnd: toISO(planEnd)
       };
