@@ -329,7 +329,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-29.56</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-29.57</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -1235,7 +1235,7 @@ function resolveRowServiceLabel(stepNums, hintServiceType){
 // ต่างหาก (Best/Yo มาจาก ST, Stamp/Jack มาจาก MEP อยู่แล้ว — คนคนเดียวอยู่ได้หลาย pool ตามที่ ALL_TEAM_MEMBERS ด้านล่าง
 // รองรับอยู่แล้ว) ตามที่ผู้ใช้ยืนยันรายชื่อจริงของทีม Budget มา
 const POOLS = {
-  // build 2026-09-29.56: Yo เพิ่มเป็นผู้ร่วมทีมทุกทีม (ST/AR/MEP/BUDGET) ตามคำขอผู้ใช้
+  // build 2026-09-29.57: Yo เพิ่มเป็นผู้ร่วมทีมทุกทีม (ST/AR/MEP/BUDGET) ตามคำขอผู้ใช้
   // (เดิม build 2026-08-25.15 เอา Yo ออกจาก ST/AR/MEP เหลือแค่ BUDGET+QA_LEADS แต่ตอนนี้เพิ่มกลับครบทุก pool)
   ST:['P','Ize','May','Yo'],
   AR:['June','Si','Pang','Memie','Mai','Yim','Su','Yo'],
@@ -5658,6 +5658,8 @@ async function loadWorkPlan(){
     _wpItems = await graphFetchAllItems(
       `/sites/${SITE_ID}/lists/${WORKPLAN_LIST}/items?$expand=fields&$top=200`
     );
+    // build 2026-09-29.57: debug — แสดง field keys ของ item แรกเพื่อหาชื่อ internal ที่ถูกต้อง
+    if(_wpItems.length) console.log('[WP Load] SP field keys:', Object.keys(_wpItems[0].fields||{}).sort().join(', '));
     renderWpTable();
   }catch(e){
     if(body) body.innerHTML = `<div style="padding:20px;color:#ef4444">❌ โหลดข้อมูลไม่สำเร็จ: ${e.message}</div>`;
@@ -6046,7 +6048,8 @@ function openWpEdit(id){
   document.getElementById('wpfFinish').value = toDateInput(f.FinishDate);
   document.getElementById('wpfDue').value = toDateInput(f.Due_x0020_Date);
   document.getElementById('wpfCommittedFinish').value = toDateInput(f.CommittedFinish);
-  document.getElementById('wpfDetails').value = f.Details || '';
+  // build 2026-09-29.57: "Details if have" — SP internal name อาจเป็น Details_x0020_if_x0020_have ไม่ใช่ Details
+  document.getElementById('wpfDetails').value = f.Details_x0020_if_x0020_have || f.Details || '';
   // Hyperlink field: Graph API returns {Url, Description} or just a URL string
   // Link_x0020_ = "Link ข้อมูลส่งให้ Team BOQ" — actual SP internal name confirmed via column inspector
   const linkRaw = f['Link_x0020_'] || f.Link_x0020__x0e02_x0e49_x0e2d_x0e21_x0e39_x0e25_x0e2a_x0e48_x0e07_x0e43_x0e2b_x0e49_Team_x0020_BOQ || '';
@@ -6161,7 +6164,8 @@ async function saveWpItem(){
     CommitStatus:         gv('wpfCommitStatus'),
     Team:                 teamVal || null,
     // Department removed — suspected SP system field conflict (causes InvalidClientInput 400)
-    // Details removed — confirmed wrong SP internal field name (Graph 400: "Field 'Details' is not recognized")
+    // build 2026-09-29.57: Details field — using Details_x0020_if_x0020_have (SP internal name for "Details if have")
+    Details_x0020_if_x0020_have: gv('wpfDetails'),
     // SP REST hyperlink uses capital Url/Description (unlike Graph API lowercase url)
     'Link_x0020_':        gv('wpfLinkBoq') ? { Url: gv('wpfLinkBoq'), Description: 'Link' } : null,
     StartDate:            toDate(gv('wpfStart')),
