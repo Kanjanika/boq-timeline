@@ -330,7 +330,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-29.75</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-29.77</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -621,6 +621,7 @@ tr.pick:hover td{background:var(--bg)}
       <option value="status">กลุ่มตาม: Status</option>
     </select>
     <button class="btn btn-teal" onclick="openWpNew()">＋ เพิ่มงานใหม่</button>
+    <a class="btn btn2" href="https://costplan1.sharepoint.com/:l:/s/BOQTeam/JABVdFka-QxLSKQUvXtPbfaeATc-zs9gGzDQx8Pfz5M5XMQ?nav=MTExZmQ3MTEtYWMxNy00NGI2LWI1Y2EtMjdlNTc4YWRhYzY3" target="_blank" rel="noopener" style="text-decoration:none;display:inline-block" title="เปิดฟอร์มกรอกงานใน SharePoint (แท็บใหม่)">📝 BOQ Assignment Form</a>
     <button class="btn btn2" onclick="inspectWpColumns()">🔍 ดูคอลัมน์</button>
     <button class="btn btn2" onclick="loadWorkPlan()">🔄 รีเฟรช</button>
   </div>
@@ -6378,24 +6379,38 @@ async function saveWpItem(){
       const idx = _wpItems.findIndex(x=>String(x.id)===_wpEditId);
       if(idx>=0) Object.assign(_wpItems[idx].fields, patchFields);
     } else {
-      // POST (create) — Graph API; fix link format back to lowercase for Graph
-      const graphFields = {...patchFields};
-      if(graphFields['Link_x0020_']){
-        graphFields['Link_x0020_'] = { url: graphFields['Link_x0020_'].Url, description: graphFields['Link_x0020_'].Description };
-      }
-      const res = await graphFetch(`/sites/${SITE_ID}/lists/${WORKPLAN_LIST}/items`, {
+      // build 2026-09-29.76: สร้างรายการใหม่ด้วย SP REST แทน Graph POST (Graph ตอบ 500 generalException กับลิสต์นี้
+      // เหมือนตอนแก้ไข) — ใช้รูปแบบข้อมูลเดียวกับตอนแก้ไข: multi-choice = array, Person multi = array ของ Id
+      const createBody = {...patchFields};
+      Object.keys(createBody).forEach(k=>{ if(createBody[k]===null || createBody[k]===undefined || createBody[k]==='') delete createBody[k]; });
+      if(teamValsArr.length) createBody['Team'] = teamValsArr; else delete createBody['Team'];
+      if(docStatusValsArr.length) createBody['DocumentStatsus'] = docStatusValsArr; else delete createBody['DocumentStatsus'];
+      if(docPostValsArr.length) createBody['DocumenttoPost'] = docPostValsArr; else delete createBody['DocumenttoPost'];
+      if(assigneeIds.length) createBody['AssigneeId'] = assigneeIds; else delete createBody['AssigneeId'];
+      console.log('[WP Save .76] create body:', JSON.stringify(createBody));
+      const spTokenC = await getSpToken();
+      const spRespC = await fetch(`${SP_SITE_URL}/_api/web/lists/getById('${WORKPLAN_LIST}')/items`, {
         method:'POST',
-        body: JSON.stringify({ fields: graphFields })
+        headers:{
+          'Authorization':`Bearer ${spTokenC}`,
+          'Accept':'application/json;odata=nometadata',
+          'Content-Type':'application/json;odata=nometadata',
+        },
+        body: JSON.stringify(createBody)
       });
-      if(res){ _wpItems.unshift(res); savedItemId = res.id; }
-      // Assignee for new item
-      if(savedItemId && assigneeIds.length){
-        try{
-          const spToken2 = await getSpToken();
-          await fetch(`${SP_SITE_URL}/_api/web/lists/getById('${WORKPLAN_LIST}')/items(${savedItemId})`,
-            { method:'POST', headers:{'Authorization':`Bearer ${spToken2}`,'Accept':'application/json;odata=nometadata','Content-Type':'application/json;odata=nometadata','X-HTTP-Method':'MERGE','IF-MATCH':'*'},
-              body: JSON.stringify({AssigneeId: assigneeIds}) });
-        }catch(eA){ console.warn('[WP Save .61] Assignee on new item error:', eA); }
+      if(!spRespC.ok){
+        const errText = await spRespC.text();
+        console.error('[WP Save .76] SP REST create error body:', errText);
+        let spErrMsg = errText.substring(0,300);
+        try{ spErrMsg = JSON.parse(errText)?.['odata.error']?.message?.value || spErrMsg; }catch(_){}
+        toastMsg(`❌ SP ${spRespC.status}: ${spErrMsg.substring(0,200)}`);
+        throw new Error(`SP REST ${spRespC.status}: ${spErrMsg}`);
+      }
+      const created = await spRespC.json().catch(()=>null);
+      const newId = created && (created.Id ?? created.ID);
+      if(newId != null){
+        savedItemId = String(newId);
+        _wpItems.unshift({ id: savedItemId, fields: { ...patchFields, id: savedItemId } });
       }
     }
 
