@@ -2295,6 +2295,9 @@ async function pickLeastBusyPerson(subteam, pool, excludeNames=[]){
       const bEnd = (maxEndByPerson[b]||0) + (primary.includes(b) ? 0 : SECONDARY_PENALTY_MS);
       return aEnd - bEnd;
     });
+    // build .64 debug log
+    console.log(`[pickLBP .64] subteam=${subteam} pool=${pool} primary=${JSON.stringify(primary)} available=${JSON.stringify(available)} exclude=${JSON.stringify(excludeNames)}`);
+    console.log(`[pickLBP .64] sorted=${JSON.stringify(sorted)} maxEnd=${JSON.stringify(maxEndByPerson)}`);
     const chosenName = sorted[0] || null;
     const freeDateMs = chosenName ? (maxEndByPerson[chosenName] || 0) : 0;
     // build 2026-08-25.15: คืน maxEndByPerson ทั้ง dict กลับไป เพื่อให้ computeAISuggest
