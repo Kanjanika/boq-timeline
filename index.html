@@ -329,7 +329,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-29.63</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-29.64</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -1237,11 +1237,20 @@ function resolveRowServiceLabel(stepNums, hintServiceType){
 const POOLS = {
   // build 2026-09-29.60: Yo เพิ่มเป็นผู้ร่วมทีมทุกทีม (ST/AR/MEP/BUDGET) ตามคำขอผู้ใช้
   // (เดิม build 2026-08-25.15 เอา Yo ออกจาก ST/AR/MEP เหลือแค่ BUDGET+QA_LEADS แต่ตอนนี้เพิ่มกลับครบทุก pool)
-  ST:['P','Ize','May','Yo'],
+  ST:['May','P','Ize','Yo'],           // build 2026-09-29.64: May ขึ้นก่อน ตามลำดับหลักของทีม ST
   AR:['June','Si','Pang','Memie','Mai','Yim','Su','Yo'],
   MEP:['Jack','Pari','Hongyok','Fah','Wim','Stamp','Yo'],
   BUDGET:['Best','Yo','Stamp','Jack']  // build 2026-09-29.63: Best+Yo=หลัก, Stamp+Jack=ผู้ร่วมทีม
 };
+// build 2026-09-29.64: POOL_PRIMARY — คนหลักต่อ pool
+// คนที่ไม่อยู่ใน primary จะถูกบวกโทษ 1 ปีในการ sort → ถูกเลือกก็ต่อเมื่อคนหลักทุกคนมีงานเต็มมากจริงๆ
+const POOL_PRIMARY = {
+  ST:     ['May','P','Ize'],                              // Yo = cross-team, รองใน ST
+  AR:     ['June','Si','Pang','Memie','Mai','Yim','Su'],  // Yo = cross-team, รองใน AR
+  MEP:    ['Jack','Pari','Hongyok','Fah','Wim'],          // Stamp+Yo = cross-team, รองใน MEP
+  BUDGET: ['Best','Yo'],                                  // Stamp+Jack = ผู้ร่วมทีม, รองใน BUDGET
+};
+const SECONDARY_PENALTY_MS = 365 * 24 * 60 * 60 * 1000; // ~1 ปี penalty สำหรับคนรอง
 // build 2026-08-20.6: QA/ผู้ตรวจ = หัวหน้าทีม ต่อ subteam — เขียนลง StepQA ทุก step ตอน Commit อัตโนมัติ
 // (ต้องสร้าง column "StepQA" ชนิด Text และ "StepQALookupId" ชนิด Number ใน BOQ Step Tracking ก่อน)
 // build 2026-09-23.19: Yo เป็น option เลือกได้ทุกทีม (ดู openStep S4/S8) แต่ default ยังเป็นหัวหน้าทีมเดิม
@@ -2278,7 +2287,14 @@ async function pickLeastBusyPerson(subteam, pool, excludeNames=[]){
     // คนที่ไม่เคยมี Step เลย (maxEndByPerson ไม่มี key) ถือว่าว่างที่สุด (0) — เรียงจากว่างเร็วสุด/ว่างอยู่แล้วก่อน
     // กรอง excludeNames ออกก่อนเรียง (กันซ้ำข้ามทีม)
     const available = roster.filter(n => !excludeNames.includes(n));
-    const sorted = available.sort((a,b)=> (maxEndByPerson[a]||0) - (maxEndByPerson[b]||0));
+    // build 2026-09-29.64: คนรอง (ไม่อยู่ใน POOL_PRIMARY) จะถูกบวกโทษ ~1 ปี
+    // → คนหลักถูกเลือกก่อนเสมอ (เว้นแต่คนหลักทุกคนมีงานเต็มมากกว่า 1 ปีจากคนรอง)
+    const primary = POOL_PRIMARY[pool] || roster;
+    const sorted = available.sort((a,b)=> {
+      const aEnd = (maxEndByPerson[a]||0) + (primary.includes(a) ? 0 : SECONDARY_PENALTY_MS);
+      const bEnd = (maxEndByPerson[b]||0) + (primary.includes(b) ? 0 : SECONDARY_PENALTY_MS);
+      return aEnd - bEnd;
+    });
     const chosenName = sorted[0] || null;
     const freeDateMs = chosenName ? (maxEndByPerson[chosenName] || 0) : 0;
     // build 2026-08-25.15: คืน maxEndByPerson ทั้ง dict กลับไป เพื่อให้ computeAISuggest
