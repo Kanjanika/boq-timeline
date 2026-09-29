@@ -330,7 +330,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-29.72</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-29.73</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -2566,20 +2566,58 @@ async function commitAndGenerateSteps(task, sug, selectedSubs, editedStart, edit
   // build 2026-09-29.71: สร้าง PATCH body แบบ dynamic — ใช้ undefined (JSON.stringify จะ drop ออก) แทน null
   // เพราะ SharePoint บาง field (เช่น Team, AISuggestAssignee) ถ้าส่ง null ไปตรงๆ จะได้ 500 generalException
   // แทนที่จะเป็น 400 Bad Request ที่มีรายละเอียด — งงมากถ้าไม่รู้สาเหตุ
+  // build 2026-09-29.73: เปลี่ยนจาก Graph PATCH → SharePoint REST MERGE (แบบเดียวกับปุ่ม "บันทึก" ในหน้า Work Plan)
+  // สาเหตุ: Graph PATCH ลิสต์ BOQ Team Work Plan ตอบ 500 generalException เสมอ (ลองตัด null / ตัด :version / ส่ง Team
+  // ทีมเดียวแล้วก็ยังไม่หาย) — หน้า Work Plan แก้ไปตั้งแต่ .61 โดยใช้ SP REST และส่ง Team เป็น array (multi-choice)
+  // ส่วนนี้ยังค้างเป็น Graph อยู่ จึงแก้ให้ใช้ทางเดียวกัน + วันที่ส่งแบบ yyyy-mm-ddT00:00:00Z
+  const teamArr = [...new Set(subs.map(s => MEP_SUB_SET.has(s) ? 'MEP' : s))].filter(s => WP_TEAM_VALID.has(s));
+  const toSpDate = d => d ? toISO(d) + 'T00:00:00Z' : undefined;
   const patchFields = {
     CommitStatus: 'Committed',
     Status: 'Not Started',  // build 2026-08-25.10: เพื่อให้รายการใหม่ผ่าน isActive และแสดงใน Timeline ทันที
-    CommittedFinish: finish ? toISO(finish) : undefined,
-    AISuggestStart: start ? toISO(start) : undefined,
-    AISuggestFinish: finish ? toISO(finish) : undefined,
+    CommittedFinish: toSpDate(finish),
+    AISuggestStart: toSpDate(start),
+    AISuggestFinish: toSpDate(finish),
     AISuggestAssignee: sug.who || undefined,
-    Team: wpTeamVal || undefined,  // build 2026-09-25.33: กรอก Team ใน Work Plan ตามทีมที่ PCM ติ๊กไว้ตอน Commit
+    Team: teamArr.length ? teamArr : undefined,  // multi-choice → array
   };
-  console.log('[commitAndGenerateSteps] PATCH', safeTaskId, JSON.stringify({fields: patchFields}));
-  await graphFetch(`/sites/${SITE_ID}/lists/${WORKPLAN_LIST}/items/${safeTaskId}`, {
-    method:'PATCH',
-    body: JSON.stringify({ fields: patchFields })
-  });
+  console.log('[commitAndGenerateSteps .73] SP MERGE', safeTaskId, JSON.stringify(patchFields));
+  const spMerge = async body => {
+    const spToken = await getSpToken();
+    const r = await fetch(`${SP_SITE_URL}/_api/web/lists/getById('${WORKPLAN_LIST}')/items(${safeTaskId})`, {
+      method:'POST',
+      headers:{
+        'Authorization':`Bearer ${spToken}`,
+        'Accept':'application/json;odata=nometadata',
+        'Content-Type':'application/json;odata=nometadata',
+        'X-HTTP-Method':'MERGE',
+        'IF-MATCH':'*',
+      },
+      body: JSON.stringify(body)
+    });
+    if(!r.ok && r.status!==204){
+      const t = await r.text().catch(()=>r.statusText);
+      let msg = t;
+      try{ msg = JSON.parse(t)?.['odata.error']?.message?.value || t; }catch(_){}
+      throw new Error(`SP ${r.status}: ${msg}`);
+    }
+  };
+  try{
+    await spMerge(patchFields);
+  }catch(eMerge){
+    // fallback: ถ้า Team เป็น single-choice จริง (ส่ง array ไม่ได้) → ลองส่งทีมแรกเป็นข้อความ
+    // ถ้ายังไม่ผ่าน → บันทึกโดยไม่ใส่ Team เพื่อให้ Commit สำเร็จก่อน แล้วแจ้งให้กรอก Team เองในหน้า Work Plan
+    console.warn('[commitAndGenerateSteps .73] MERGE failed, retry:', eMerge.message);
+    if(!teamArr.length) throw eMerge;
+    try{
+      await spMerge({...patchFields, Team: teamArr[0]});
+    }catch(eMerge2){
+      console.warn('[commitAndGenerateSteps .73] retry with single Team failed, save without Team:', eMerge2.message);
+      const {Team, ...noTeam} = patchFields;
+      await spMerge(noTeam);
+      toastMsg('⚠️ Commit สำเร็จ แต่บันทึก Team ไม่ได้ — กรอก Team เองในหน้า Work Plan: ' + eMerge2.message.substring(0,120));
+    }
+  }
   // build 2026-08-25 BugFix: เดิมลบ Step ด้วย Project+Package ครอบคลุมทั้งหมด ทำให้ Commit Pretender ลบ Blank BOQ
   // ของ Package เดียวกันทิ้งด้วย เพราะ Blank BOQ กับ Pretender ใช้ Project+Package เดียวกัน แต่เป็น Work Plan item คนละชิ้น
   // Fix: ลบเฉพาะ Step ที่ ParentTaskID ตรงกับ task.itemId (เจาะจง Work Plan item นี้เท่านั้น) — กันไม่ให้ Commit งาน
