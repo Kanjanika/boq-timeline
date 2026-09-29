@@ -329,7 +329,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-28.55</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-29.56</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -1235,12 +1235,11 @@ function resolveRowServiceLabel(stepNums, hintServiceType){
 // ต่างหาก (Best/Yo มาจาก ST, Stamp/Jack มาจาก MEP อยู่แล้ว — คนคนเดียวอยู่ได้หลาย pool ตามที่ ALL_TEAM_MEMBERS ด้านล่าง
 // รองรับอยู่แล้ว) ตามที่ผู้ใช้ยืนยันรายชื่อจริงของทีม Budget มา
 const POOLS = {
-  // build 2026-08-25.15: Yo วางตัวเป็น "ผู้ตรวจ (Reviewer)" ข้ามทุกทีม — ไม่ใช่ doer ใน Commit สำหรับ ST/AR/MEP
-  // จึงเอา Yo ออกจาก pool ทั้งสาม (Yo ยังอยู่ใน QA_LEADS ทุกทีมแทน) คงไว้เฉพาะ BUDGET เพราะ Yo ทำหน้าที่
-  // ทั้ง doer + reviewer พร้อมกัน — ในหน้า Timeline PCM ยังแก้ไข/เปลี่ยน doer เป็น Yo ได้อิสระถ้าจำเป็น
-  ST:['P','Ize','May'],
-  AR:['June','Si','Pang','Memie','Mai','Yim','Su'],
-  MEP:['Jack','Pari','Hongyok','Fah','Wim','Stamp'],
+  // build 2026-09-29.56: Yo เพิ่มเป็นผู้ร่วมทีมทุกทีม (ST/AR/MEP/BUDGET) ตามคำขอผู้ใช้
+  // (เดิม build 2026-08-25.15 เอา Yo ออกจาก ST/AR/MEP เหลือแค่ BUDGET+QA_LEADS แต่ตอนนี้เพิ่มกลับครบทุก pool)
+  ST:['P','Ize','May','Yo'],
+  AR:['June','Si','Pang','Memie','Mai','Yim','Su','Yo'],
+  MEP:['Jack','Pari','Hongyok','Fah','Wim','Stamp','Yo'],
   BUDGET:['Best','Yo','Stamp','Jack']
 };
 // build 2026-08-20.6: QA/ผู้ตรวจ = หัวหน้าทีม ต่อ subteam — เขียนลง StepQA ทุก step ตอน Commit อัตโนมัติ
