@@ -329,7 +329,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-29.61</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-29.63</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -1240,7 +1240,7 @@ const POOLS = {
   ST:['P','Ize','May','Yo'],
   AR:['June','Si','Pang','Memie','Mai','Yim','Su','Yo'],
   MEP:['Jack','Pari','Hongyok','Fah','Wim','Stamp','Yo'],
-  BUDGET:['Best','Yo','Stamp','Jack']
+  BUDGET:['Best','Yo','Stamp','Jack']  // build 2026-09-29.63: Best+Yo=หลัก, Stamp+Jack=ผู้ร่วมทีม
 };
 // build 2026-08-20.6: QA/ผู้ตรวจ = หัวหน้าทีม ต่อ subteam — เขียนลง StepQA ทุก step ตอน Commit อัตโนมัติ
 // (ต้องสร้าง column "StepQA" ชนิด Text และ "StepQALookupId" ชนิด Number ใน BOQ Step Tracking ก่อน)
@@ -6413,11 +6413,18 @@ function toggleDueConstraint(){
   // เปิด mode — ตรวจสอบข้อมูลก่อน
   const dueRaw=it._liveTask.due; if(!dueRaw||dueRaw==='—'){ toastMsg('⚠️ ไม่พบ Due Date'); return; }
   const dueDate=new Date(dueRaw); if(isNaN(dueDate)){ toastMsg('⚠️ Due Date ไม่ถูกต้อง'); return; }
-  const sugStart=it._liveSug.start;
+  // build 2026-09-29.62: ใช้วันที่ใน ciStartInput (ที่ user กรอก/แก้ไข) ไม่ใช่ liveSug.start
+  // liveSug.start = วันที่ทีมว่างจริง (อาจอยู่หลัง Due Date) → ทำให้ availDays < 0 โดยไม่จำเป็น
+  const ciStartVal = document.getElementById('ciStartInput')?.value;
+  const sugStart = ciStartVal ? new Date(ciStartVal) : it._liveSug.start;
   if(!sugStart||isNaN(sugStart)){ toastMsg('⚠️ ไม่พบวันเริ่มงาน'); return; }
   const dueNext=new Date(dueDate.getTime()+864e5); // +1 วัน เพราะ countWorkingDays end exclusive
-  const availDays=countWorkingDays(sugStart, dueNext);
-  if(availDays<1){ toastMsg('⚠️ Due Date อยู่ก่อนวันที่ทีมว่างจริง ไม่สามารถ Commit'); return; }
+  let availDays=countWorkingDays(sugStart, dueNext);
+  if(availDays<1){
+    // Due Date ก่อน start ที่เลือก → บังคับ minimum 1 วันทำการ (emergency commit)
+    availDays=1;
+    toastMsg('⚠️ Due Date ก่อนวันเริ่ม — บีบ Stage ใน 1 วันทำการ (emergency mode)');
+  }
   // คำนวณ weights และ compressed durations
   const tmpl=getTemplateForService(it._liveTask.service);
   const offset=getStepOffset(it._liveTask.service);
