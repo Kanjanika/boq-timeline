@@ -330,7 +330,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-29.73</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-29.74</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -6058,6 +6058,39 @@ function renderWpRow(it, idx, html, tdSt, fmtD, statusColor){
   );
 }
 
+// build 2026-09-29.74: รายชื่อ Project แบบ dynamic
+let _wpProjChoicesSP = [];      // choices จากคอลัมน์ Project Name ใน SharePoint (cache)
+let _wpProjChoicesLoaded = false;
+function wpProjectNameList(){
+  const seen = new Set(), out = [];
+  const add = v => { const t = String(v||'').trim(); if(t && !seen.has(t.toLowerCase())){ seen.add(t.toLowerCase()); out.push(t); } };
+  WP_PROJECT_NAMES.forEach(add);
+  const extra = [..._wpProjChoicesSP, ...(_wpItems||[]).map(it => (it.fields||{}).Project_x0020_Name || (it.fields||{}).Title)]
+    .map(v => String(v||'').trim()).filter(Boolean).sort((a,b)=>a.localeCompare(b));
+  extra.forEach(add);
+  return out;
+}
+function fillWpProjectNames(){
+  const pn = document.getElementById('wpfProjName');
+  if(!pn) return;
+  const cur = pn.value;
+  const esc = v => String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+  pn.innerHTML = `<option value="">— เลือก —</option>` + wpProjectNameList().map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join('');
+  if(cur) pn.value = cur;
+}
+async function refreshWpProjectChoices(){
+  if(_wpProjChoicesLoaded || typeof LIVE_MODE==='undefined' || !LIVE_MODE) return;
+  _wpProjChoicesLoaded = true;
+  try{
+    const res = await graphFetch(`/sites/${SITE_ID}/lists/${WORKPLAN_LIST}/columns`);
+    const col = (res.value||[]).find(c => c.name==='Project_x0020_Name' || c.displayName==='Project Name');
+    _wpProjChoicesSP = (col && col.choice && col.choice.choices) ? col.choice.choices : [];
+    fillWpProjectNames();
+  }catch(e){
+    _wpProjChoicesLoaded = false;
+    console.warn('[wpProjectNames] โหลดรายชื่อ Project จาก SharePoint ไม่สำเร็จ ใช้รายชื่อเดิมไปก่อน', e);
+  }
+}
 function openWpEdit(id){
   _wpEditId = id ? String(id) : null;
   const panel = document.getElementById('wpEditPanel');
@@ -6069,9 +6102,10 @@ function openWpEdit(id){
   if(svc && svc.options.length<=1)
     svc.innerHTML = `<option value="">— เลือก —</option>` + WP_SERVICE_TYPES.map(s=>`<option>${s}</option>`).join('');
 
-  const pn = document.getElementById('wpfProjName');
-  if(pn && pn.options.length<=1)
-    pn.innerHTML = `<option value="">— เลือก —</option>` + WP_PROJECT_NAMES.map(s=>`<option>${s}</option>`).join('');
+  // build 2026-09-29.74: รายชื่อ Project ไม่ fix ตายตัวแล้ว — รวมจาก (1) รายชื่อเดิมในโค้ด (2) ชื่อที่มีอยู่จริงใน
+  // Work Plan (3) ตัวเลือกของคอลัมน์ Project Name ใน SharePoint → เพิ่มโครงการใหม่ใน SharePoint แล้วโผล่ที่นี่เอง
+  fillWpProjectNames();
+  refreshWpProjectChoices();
 
   const pt = document.getElementById('wpfProjType');
   if(pt && pt.options.length<=1)
