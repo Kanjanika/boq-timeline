@@ -329,7 +329,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-29.57</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-29.58</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -1235,7 +1235,7 @@ function resolveRowServiceLabel(stepNums, hintServiceType){
 // ต่างหาก (Best/Yo มาจาก ST, Stamp/Jack มาจาก MEP อยู่แล้ว — คนคนเดียวอยู่ได้หลาย pool ตามที่ ALL_TEAM_MEMBERS ด้านล่าง
 // รองรับอยู่แล้ว) ตามที่ผู้ใช้ยืนยันรายชื่อจริงของทีม Budget มา
 const POOLS = {
-  // build 2026-09-29.57: Yo เพิ่มเป็นผู้ร่วมทีมทุกทีม (ST/AR/MEP/BUDGET) ตามคำขอผู้ใช้
+  // build 2026-09-29.58: Yo เพิ่มเป็นผู้ร่วมทีมทุกทีม (ST/AR/MEP/BUDGET) ตามคำขอผู้ใช้
   // (เดิม build 2026-08-25.15 เอา Yo ออกจาก ST/AR/MEP เหลือแค่ BUDGET+QA_LEADS แต่ตอนนี้เพิ่มกลับครบทุก pool)
   ST:['P','Ize','May','Yo'],
   AR:['June','Si','Pang','Memie','Mai','Yim','Su','Yo'],
@@ -5658,7 +5658,7 @@ async function loadWorkPlan(){
     _wpItems = await graphFetchAllItems(
       `/sites/${SITE_ID}/lists/${WORKPLAN_LIST}/items?$expand=fields&$top=200`
     );
-    // build 2026-09-29.57: debug — แสดง field keys ของ item แรกเพื่อหาชื่อ internal ที่ถูกต้อง
+    // build 2026-09-29.58: debug — แสดง field keys ของ item แรกเพื่อหาชื่อ internal ที่ถูกต้อง
     if(_wpItems.length) console.log('[WP Load] SP field keys:', Object.keys(_wpItems[0].fields||{}).sort().join(', '));
     renderWpTable();
   }catch(e){
@@ -6048,7 +6048,7 @@ function openWpEdit(id){
   document.getElementById('wpfFinish').value = toDateInput(f.FinishDate);
   document.getElementById('wpfDue').value = toDateInput(f.Due_x0020_Date);
   document.getElementById('wpfCommittedFinish').value = toDateInput(f.CommittedFinish);
-  // build 2026-09-29.57: "Details if have" — SP internal name อาจเป็น Details_x0020_if_x0020_have ไม่ใช่ Details
+  // build 2026-09-29.58: "Details if have" — SP internal name อาจเป็น Details_x0020_if_x0020_have ไม่ใช่ Details
   document.getElementById('wpfDetails').value = f.Details_x0020_if_x0020_have || f.Details || '';
   // Hyperlink field: Graph API returns {Url, Description} or just a URL string
   // Link_x0020_ = "Link ข้อมูลส่งให้ Team BOQ" — actual SP internal name confirmed via column inspector
@@ -6163,8 +6163,9 @@ async function saveWpItem(){
     Status:               gv('wpfStatus') || 'Not Started',
     CommitStatus:         gv('wpfCommitStatus'),
     Team:                 teamVal || null,
-    // Department removed — suspected SP system field conflict (causes InvalidClientInput 400)
-    // build 2026-09-29.57: Details field — using Details_x0020_if_x0020_have (SP internal name for "Details if have")
+    // build 2026-09-29.58: Department re-added — confirmed valid SP Choice field (Team Benz/Meen/Prang/Sak/Pair/BOQ)
+    Department:           gv('wpfDept'),
+    // build 2026-09-29.58: Details_x0020_if_x0020_have = SP internal name for "Details if have" column
     Details_x0020_if_x0020_have: gv('wpfDetails'),
     // SP REST hyperlink uses capital Url/Description (unlike Graph API lowercase url)
     'Link_x0020_':        gv('wpfLinkBoq') ? { Url: gv('wpfLinkBoq'), Description: 'Link' } : null,
@@ -6192,7 +6193,8 @@ async function saveWpItem(){
       // Switch from Graph PATCH → SP REST MERGE (Graph returns 500 generalException on this list)
       // Include AssigneeId directly in the same call (no separate round-trip needed)
       const mergeBody = {...patchFields};
-      if(assigneeIds.length) mergeBody['AssigneeId'] = assigneeIds;
+      // build 2026-09-29.58: use {results:[...]} format for multi-value Person field (safer than plain array)
+      if(assigneeIds.length) mergeBody['AssigneeId'] = {results: assigneeIds};
       console.log('[WP Save] SP REST MERGE:', JSON.stringify(mergeBody, null, 2));
       const spToken = await getSpToken();
       const spResp = await fetch(
@@ -6235,7 +6237,7 @@ async function saveWpItem(){
           const spToken2 = await getSpToken();
           await fetch(`${SP_SITE_URL}/_api/web/lists/getById('${WORKPLAN_LIST}')/items(${savedItemId})`,
             { method:'POST', headers:{'Authorization':`Bearer ${spToken2}`,'Accept':'application/json;odata=nometadata','Content-Type':'application/json;odata=nometadata','X-HTTP-Method':'MERGE','IF-MATCH':'*'},
-              body: JSON.stringify({AssigneeId: assigneeIds}) });
+              body: JSON.stringify({AssigneeId: {results: assigneeIds}}) });
         }catch(eA){ console.warn('[WP Save] Assignee on new item error:', eA); }
       }
     }
