@@ -330,7 +330,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-29.78</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-29.79</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -5758,6 +5758,8 @@ async function loadWorkPlan(){
     );
     // build 2026-09-29.60: debug — แสดง field keys ของ item แรกเพื่อหาชื่อ internal ที่ถูกต้อง
     if(_wpItems.length) console.log('[WP Load] SP field keys:', Object.keys(_wpItems[0].fields||{}).sort().join(', '));
+    // build .79: เรียงตาม ID จากน้อยไปมาก เสมอ → รายการที่เพิ่มใหม่อยู่ท้ายสุด
+    _wpItems.sort((a,b)=> (Number(a.id)||0) - (Number(b.id)||0));
     renderWpTable();
   }catch(e){
     if(body) body.innerHTML = `<div style="padding:20px;color:#ef4444">❌ โหลดข้อมูลไม่สำเร็จ: ${e.message}</div>`;
@@ -6410,7 +6412,7 @@ async function saveWpItem(){
       const newId = created && (created.Id ?? created.ID);
       if(newId != null){
         savedItemId = String(newId);
-        _wpItems.unshift({ id: savedItemId, fields: { ...patchFields, id: savedItemId } });
+        _wpItems.push({ id: savedItemId, fields: { ...patchFields, id: savedItemId } }); // build .79: ต่อท้าย (รายการใหม่ = ลำดับสุดท้าย)
       }
     }
 
