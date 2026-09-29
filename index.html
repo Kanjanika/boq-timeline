@@ -330,7 +330,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-29.84</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-29.85</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -6581,94 +6581,124 @@ function renderPostView(){
   };
   // build 2026-09-29.83: ตาราง + Timeline อยู่แถวเดียวกัน (Timeline ทางขวา) · ตัดคอลัมน์ ทีม BOQ / ผู้ทำ / Version ออก
   // → กดที่แถวเพื่อดูรายละเอียดทั้งหมด (popup ดูอย่างเดียว)
+  // build 2026-09-29.85: รูปแบบเดียวกับหน้า Timeline — หัวสีเขียวเข้ม · คอลัมน์ซ้ายนิ่ง · Timeline รายสัปดาห์ (W1, W2 …)
+  // ทางขวาเลื่อนซ้าย-ขวาได้ด้วย scrollbar อันเดียวใต้หัววันที่ (ทุก Department เลื่อนพร้อมกัน) · หัวติดด้านบนตอนเลื่อนลง
   _pvRowsById = {};
   rows.forEach(r => { _pvRowsById[r.id] = r; });
-  const sc = pvTimelineScale(rows);
-  const GRID = 'display:grid;grid-template-columns:190px 130px 120px 96px 86px 96px minmax(420px,1fr);align-items:center';
-  const hc = 'padding:7px 8px;font-size:11px;color:var(--text3);font-weight:600;white-space:nowrap;overflow:hidden';
-  const dc = 'padding:5px 8px;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
-  const headRow = `<div style="${GRID};background:var(--bg2);border-bottom:1px solid var(--border)">
-      <div style="${hc};position:sticky;left:0;z-index:2;background:var(--bg2);box-shadow:1px 0 0 var(--border)">โครงการ · Package</div><div style="${hc}">Service Type</div><div style="${hc}">ผู้สั่งงาน</div>
-      <div style="${hc}">Due Date</div><div style="${hc}">BOQ รับปากส่ง</div><div style="${hc}">สถานะ</div>
-      <div style="position:relative;height:28px;border-left:1px solid var(--border)">${sc ? sc.head : ''}</div>
-    </div>`;
-  // build 2026-09-29.84: ทุก Department อยู่ในกล่องเลื่อนกล่องเดียว → scrollbar แนวนอนอันเดียว เลื่อนพร้อมกันทุกแผนก
-  // หัวคอลัมน์ + วันที่ ติดด้านบน (sticky) ไม่เลื่อนตาม mouse scroll
-  const section = d => {
+  const sc = pvWeekScale(rows);
+  const LW = 718, RH = 40, DH = 34;   // ความกว้างคอลัมน์ซ้าย · ความสูงแถวงาน · ความสูงแถว Department (ซ้าย/ขวาต้องเท่ากัน)
+  const COLS = 'display:grid;grid-template-columns:190px 130px 120px 96px 86px 96px';
+  const hcell = (t, extra='') => `<div style="padding:8px 6px;display:flex;align-items:center;justify-content:center;text-align:center;border-left:1px solid rgba(255,255,255,.25);font-size:11.5px;${extra}">${t}</div>`;
+  const dc = 'padding:0 8px;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;align-items:center';
+  const bgOf = r => r.late ? '#fff5f5' : '#fff';
+  const hoverIn  = id => `document.querySelectorAll('[data-pvr=&quot;${id}&quot;]').forEach(e=>e.style.background='var(--bg2)')`;
+  const hoverOut = (id,bg) => `document.querySelectorAll('[data-pvr=&quot;${id}&quot;]').forEach(e=>e.style.background='${bg}')`;
+  let left = '', right = '';
+  order.forEach(d => {
     const list = groups[d].slice().sort((a,b)=> (a.done-b.done) || ((a.dueD||Infinity) - (b.dueD||Infinity)) || a.proj.localeCompare(b.proj));
-    return `<div style="padding:8px 0;font-weight:700;font-size:13px;color:var(--primary);background:var(--bg1,#fff);border-top:2px solid var(--border);border-bottom:1px solid var(--border)"><span style="position:sticky;left:12px;padding-left:12px">🏢 ${esc(d)} <span style="color:var(--text3);font-weight:500;font-size:12px">· ${list.length} งาน</span></span></div>
-        ${list.map(r=>`<div onclick="openPostViewDetail('${esc(r.id)}')" title="กดเพื่อดูรายละเอียด"
-            style="${GRID};border-bottom:1px solid var(--border);cursor:pointer;min-height:40px;background:${r.late?'#fff5f5':'var(--bg1,#fff)'}"
-            onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='${r.late?'#fff5f5':'var(--bg1,#fff)'}'">
-          <div style="${dc};line-height:1.25;position:sticky;left:0;z-index:2;background:inherit;align-self:stretch;display:flex;flex-direction:column;justify-content:center;box-shadow:1px 0 0 var(--border)"><div style="font-weight:600;overflow:hidden;text-overflow:ellipsis">${esc(r.proj)}</div><div style="font-size:10.5px;color:var(--text3);overflow:hidden;text-overflow:ellipsis">${esc(r.pkg)}</div></div>
+    left  += `<div style="height:${DH}px;box-sizing:border-box;display:flex;align-items:center;padding:0 12px;background:var(--primary-lt,#ecfdf5);border-bottom:1px solid var(--border);font-weight:700;font-size:13px;color:var(--primary)">🏢 ${esc(d)}&nbsp;<span style="color:var(--text3);font-weight:500;font-size:12px">· ${list.length} งาน</span></div>`;
+    right += `<div style="height:${DH}px;box-sizing:border-box;background:var(--primary-lt,#ecfdf5);border-bottom:1px solid var(--border)"></div>`;
+    list.forEach(r => {
+      const id = esc(r.id), ev = `onclick="openPostViewDetail('${id}')" onmouseover="${hoverIn(id)}" onmouseout="${hoverOut(id,bgOf(r))}"`;
+      left += `<div data-pvr="${id}" ${ev} title="กดเพื่อดูรายละเอียด" style="${COLS};height:${RH}px;box-sizing:border-box;border-bottom:1px solid var(--border);cursor:pointer;background:${bgOf(r)}">
+          <div style="${dc};flex-direction:column;align-items:flex-start;justify-content:center;line-height:1.25"><div style="font-weight:600;max-width:100%;overflow:hidden;text-overflow:ellipsis">${esc(r.proj)}</div><div style="font-size:10.5px;color:var(--text3);max-width:100%;overflow:hidden;text-overflow:ellipsis">${esc(r.pkg)}</div></div>
           <div style="${dc};color:var(--primary)" title="${esc(r.svc)}">${esc(r.svc)}</div>
           <div style="${dc};font-weight:600" title="${esc(r.pic)}">${esc(r.pic)}</div>
-          <div style="${dc};${r.late?'color:#dc2626;font-weight:700':''}">${fmtDate(r.due)}${r.late?' ⚠':''}</div>
+          <div style="${dc};${r.late?'color:#dc2626;font-weight:700':''}">${fmtDate(r.due)}${r.late?'&nbsp;⚠':''}</div>
           <div style="${dc}">${fmtDate(r.committed)}</div>
           <div style="${dc}">${statusBadge(r)}</div>
-          <div style="position:relative;align-self:stretch;min-height:40px;border-left:1px solid var(--border)">${sc ? pvTimelineBar(r, sc) : ''}</div>
-        </div>`).join('')}`;
-  };
+        </div>`;
+      right += `<div data-pvr="${id}" ${ev} style="position:relative;height:${RH}px;box-sizing:border-box;border-bottom:1px solid var(--border);cursor:pointer;background:${bgOf(r)}">${sc ? pvWeekBar(r, sc) : ''}</div>`;
+    });
+  });
   const lg = (c,t)=>`<span style="display:inline-flex;align-items:center;gap:4px"><span style="width:12px;height:8px;border-radius:2px;background:${c}"></span>${t}</span>`;
   const legend = lg('#94a3b8','รอเริ่ม') + lg('#2563eb','กำลังทำ') + lg('#7c3aed','Review') + lg('#dc2626','เลยกำหนด') + lg('#16a34a','เสร็จ')
     + `<span><span style="color:#b45309">◆</span> Due Date</span><span><span style="color:#0f766e">●</span> BOQ รับปากส่ง</span>`
     + `<span style="display:inline-flex;align-items:center;gap:4px"><span style="width:2px;height:12px;background:#ef4444"></span>วันนี้</span>`;
-  const _prevSc = document.getElementById('pvScroll');
-  const _keep = _prevSc ? [_prevSc.scrollLeft, _prevSc.scrollTop] : null;
+  const _ph = document.getElementById('pvHeadScroll'), _pv = document.getElementById('pvScroll');
+  const _keep = (_ph && _pv) ? [_ph.scrollLeft, _pv.scrollTop] : null;   // จำตำแหน่งเลื่อนไว้ตอน render ใหม่
+  const TW = sc ? sc.width : 600;
+  const grid = sc ? sc.gridBg : '';
   body.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:10px">${order.map(d=>card(d,groups[d])).join('')}</div>
     <div style="display:flex;flex-wrap:wrap;gap:12px;font-size:11px;color:var(--text2);margin-top:12px;justify-content:flex-end">${legend}</div>
-    <div id="pvScroll" style="margin-top:10px;border:1px solid var(--border);border-radius:10px;overflow:auto;max-height:calc(100vh - 300px);min-height:260px;background:var(--bg1,#fff)">
-      <div style="min-width:1160px">
-        <div style="position:sticky;top:0;z-index:6">${headRow}</div>
-        ${order.map(section).join('')}
+    <style>#pvBodyScroll{scrollbar-width:none}#pvBodyScroll::-webkit-scrollbar{display:none}</style>
+    <div id="pvScroll" style="margin-top:10px;border:1px solid var(--border);border-radius:11px;overflow-y:auto;overflow-x:hidden;max-height:calc(100vh - 300px);min-height:260px;background:#fff">
+      <div style="display:flex;position:sticky;top:0;z-index:10;background:var(--primary);color:#fff;font-weight:600">
+        <div style="flex:0 0 ${LW}px;width:${LW}px;${COLS};box-sizing:border-box">
+          <div style="padding:8px 12px;display:flex;align-items:center;font-size:12.5px">โครงการ · Package</div>
+          ${hcell('Service Type')}${hcell('ผู้สั่งงาน')}${hcell('Due Date')}${hcell('BOQ<br>รับปากส่ง')}${hcell('Status')}
+        </div>
+        <div id="pvHeadScroll" style="flex:1 1 auto;min-width:0;overflow-x:auto;overflow-y:hidden;border-left:1px solid rgba(255,255,255,.25)">
+          <div style="position:relative;width:${TW}px">${sc ? sc.head : ''}</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:flex-start">
+        <div style="flex:0 0 ${LW}px;width:${LW}px;border-right:1px solid var(--border)">${left}</div>
+        <div id="pvBodyScroll" style="flex:1 1 auto;min-width:0;overflow-x:auto;overflow-y:hidden">
+          <div style="position:relative;width:${TW}px;${grid}">
+            ${right}
+            ${sc ? `<div style="position:absolute;top:0;bottom:0;left:${sc.todayPx}px;width:2px;background:#ef4444;z-index:3;pointer-events:none"></div>` : ''}
+          </div>
+        </div>
       </div>
     </div>
-    <p style="margin:12px 4px;font-size:11.5px;color:var(--text3)">👁 หน้านี้ดูได้อย่างเดียว · กดที่แถวเพื่อดูรายละเอียด · แถวสีแดง = เลย Due Date แล้วยังไม่เสร็จ · แท่ง = วันเริ่ม → วันเสร็จตามแผน (ถ้าไม่มีวันเสร็จ ใช้ Due Date) · Timeline แสดง 30 วันก่อน ถึง 120 วันหลังวันนี้</p>`;
-  if(_keep){ const ns = document.getElementById('pvScroll'); if(ns){ ns.scrollLeft = _keep[0]; ns.scrollTop = _keep[1]; } }
+    <p style="margin:12px 4px;font-size:11.5px;color:var(--text3)">👁 หน้านี้ดูได้อย่างเดียว · กดที่แถวเพื่อดูรายละเอียด · แถวสีแดง = เลย Due Date แล้วยังไม่เสร็จ · แท่ง = วันเริ่ม → วันเสร็จตามแผน (ถ้าไม่มีวันเสร็จ ใช้ Due Date) · ลากแถบเลื่อนใต้หัววันที่เพื่อเลื่อนซ้าย-ขวา</p>`;
+  // ซิงค์ scroll แนวนอน: หัววันที่ ↔ ตัวตาราง
+  const hs = document.getElementById('pvHeadScroll'), bs = document.getElementById('pvBodyScroll'), vs = document.getElementById('pvScroll');
+  if(hs && bs){
+    let lock = false;
+    hs.addEventListener('scroll', ()=>{ if(lock) return; lock = true; bs.scrollLeft = hs.scrollLeft; lock = false; });
+    bs.addEventListener('scroll', ()=>{ if(lock) return; lock = true; hs.scrollLeft = bs.scrollLeft; lock = false; });
+    const x = _keep ? _keep[0] : (sc ? Math.max(0, sc.todayPx - 140) : 0);   // ครั้งแรกเลื่อนให้เห็นวันนี้ใกล้ๆ ซ้าย
+    hs.scrollLeft = x; bs.scrollLeft = x;
+    if(_keep && vs) vs.scrollTop = _keep[1];
+  }
 }
 
-// build 2026-09-29.83: สเกล Timeline ร่วมกันทุก Department
+// build 2026-09-29.85: สเกลรายสัปดาห์ (เริ่มวันจันทร์) · 1 สัปดาห์ = 70px
 let _pvRowsById = {};
-const PV_DAY = 864e5;
+const PV_DAY = 864e5, PV_WEEK_PX = 70;
 function pvD0(v){ if(!v) return null; const d = new Date(v); if(isNaN(d)) return null; d.setHours(0,0,0,0); return d; }
-function pvTimelineScale(rows){
+function pvWeekScale(rows){
   const today = new Date(); today.setHours(0,0,0,0);
-  const fmtS = d => d.toLocaleDateString('th-TH',{day:'numeric',month:'short'});
   const pts = [];
   rows.forEach(r => [r.start,r.finish,r.due,r.committed].forEach(v => { const d = pvD0(v); if(d) pts.push(d.getTime()); }));
   if(!pts.length) return null;
-  const lo = today.getTime() - 30*PV_DAY, hi = today.getTime() + 120*PV_DAY;
-  let min = Math.max(Math.min(...pts, today.getTime()), lo), max = Math.min(Math.max(...pts, today.getTime()), hi);
-  min -= 2*PV_DAY; max += 3*PV_DAY;
-  const span = Math.round((max - min)/PV_DAY);
-  const pct = x => (Math.max(0, Math.min(span, x)) / span * 100).toFixed(3) + '%';
-  const off = d => (d.getTime() - min)/PV_DAY;
-  const every = span<=35 ? 2 : span<=70 ? 4 : span<=140 ? 7 : 14;
-  let head = '', lastMonth = -1;
-  for(let i=0;i<span;i+=every){
-    const dt = new Date(min + i*PV_DAY);
-    const lbl = dt.getMonth()!==lastMonth ? fmtS(dt) : dt.getDate(); lastMonth = dt.getMonth();
-    head += `<div style="position:absolute;top:0;bottom:0;left:${pct(i)};width:${(100/span*every).toFixed(3)}%;padding-top:7px;text-align:center;font-size:10px;color:var(--text3);border-left:1px solid var(--border);white-space:nowrap;overflow:hidden">${lbl}</div>`;
+  // ช่วง: ย้อนหลังไม่เกิน 8 สัปดาห์ ล่วงหน้าไม่เกิน 26 สัปดาห์จากวันนี้
+  let min = Math.max(Math.min(...pts, today.getTime() - 14*PV_DAY), today.getTime() - 56*PV_DAY);
+  let max = Math.min(Math.max(...pts, today.getTime() + 28*PV_DAY), today.getTime() + 182*PV_DAY);
+  const s = new Date(min); const dow = (s.getDay()+6)%7; s.setDate(s.getDate() - dow); // ถอยไปวันจันทร์
+  const start = s.getTime();
+  const weeks = Math.max(14, Math.ceil((max - start)/PV_DAY/7) + 1);   // อย่างน้อย 14 สัปดาห์ ให้เต็มความกว้าง
+  const pxPerDay = PV_WEEK_PX/7, width = weeks*PV_WEEK_PX;
+  const x = d => (d.getTime() - start)/PV_DAY * pxPerDay;
+  const fmtS = d => d.toLocaleDateString('th-TH',{day:'numeric',month:'short'});
+  let head = '';
+  for(let w=0; w<weeks; w++){
+    const ws = new Date(start + w*7*PV_DAY);
+    const isNow = today >= ws && today < new Date(ws.getTime() + 7*PV_DAY);
+    head += `<div style="position:absolute;top:0;bottom:0;left:${w*PV_WEEK_PX}px;width:${PV_WEEK_PX}px;box-sizing:border-box;padding:6px 2px 8px;text-align:center;font-size:10px;line-height:1.35;border-left:1px solid rgba(255,255,255,.15);${isNow?'background:rgba(255,255,255,.14)':''}"><b style="display:block;font-size:10.5px">W${w+1}</b>${fmtS(ws)}</div>`;
   }
-  const todayX = pct(off(today)+0.5);
-  head += `<div style="position:absolute;top:0;bottom:0;left:${todayX};width:2px;background:#ef4444"></div>`;
-  return { min, span, pct, off, todayX, fmtS, head };
+  const todayPx = x(today) + pxPerDay/2;
+  head = `<div style="height:44px"></div>` + head + `<div style="position:absolute;bottom:0;left:${todayPx}px;width:2px;height:10px;background:#fca5a5"></div>`;
+  const gridBg = `background-image:repeating-linear-gradient(to right,transparent 0,transparent ${PV_WEEK_PX-1}px,#eef2f6 ${PV_WEEK_PX-1}px,#eef2f6 ${PV_WEEK_PX}px)`;
+  return { start, width, x, pxPerDay, todayPx, fmtS, head, gridBg };
 }
-function pvTimelineBar(r, sc){
+function pvWeekBar(r, sc){
   const esc = v => String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
   const due = pvD0(r.due), com = pvD0(r.committed), st0 = pvD0(r.start), fin = pvD0(r.finish);
   const end0 = fin || due || com, start = st0 || end0;
-  const todayLine = `<div style="position:absolute;top:0;bottom:0;left:${sc.todayX};width:2px;background:#ef4444;opacity:.8"></div>`;
-  if(!start) return todayLine + `<div style="position:absolute;top:12px;left:8px;font-size:10.5px;color:var(--text3)">ไม่มีวันที่</div>`;
+  if(!start) return `<div style="position:absolute;top:12px;left:8px;font-size:10.5px;color:var(--text3)">ไม่มีวันที่</div>`;
   const end = (end0 && end0>=start) ? end0 : start;
   const st = r.status.toLowerCase();
   const color = r.done ? '#16a34a' : r.late ? '#dc2626' : st==='in progress' ? '#2563eb' : (st.includes('review')||st.includes('ตรวจ')) ? '#7c3aed' : '#94a3b8';
-  const a = sc.off(start), b = sc.off(end) + 1, clipL = a < 0, clipR = b > sc.span;
+  let a = sc.x(start), b = sc.x(end) + sc.pxPerDay;
+  const clipL = a < 0, clipR = b > sc.width; a = Math.max(0,a); b = Math.min(sc.width,b);
   const tip = esc(`ช่วงงาน ${sc.fmtS(start)}–${sc.fmtS(end)}${due?` · Due ${sc.fmtS(due)}`:''}${com?` · รับปากส่ง ${sc.fmtS(com)}`:''}`);
-  const mark = (d, sym, clr, t) => (d && sc.off(d)>=0 && sc.off(d)<=sc.span)
-    ? `<div title="${t} ${sc.fmtS(d)}" style="position:absolute;top:11px;left:${sc.pct(sc.off(d)+0.5)};transform:translateX(-50%);font-size:12px;line-height:18px;color:${clr};z-index:3">${sym}</div>` : '';
-  return todayLine + `<div title="${tip}" style="position:absolute;top:14px;height:12px;left:${sc.pct(a)};width:calc(${sc.pct(b)} - ${sc.pct(a)});min-width:5px;background:${color};opacity:${r.done?'.65':'1'};border-radius:${clipL?'0':'4px'} ${clipR?'0':'4px'} ${clipR?'0':'4px'} ${clipL?'0':'4px'};z-index:1"></div>`
-    + mark(due,'◆','#b45309','Due Date') + mark(com,'●','#0f766e','BOQ รับปากส่ง');
+  const mark = (d, sym, clr, t) => { if(!d) return ''; const px = sc.x(d) + sc.pxPerDay/2; if(px<0||px>sc.width) return '';
+    return `<div title="${t} ${sc.fmtS(d)}" style="position:absolute;top:11px;left:${px}px;transform:translateX(-50%);font-size:12px;line-height:18px;color:${clr};z-index:4">${sym}</div>`; };
+  const bar = b > a ? `<div title="${tip}" style="position:absolute;top:14px;height:12px;left:${a}px;width:${Math.max(5,b-a)}px;background:${color};opacity:${r.done?'.65':'1'};border-radius:${clipL?'0':'4px'} ${clipR?'0':'4px'} ${clipR?'0':'4px'} ${clipL?'0':'4px'};z-index:2"></div>` : '';
+  return bar + mark(due,'◆','#b45309','Due Date') + mark(com,'●','#0f766e','BOQ รับปากส่ง');
 }
 // popup รายละเอียดงาน (ดูอย่างเดียว)
 function openPostViewDetail(id){
