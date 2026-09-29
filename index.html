@@ -330,7 +330,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-29.67</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-29.68</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -1092,7 +1092,7 @@ const STEP_NAMES = {1:'รับแบบ+ตรวจ',2:'Query Sheet',3:'ท�
 // ratio ของแต่ละ Stage ไม่จำเป็นต้องรวมกันเป็น 1 พอดี ระบบ normalize ให้เองตอนคำนวณจริง (ดู getTemplateForService)
 // SERVICE_TYPES: ต้องตรงกับ choice list ของ field "Service Type" ใน SharePoint list เป๊ะๆ (ดูภาพหน้าตั้งค่า field)
 const SERVICE_TYPES = ['Blank BOQ','Pretender','Budget','VE','Cost Exercise','VO',
-  // build 2026-09-29.67: เพิ่ม variant ของ VE/Cost Exercise/VO ที่แยก Stage เป็น 2 stage (ทำ + ตรวจ)
+  // build 2026-09-29.68: เพิ่ม variant ของ VE/Cost Exercise/VO ที่แยก Stage เป็น 2 stage (ทำ + ตรวจ)
   'VO - General',
   'Cost Exercise - Budget Stage','Cost Exercise - Bidding Stage','Cost Exercise - Post Services Stage',
   'VE - Budget Stage','VE - Bidding Stage','VE - Post Services Stage',
@@ -1141,7 +1141,7 @@ const DEFAULT_STEP_TEMPLATES = {
   'Meeting - Onsite':     [ {name:'เตรียมข้อมูล', ratio:0.4}, {name:'ประชุม Onsite+สรุป', ratio:0.6} ],  // build 2026-08-25.12
   'Check Progress':       [ {name:'ตรวจหน้างาน/เอกสาร', ratio:0.5}, {name:'สรุปรายงาน', ratio:0.5} ],
   'Payment Certificate':  [ {name:'ตรวจปริมาณงาน', ratio:0.4}, {name:'ทำ Payment Cert.', ratio:0.4}, {name:'ตรวจ+ส่ง', days:2} ],
-  // build 2026-09-29.67: variant ของ VE/Cost Exercise/VO ที่ใช้ชื่อแยก Stage — 2 stage เท่านั้น: ทำ (สัดส่วนที่เหลือ) + ตรวจ (คงที่ 2 วัน)
+  // build 2026-09-29.68: variant ของ VE/Cost Exercise/VO ที่ใช้ชื่อแยก Stage — 2 stage เท่านั้น: ทำ (สัดส่วนที่เหลือ) + ตรวจ (คงที่ 2 วัน)
   'VO - General':                        [ {name:'ทำ', ratio:1}, {name:'ตรวจ', days:2} ],
   'Cost Exercise - Budget Stage':        [ {name:'ทำ', ratio:1}, {name:'ตรวจ', days:2} ],
   'Cost Exercise - Bidding Stage':       [ {name:'ทำ', ratio:1}, {name:'ตรวจ', days:2} ],
@@ -1271,10 +1271,10 @@ const SECONDARY_PENALTY_MS = 365 * 24 * 60 * 60 * 1000; // ~1 ปี penalty ส
 // build 2026-09-23.19: Yo เป็น option เลือกได้ทุกทีม (ดู openStep S4/S8) แต่ default ยังเป็นหัวหน้าทีมเดิม
 const QA_LEADS = {
   ST:'May', 'AR&ID':'Yim',
-  MEP:'Stamp', EE:'Stamp', AC:'Stamp', SN:'Stamp', FP:'Stamp', // build 2026-09-29.67: เพิ่ม MEP → Stamp
+  MEP:'Stamp', EE:'Stamp', AC:'Stamp', SN:'Stamp', FP:'Stamp', // build 2026-09-29.68: เพิ่ม MEP → Stamp
   Budget:'Yo'
 };
-const MEP_SUBTEAMS = ['MEP','EE','AC','SN','FP']; // build 2026-09-29.67: เพิ่ม MEP (ทีมรวม) ให้มี dropdown เลือกคนเหมือน EE/AC/SN/FP
+const MEP_SUBTEAMS = ['MEP','EE','AC','SN','FP']; // build 2026-09-29.68: เพิ่ม MEP (ทีมรวม) ให้มี dropdown เลือกคนเหมือน EE/AC/SN/FP
 // รายชื่อทีมทั้งหมด (unique) รวมจากทุก pool — ใช้เป็น roster หลักของตาราง Manpower เพื่อให้เห็นครบทุกคน
 // แม้ตอนนี้ไม่มีงานถือครองอยู่เลยก็ตาม (ไม่ใช่แค่คนที่บังเอิญมีชื่อโผล่ในข้อมูลปัจจุบัน) — คนหนึ่งอาจอยู่หลาย pool
 // (เช่น 'Su' อยู่ทั้ง ST/AR/MEP, 'Best'/'Yo'/'Stamp'/'Jack' อยู่ทั้ง pool เดิมของตัวเองและ BUDGET) เก็บเป็น Map ชื่อ ->
@@ -1775,7 +1775,7 @@ function subToPool(sub){
 // ที่มีจริง 3 ทีม (ST/AR&ID/MEP) แต่เดาออกมาแค่ 2 — ใช้ subteamsForRawPackage/ค่าจริงใน column "Team" เป็นแค่ค่า
 // default ที่ติ๊กไว้ให้ตอนเปิดหน้า Commit เท่านั้น ผู้ใช้ยังเห็นและติ๊กเพิ่ม/ลดเองได้เสมอก่อนกด Commit จริง)
 // build 2026-08-18.10: เพิ่ม 'Budget' เข้าไปในลิสต์นี้ตามที่ผู้ใช้แจ้งว่าขาดไป
-// build 2026-09-29.67: เพิ่ม 'MEP' เป็น subteam จริง (งานที่ส่งในนามทีม MEP รวม ไม่แยก EE/AC/SN/FP)
+// build 2026-09-29.68: เพิ่ม 'MEP' เป็น subteam จริง (งานที่ส่งในนามทีม MEP รวม ไม่แยก EE/AC/SN/FP)
 const ALL_SUBTEAMS = ['ST','AR&ID','MEP','EE','AC','SN','FP','Budget'];
 // parseTeamField: แปลงค่าดิบจาก column "Team" ใน BOQ Team Work Plan (อาจเป็น string เดี่ยว/คั่นด้วย , ; หรือ array
 // ถ้าเป็น multi-select choice) ให้เป็น array ของชื่อทีมย่อยที่ตรงกับ ALL_SUBTEAMS เท่านั้น (กันค่าพิมพ์ผิด/ไม่รู้จัก)
@@ -2511,7 +2511,7 @@ async function loadIntakeFromGraph(){
       continue;
     }
     const task = {
-      itemId: it.id,
+      itemId: String(it.id).split(':')[0],   // build 2026-09-29.68: strip :version suffix ที่ Graph API บางครั้งต่อท้าย (เช่น "439:1" → "439") — ใช้ raw id ใน URL ทำให้เกิด 500 generalException
       // ชื่อ field จริงใน SharePoint เข้ารหัสช่องว่างเป็น _x0020_ (เช่น "Project Name" -> Project_x0020_Name)
       name: f.Title || f.Project_x0020_Name || f.Project || 'Unnamed',
       service: f.Service_x0020_Type || f.ServiceType || '-',
@@ -2589,7 +2589,8 @@ async function commitAndGenerateSteps(task, sug, selectedSubs, editedStart, edit
       return stepNum >= myStepMin && stepNum <= myStepMax;
     });
     for(const old of toDelete){
-      await graphFetch(`/sites/${SITE_ID}/lists/${STEP_LIST}/items/${old.id}`, { method:'DELETE' });
+      const safeOldId = String(old.id).split(':')[0]; // build 2026-09-29.68: strip :version suffix — /items/439:1 → Graph 500
+      await graphFetch(`/sites/${SITE_ID}/lists/${STEP_LIST}/items/${safeOldId}`, { method:'DELETE' });
     }
     if(toDelete.length) console.log(`[commitAndGenerateSteps] ลบ Step เก่า ${toDelete.length} รายการของ "${task.name} · ${task.packageName} · ${task.service}" ก่อนสร้างชุดใหม่`);
   }catch(e){ console.warn('[commitAndGenerateSteps] ลบ Step เก่าไม่สำเร็จ (เสี่ยงมี Step ซ้ำ) — ดำเนินการสร้างชุดใหม่ต่อ', e); }
@@ -5195,7 +5196,7 @@ function updateTeamFilterLabel(){
   if(checked.length===0) lbl.textContent='— ทุกทีม —';
   else if(checked.length===1) lbl.textContent=checked[0].value;
   else lbl.textContent=`${checked.length} ทีม`;
-  // sync MEP master checkbox (checked/indeterminate) — build 2026-09-29.67: รวม MEP (ทีมรวม) ด้วย
+  // sync MEP master checkbox (checked/indeterminate) — build 2026-09-29.68: รวม MEP (ทีมรวม) ด้วย
   const MEP=['MEP','EE','AC','SN','FP'];
   const mepEl=document.getElementById('teamChkMEP');
   if(mepEl){
@@ -5216,7 +5217,7 @@ function teamCheckAll(cb){
   renderRows();
 }
 function teamCheckMEP(cb){
-  ['MEP','EE','AC','SN','FP'].forEach(t=>{ // build 2026-09-29.67: รวม MEP (ทีมรวม) ด้วย
+  ['MEP','EE','AC','SN','FP'].forEach(t=>{ // build 2026-09-29.68: รวม MEP (ทีมรวม) ด้วย
     const el=document.querySelector(`.team-chk[value="${t}"]`);
     if(el) el.checked=cb.checked;
   });
@@ -5238,7 +5239,7 @@ function initFilters(){
     const item=chk.closest('.team-check-item');
     if(item) item.style.display=teamSet.has(chk.value)?'':'none';
   });
-  const hasMEP=['MEP','EE','AC','SN','FP'].some(t=>teamSet.has(t)); // build 2026-09-29.67: รวม MEP รวม
+  const hasMEP=['MEP','EE','AC','SN','FP'].some(t=>teamSet.has(t)); // build 2026-09-29.68: รวม MEP รวม
   const mepLabel=document.getElementById('teamChkMEP')?.closest('.team-check-item');
   if(mepLabel) mepLabel.style.display=hasMEP?'':'none';
   // close-outside listener (ผูกครั้งเดียว)
