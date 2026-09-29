@@ -330,7 +330,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-29.80</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-29.81</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -338,6 +338,7 @@ tr.pick:hover td{background:var(--bg)}
     <div class="tab" data-p="pgToday">📋 งานวันนี้</div>
     <div class="tab" data-p="pgMyWork" id="tabMyWork" style="display:none">👤 งานของฉัน</div>
     <div class="tab" data-p="pgWorkPlan" id="tabWorkPlan" style="display:none">📝 Work Plan</div>
+    <div class="tab" data-p="pgPostView" id="tabPostView" style="display:none">📬 ภาพรวมงาน (Team Post)</div>
   </div>
   <div class="right">
     <button class="btn btn2" id="loginBtn" style="display:none" onclick="doLogin()">🔐 เข้าสู่ระบบ SharePoint</button>
@@ -579,6 +580,23 @@ tr.pick:hover td{background:var(--bg)}
     <button class="btn btn2" onclick="renderMyWork()">🔄 รีเฟรช</button>
   </div>
   <div id="myWorkBody" style="margin-top:14px"></div>
+</div>
+
+<!-- ============ PAGE · ภาพรวมงานสำหรับ Team Post (build 2026-09-29.81) — ดูได้อย่างเดียว ============ -->
+<div class="page" id="pgPostView">
+  <div class="tools" style="flex-wrap:wrap;row-gap:8px;align-items:center">
+    <span style="font-weight:700;font-size:14px">📬 ภาพรวมงานที่สั่งเข้าทีม BOQ</span>
+    <span id="pvCountLabel" style="font-size:12px;color:var(--text3);margin-left:6px"></span>
+    <span style="flex:1"></span>
+    <input id="pvSearch" type="search" placeholder="🔍 ค้นหาโครงการ / ผู้สั่งงาน..." oninput="renderPostView()"
+      style="border:1px solid var(--border);border-radius:8px;padding:5px 10px;font-size:13px;background:var(--bg2);color:var(--text1);width:220px;outline:none">
+    <select id="pvDept" onchange="renderPostView()" style="border:1px solid var(--border);border-radius:8px;padding:5px 8px;font-size:12.5px;background:var(--bg2);color:var(--text1)"><option value="">— ทุก Department —</option></select>
+    <label style="font-size:12.5px;color:var(--text2);display:flex;align-items:center;gap:6px">
+      <input type="checkbox" id="pvShowDone" onchange="renderPostView()"> แสดงงานที่เสร็จแล้ว
+    </label>
+    <button class="btn btn2" onclick="loadPostView(true)">🔄 รีเฟรช</button>
+  </div>
+  <div id="pvBody" style="margin-top:14px"></div>
 </div>
 
 <!-- ============ PAGE · BOQ Team Work Plan (build 2026-09-25.31) ============ -->
@@ -4096,6 +4114,8 @@ async function bootLive(){
       if(tabWp) tabWp.style.display = '';
       const labelEl = document.getElementById('myWorkUserLabel');
       if(labelEl) labelEl.textContent = myWorkSysName ? `· ${myWorkSysName} (${email})` : `· (${email})`;
+      // build 2026-09-29.81: account ที่ไม่ได้ map ไว้ (ไม่ใช่ทีม BOQ และไม่ใช่ admin) → เห็นเฉพาะหน้า "ภาพรวมงาน (Team Post)"
+      applyPostOnlyMode(!(myWorkSysName || FULL_ACCESS_EMAILS.includes(email)));
     }
     // build 2026-08-25.13: ปรับประสิทธิภาพการโหลด — เดิม recalcTimelineWindow() ดึง STEP_LIST + WORKPLAN_LIST
     // เองก่อน แล้ว Promise.all ด้านล่างดึง STEP_LIST + WORKPLAN_LIST ซ้ำอีกรอบ รวมเป็น 4 round-trip sequential+parallel
@@ -6445,7 +6465,143 @@ document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
   if(t.dataset.p==='pgToday') renderTodayTasks(); // build 2026-09-11.2: render งานวันนี้ทุกครั้งที่สลับมา tab นี้
   if(t.dataset.p==='pgMyWork') renderMyWork(); // build 2026-09-23.3: render งานของฉันทุกครั้งที่สลับมา tab นี้
   if(t.dataset.p==='pgWorkPlan' && !_wpItems.length) loadWorkPlan(); // build 2026-09-25.24: โหลด Work Plan ครั้งแรก
+  if(t.dataset.p==='pgPostView') loadPostView(false); // build .81
 }));
+
+/* ============ ภาพรวมงานสำหรับ Team Post (build 2026-09-29.81) ============ */
+// ดูได้อย่างเดียว · แบ่งตาม Department · แสดง Person in Charge (ผู้สั่งงานจาก Team Post)
+// account ที่ไม่อยู่ใน USER_MAP และไม่อยู่ใน FULL_ACCESS_EMAILS จะเห็นเฉพาะหน้านี้หน้าเดียว
+// หมายเหตุ: เป็นการซ่อนที่หน้าเว็บ ไม่ใช่สิทธิ์ใน SharePoint — ผู้ใช้ต้องมีสิทธิ์อ่านลิสต์ BOQ Team Work Plan ด้วย
+const FULL_ACCESS_EMAILS = ['costplan1@costplan1.onmicrosoft.com','ai@costplan.co.th']; // admin เห็นทุกหน้า
+let POST_ONLY_MODE = false;
+let _pvItems = null;
+function applyPostOnlyMode(on){
+  POST_ONLY_MODE = !!on;
+  const pvTab = document.getElementById('tabPostView');
+  if(pvTab) pvTab.style.display = '';
+  document.querySelectorAll('.tab').forEach(t=>{
+    if(t.id==='tabPostView') return;
+    if(on) t.style.display = 'none';
+  });
+  if(on){
+    // ซ่อนปุ่มที่แก้ไขข้อมูลได้บนแถบบน (ถ้ามี) และเปิดหน้าภาพรวมทันที
+    ['refreshBtn'].forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display='none'; });
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
+    document.querySelectorAll('.page').forEach(x=>x.classList.remove('on'));
+    if(pvTab) pvTab.classList.add('on');
+    document.getElementById('pgPostView').classList.add('on');
+    loadPostView(false);
+  }
+}
+async function loadPostView(force){
+  const body = document.getElementById('pvBody');
+  if(!body) return;
+  if(!graphAccount){ body.innerHTML = `<div style="padding:32px 16px;text-align:center;color:var(--text3)">🔐 กรุณาเข้าสู่ระบบ SharePoint ก่อน</div>`; return; }
+  try{
+    if(force || !_pvItems){
+      if(!force && typeof BOOT_CACHE!=='undefined' && BOOT_CACHE && BOOT_CACHE.workplanItems && BOOT_CACHE.workplanItems.length){
+        _pvItems = BOOT_CACHE.workplanItems;
+      } else {
+        body.innerHTML = `<div style="padding:24px;color:var(--text3)">⏳ กำลังโหลด...</div>`;
+        _pvItems = await graphFetchAllItems(`/sites/${SITE_ID}/lists/${WORKPLAN_LIST}/items?$expand=fields&$top=200`);
+      }
+    }
+    renderPostView();
+  }catch(e){
+    body.innerHTML = `<div style="padding:20px;color:#ef4444">❌ โหลดข้อมูลไม่สำเร็จ: ${String(e.message).replace(/</g,'&lt;')}<br><span style="color:var(--text3);font-size:12px">ถ้าเป็น 403/401 แปลว่า account นี้ยังไม่มีสิทธิ์อ่านลิสต์ BOQ Team Work Plan ใน SharePoint</span></div>`;
+  }
+}
+function pvPersonName(v){
+  if(!v) return '';
+  if(Array.isArray(v)) return v.map(x=> typeof x==='object' ? (x.LookupValue||x.Email||'') : String(x)).filter(Boolean).join(', ');
+  if(typeof v==='object') return v.LookupValue || v.Email || '';
+  return String(v);
+}
+function renderPostView(){
+  const body = document.getElementById('pvBody');
+  if(!body || !_pvItems) return;
+  const esc = v => String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+  const fmtDate = v => { if(!v) return '—'; const d=new Date(v); return isNaN(d) ? '—' : d.toLocaleDateString('th-TH',{day:'numeric',month:'numeric',year:'numeric'}); };
+  const today = new Date(); today.setHours(0,0,0,0);
+  const DONE = new Set(['done','completed','complete','เสร็จ']);
+  const q = (document.getElementById('pvSearch')?.value||'').trim().toLowerCase();
+  const deptSel = document.getElementById('pvDept');
+  const deptF = deptSel?.value || '';
+  const showDone = document.getElementById('pvShowDone')?.checked;
+
+  const all = _pvItems.map(it=>{
+    const f = it.fields||{};
+    const status = f.Status || 'Not Started';
+    const done = DONE.has(status.toLowerCase());
+    const due = f.Due_x0020_Date || f.DueDate || '';
+    const dueD = due ? new Date(due) : null;
+    const assignee = (typeof extractWpAssignee==='function') ? extractWpAssignee(f) : '';
+    const team = Array.isArray(f.Team) ? f.Team.join(', ') : (f.Team||'');
+    return {
+      id: it.id, dept: f.Department || 'ไม่ระบุ Department',
+      proj: f.Project_x0020_Name || f.Title || '—', pkg: f.Package || '—', svc: f.Service_x0020_Type || '—',
+      ver: f.Version || '', pic: pvPersonName(f.Person_x0020_in_x0020_Charge) || '—',
+      team: team || '—', assignee: (Array.isArray(assignee)?assignee.join(', '):assignee) || '—',
+      due, dueD, committed: f.CommittedFinish || '', status, done,
+      late: !done && dueD && !isNaN(dueD) && dueD < today
+    };
+  });
+  // เติมตัวเลือก Department
+  const depts = [...new Set(all.map(r=>r.dept))].sort((a,b)=> (a.startsWith('ไม่ระบุ')) - (b.startsWith('ไม่ระบุ')) || a.localeCompare(b));
+  if(deptSel && deptSel.dataset.key !== depts.join('|')){
+    const cur = deptSel.value;
+    deptSel.innerHTML = `<option value="">— ทุก Department —</option>` + depts.map(d=>`<option value="${esc(d)}">${esc(d)}</option>`).join('');
+    deptSel.dataset.key = depts.join('|'); if(depts.includes(cur)) deptSel.value = cur;
+  }
+  const rows = all.filter(r=>
+    (showDone || !r.done) && (!deptF || r.dept===deptF) &&
+    (!q || [r.proj,r.pkg,r.svc,r.pic,r.assignee,r.dept].some(x=>String(x).toLowerCase().includes(q))));
+  const lbl = document.getElementById('pvCountLabel');
+  if(lbl) lbl.textContent = `${rows.length} / ${all.length} รายการ`;
+  if(!rows.length){ body.innerHTML = `<div style="padding:32px 16px;text-align:center;color:var(--text3)">ไม่พบรายการ</div>`; return; }
+
+  const statusBadge = r => {
+    const st = r.status.toLowerCase();
+    const c = r.done ? ['#dcfce7','#15803d'] : st==='in progress' ? ['#dbeafe','#1d4ed8'] : (st.includes('review')||st.includes('ตรวจ')) ? ['#ede9fe','#6d28d9'] : (st==='on hold'||st==='reject') ? ['#fee2e2','#b91c1c'] : ['#f1f5f9','#475569'];
+    return `<span style="background:${c[0]};color:${c[1]};border-radius:5px;padding:1px 7px;font-size:11px;font-weight:600;white-space:nowrap">${esc(r.status)}</span>`;
+  };
+  // สรุปจำนวนต่อ Department
+  const groups = {};
+  rows.forEach(r=>{ (groups[r.dept] = groups[r.dept] || []).push(r); });
+  const order = Object.keys(groups).sort((a,b)=> (a.startsWith('ไม่ระบุ')) - (b.startsWith('ไม่ระบุ')) || a.localeCompare(b));
+  const card = (d,list)=>{
+    const prog = list.filter(r=>!r.done && r.status.toLowerCase()!=='not started').length;
+    const late = list.filter(r=>r.late).length;
+    const done = list.filter(r=>r.done).length;
+    return `<div onclick="document.getElementById('pvDept').value='${esc(d)}';renderPostView()" style="cursor:pointer;border:1px solid var(--border);border-radius:10px;padding:10px 12px;background:var(--bg1,#fff);min-width:150px">
+      <div style="font-weight:700;font-size:13px;color:var(--text1)">${esc(d)}</div>
+      <div style="font-size:22px;font-weight:700;color:var(--primary);margin:2px 0">${list.length}<span style="font-size:11px;color:var(--text3);font-weight:500"> งาน</span></div>
+      <div style="font-size:11px;color:var(--text2)">กำลังทำ ${prog}${late?` · <span style="color:#dc2626;font-weight:700">เลยกำหนด ${late}</span>`:''}${showDone?` · เสร็จ ${done}`:''}</div>
+    </div>`;
+  };
+  const th = 'padding:7px 10px;font-size:11.5px;color:var(--text3);font-weight:600;text-align:left;border-bottom:1px solid var(--border);background:var(--bg2);white-space:nowrap';
+  const td = 'padding:7px 10px;font-size:12.5px;border-bottom:1px solid var(--border);vertical-align:top';
+  const section = d => {
+    const list = groups[d].slice().sort((a,b)=> (a.done-b.done) || ((a.dueD||Infinity) - (b.dueD||Infinity)) || a.proj.localeCompare(b.proj));
+    return `<div style="margin-top:16px;border:1px solid var(--border);border-radius:10px;overflow:hidden;background:var(--bg1,#fff)">
+      <div style="padding:9px 12px;font-weight:700;font-size:13.5px;color:var(--primary);border-bottom:1px solid var(--border)">🏢 ${esc(d)} <span style="color:var(--text3);font-weight:500;font-size:12px">· ${list.length} งาน</span></div>
+      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:980px;table-layout:fixed">
+        <colgroup><col style="width:13%"><col style="width:10%"><col style="width:12%"><col style="width:7%"><col style="width:13%"><col style="width:8%"><col style="width:10%"><col style="width:9%"><col style="width:9%"><col style="width:9%"></colgroup>
+        <thead><tr><th style="${th}">โครงการ</th><th style="${th}">Package</th><th style="${th}">Service Type</th><th style="${th}">Version</th>
+          <th style="${th}">Person in Charge (ผู้สั่งงาน)</th><th style="${th}">ทีม BOQ</th><th style="${th}">ผู้ทำ</th>
+          <th style="${th}">Due Date</th><th style="${th}">BOQ รับปากส่ง</th><th style="${th}">สถานะ</th></tr></thead>
+        <tbody>${list.map(r=>`<tr style="${r.late?'background:#fff5f5':''}">
+          <td style="${td};font-weight:600">${esc(r.proj)}</td><td style="${td}">${esc(r.pkg)}</td><td style="${td};color:var(--primary)">${esc(r.svc)}</td>
+          <td style="${td};color:var(--text2)">${esc(r.ver||'—')}</td><td style="${td};font-weight:600">${esc(r.pic)}</td>
+          <td style="${td};color:var(--text2)">${esc(r.team)}</td><td style="${td};color:var(--text2)">${esc(r.assignee)}</td>
+          <td style="${td};white-space:nowrap;${r.late?'color:#dc2626;font-weight:700':''}">${fmtDate(r.due)}${r.late?' ⚠':''}</td>
+          <td style="${td};white-space:nowrap">${fmtDate(r.committed)}</td><td style="${td}">${statusBadge(r)}</td></tr>`).join('')}</tbody>
+      </table></div></div>`;
+  };
+  body.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:10px">${order.map(d=>card(d,groups[d])).join('')}</div>
+    ${order.map(section).join('')}
+    <p style="margin:12px 4px;font-size:11.5px;color:var(--text3)">👁 หน้านี้ดูได้อย่างเดียว · แถวสีแดง = เลย Due Date แล้วยังไม่เสร็จ · กดการ์ด Department เพื่อกรองเฉพาะแผนกนั้น</p>`;
+}
 
 /* ============ COMMIT CHECK · AI Suggest ============ */
 let INTAKE=[
