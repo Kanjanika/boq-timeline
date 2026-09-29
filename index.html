@@ -330,7 +330,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-29.66</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-29.67</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -359,6 +359,7 @@ tr.pick:hover td{background:var(--bg)}
         <label class="team-check-item"><input type="checkbox" id="teamChkAll" checked onchange="teamCheckAll(this)"> ทุกทีม</label>
         <hr class="team-divider">
         <label class="team-check-item mep-group"><input type="checkbox" id="teamChkMEP" onchange="teamCheckMEP(this)"> 📦 MEP ทั้งหมด</label>
+        <label class="team-check-item team-check-sub"><input type="checkbox" class="team-chk" value="MEP" onchange="teamChkChange()"> MEP (ทีมรวม)</label>
         <label class="team-check-item team-check-sub"><input type="checkbox" class="team-chk" value="EE" onchange="teamChkChange()"> EE</label>
         <label class="team-check-item team-check-sub"><input type="checkbox" class="team-chk" value="AC" onchange="teamChkChange()"> AC</label>
         <label class="team-check-item team-check-sub"><input type="checkbox" class="team-chk" value="SN" onchange="teamChkChange()"> SN</label>
@@ -1090,7 +1091,12 @@ const STEP_NAMES = {1:'รับแบบ+ตรวจ',2:'Query Sheet',3:'ท�
 // จริงไม่เหมือนกัน เลยทำ Step Template แยกตาม Service Type แทน แก้ไขได้จากปุ่ม "⚙️ Step Template" ในแถบ Timeline
 // ratio ของแต่ละ Stage ไม่จำเป็นต้องรวมกันเป็น 1 พอดี ระบบ normalize ให้เองตอนคำนวณจริง (ดู getTemplateForService)
 // SERVICE_TYPES: ต้องตรงกับ choice list ของ field "Service Type" ใน SharePoint list เป๊ะๆ (ดูภาพหน้าตั้งค่า field)
-const SERVICE_TYPES = ['Blank BOQ','Pretender','Budget','VE','Cost Exercise','VO','Meeting - Online','Meeting - Onsite','Check Progress','Payment Certificate']; // build 2026-08-25.12: แยก Meeting → Meeting - Online + Meeting - Onsite ตาม choice list ใน SharePoint
+const SERVICE_TYPES = ['Blank BOQ','Pretender','Budget','VE','Cost Exercise','VO',
+  // build 2026-09-29.67: เพิ่ม variant ของ VE/Cost Exercise/VO ที่แยก Stage เป็น 2 stage (ทำ + ตรวจ)
+  'VO - General',
+  'Cost Exercise - Budget Stage','Cost Exercise - Bidding Stage','Cost Exercise - Post Services Stage',
+  'VE - Budget Stage','VE - Bidding Stage','VE - Post Services Stage',
+  'Meeting - Online','Meeting - Onsite','Check Progress','Payment Certificate']; // build 2026-08-25.12: แยก Meeting → Meeting - Online + Meeting - Onsite ตาม choice list ใน SharePoint
 // WP Work Plan field constants — synced from Graph API column definitions 2026-09-25.26
 // (แยกจาก SERVICE_TYPES/ALL_SUBTEAMS/PROJECT_TYPES_WEEKS ที่ใช้กับ Commit Check flow)
 const WP_SERVICE_TYPES = ['Blank BOQ','Pretender','Budget - Preliminaries (Cost/m2)','Budget - Breakdown Detail (บางส่วน เช่น Guestroom 1-2 Type)','Budget - Breakdown Detail (as EIA Drawing)','Budget - Breakdown Detail (as For Tender Drawing)','VO - General','VO - For Con VS For Tender','Cost Exercise - Budget Stage','Cost Exercise - Bidding Stage','Cost Exercise - Post Services Stage','VE - Budget Stage','VE - Bidding Stage','VE - Post Services Stage','Meeting - Online','Meeting - Onsite','Check Progress','Payment Certificate'];
@@ -1135,6 +1141,14 @@ const DEFAULT_STEP_TEMPLATES = {
   'Meeting - Onsite':     [ {name:'เตรียมข้อมูล', ratio:0.4}, {name:'ประชุม Onsite+สรุป', ratio:0.6} ],  // build 2026-08-25.12
   'Check Progress':       [ {name:'ตรวจหน้างาน/เอกสาร', ratio:0.5}, {name:'สรุปรายงาน', ratio:0.5} ],
   'Payment Certificate':  [ {name:'ตรวจปริมาณงาน', ratio:0.4}, {name:'ทำ Payment Cert.', ratio:0.4}, {name:'ตรวจ+ส่ง', days:2} ],
+  // build 2026-09-29.67: variant ของ VE/Cost Exercise/VO ที่ใช้ชื่อแยก Stage — 2 stage เท่านั้น: ทำ (สัดส่วนที่เหลือ) + ตรวจ (คงที่ 2 วัน)
+  'VO - General':                        [ {name:'ทำ', ratio:1}, {name:'ตรวจ', days:2} ],
+  'Cost Exercise - Budget Stage':        [ {name:'ทำ', ratio:1}, {name:'ตรวจ', days:2} ],
+  'Cost Exercise - Bidding Stage':       [ {name:'ทำ', ratio:1}, {name:'ตรวจ', days:2} ],
+  'Cost Exercise - Post Services Stage': [ {name:'ทำ', ratio:1}, {name:'ตรวจ', days:2} ],
+  'VE - Budget Stage':                   [ {name:'ทำ', ratio:1}, {name:'ตรวจ', days:2} ],
+  'VE - Bidding Stage':                  [ {name:'ทำ', ratio:1}, {name:'ตรวจ', days:2} ],
+  'VE - Post Services Stage':            [ {name:'ทำ', ratio:1}, {name:'ตรวจ', days:2} ],
 };
 // STEP_NUMBER_OFFSET: เลข Step (WBSStep/S{n}) ของ Service Type นี้เริ่มนับต่อจากเลขนี้ (ไม่ใช่เริ่ม S1 เสมอไป)
 // ใช้กับ Pretender เท่านั้นตอนนี้ เพื่อให้ยังเห็นเป็น S5-S8 ต่อจาก Blank BOQ (S1-S4) ตามธรรมเนียมเดิม แม้จะ commit
@@ -1257,10 +1271,10 @@ const SECONDARY_PENALTY_MS = 365 * 24 * 60 * 60 * 1000; // ~1 ปี penalty ส
 // build 2026-09-23.19: Yo เป็น option เลือกได้ทุกทีม (ดู openStep S4/S8) แต่ default ยังเป็นหัวหน้าทีมเดิม
 const QA_LEADS = {
   ST:'May', 'AR&ID':'Yim',
-  EE:'Stamp', AC:'Stamp', SN:'Stamp', FP:'Stamp',
+  MEP:'Stamp', EE:'Stamp', AC:'Stamp', SN:'Stamp', FP:'Stamp', // build 2026-09-29.67: เพิ่ม MEP → Stamp
   Budget:'Yo'
 };
-const MEP_SUBTEAMS = ['EE','AC','SN','FP'];
+const MEP_SUBTEAMS = ['MEP','EE','AC','SN','FP']; // build 2026-09-29.67: เพิ่ม MEP (ทีมรวม) ให้มี dropdown เลือกคนเหมือน EE/AC/SN/FP
 // รายชื่อทีมทั้งหมด (unique) รวมจากทุก pool — ใช้เป็น roster หลักของตาราง Manpower เพื่อให้เห็นครบทุกคน
 // แม้ตอนนี้ไม่มีงานถือครองอยู่เลยก็ตาม (ไม่ใช่แค่คนที่บังเอิญมีชื่อโผล่ในข้อมูลปัจจุบัน) — คนหนึ่งอาจอยู่หลาย pool
 // (เช่น 'Su' อยู่ทั้ง ST/AR/MEP, 'Best'/'Yo'/'Stamp'/'Jack' อยู่ทั้ง pool เดิมของตัวเองและ BUDGET) เก็บเป็น Map ชื่อ ->
@@ -1761,7 +1775,8 @@ function subToPool(sub){
 // ที่มีจริง 3 ทีม (ST/AR&ID/MEP) แต่เดาออกมาแค่ 2 — ใช้ subteamsForRawPackage/ค่าจริงใน column "Team" เป็นแค่ค่า
 // default ที่ติ๊กไว้ให้ตอนเปิดหน้า Commit เท่านั้น ผู้ใช้ยังเห็นและติ๊กเพิ่ม/ลดเองได้เสมอก่อนกด Commit จริง)
 // build 2026-08-18.10: เพิ่ม 'Budget' เข้าไปในลิสต์นี้ตามที่ผู้ใช้แจ้งว่าขาดไป
-const ALL_SUBTEAMS = ['ST','AR&ID','EE','AC','SN','FP','Budget'];
+// build 2026-09-29.67: เพิ่ม 'MEP' เป็น subteam จริง (งานที่ส่งในนามทีม MEP รวม ไม่แยก EE/AC/SN/FP)
+const ALL_SUBTEAMS = ['ST','AR&ID','MEP','EE','AC','SN','FP','Budget'];
 // parseTeamField: แปลงค่าดิบจาก column "Team" ใน BOQ Team Work Plan (อาจเป็น string เดี่ยว/คั่นด้วย , ; หรือ array
 // ถ้าเป็น multi-select choice) ให้เป็น array ของชื่อทีมย่อยที่ตรงกับ ALL_SUBTEAMS เท่านั้น (กันค่าพิมพ์ผิด/ไม่รู้จัก)
 function parseTeamField(raw){
@@ -5180,8 +5195,8 @@ function updateTeamFilterLabel(){
   if(checked.length===0) lbl.textContent='— ทุกทีม —';
   else if(checked.length===1) lbl.textContent=checked[0].value;
   else lbl.textContent=`${checked.length} ทีม`;
-  // sync MEP master checkbox (checked/indeterminate)
-  const MEP=['EE','AC','SN','FP'];
+  // sync MEP master checkbox (checked/indeterminate) — build 2026-09-29.67: รวม MEP (ทีมรวม) ด้วย
+  const MEP=['MEP','EE','AC','SN','FP'];
   const mepEl=document.getElementById('teamChkMEP');
   if(mepEl){
     const n=MEP.filter(t=>document.querySelector(`.team-chk[value="${t}"]`)?.checked).length;
@@ -5201,7 +5216,7 @@ function teamCheckAll(cb){
   renderRows();
 }
 function teamCheckMEP(cb){
-  ['EE','AC','SN','FP'].forEach(t=>{
+  ['MEP','EE','AC','SN','FP'].forEach(t=>{ // build 2026-09-29.67: รวม MEP (ทีมรวม) ด้วย
     const el=document.querySelector(`.team-chk[value="${t}"]`);
     if(el) el.checked=cb.checked;
   });
@@ -5223,7 +5238,7 @@ function initFilters(){
     const item=chk.closest('.team-check-item');
     if(item) item.style.display=teamSet.has(chk.value)?'':'none';
   });
-  const hasMEP=['EE','AC','SN','FP'].some(t=>teamSet.has(t));
+  const hasMEP=['MEP','EE','AC','SN','FP'].some(t=>teamSet.has(t)); // build 2026-09-29.67: รวม MEP รวม
   const mepLabel=document.getElementById('teamChkMEP')?.closest('.team-check-item');
   if(mepLabel) mepLabel.style.display=hasMEP?'':'none';
   // close-outside listener (ผูกครั้งเดียว)
