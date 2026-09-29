@@ -329,7 +329,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-29.64</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-29.65</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -2284,20 +2284,24 @@ async function pickLeastBusyPerson(subteam, pool, excludeNames=[]){
       const end = f.PlanEnd ? new Date(f.PlanEnd).getTime() : 0;
       if(!(name in maxEndByPerson) || end > maxEndByPerson[name]) maxEndByPerson[name] = end;
     });
-    // คนที่ไม่เคยมี Step เลย (maxEndByPerson ไม่มี key) ถือว่าว่างที่สุด (0) — เรียงจากว่างเร็วสุด/ว่างอยู่แล้วก่อน
+    // คนที่ไม่เคยมี Step เลย (maxEndByPerson ไม่มี key) ถือว่าว่างตั้งแต่วันนี้ (Date.now()) — ไม่ใช่ 0 (epoch 1970)
+    // เพราะถ้าใช้ 0 คนรองที่ไม่มี history จะ score ≈ Jan 1971 ms ซึ่งน้อยกว่า timestamp ค.ศ. 2026 มาก
+    // → คนรองที่ไม่มีงานชนะคนหลักที่มีงานอยู่ ทั้งที่ควรจะแพ้ penalty อยู่ดี (bug .64)
+    // build 2026-09-29.65: แก้โดยใช้ Date.now() เป็น fallback → คนรองที่ไม่มี history score ≈ วันนี้ + 1 ปี
     // กรอง excludeNames ออกก่อนเรียง (กันซ้ำข้ามทีม)
     const available = roster.filter(n => !excludeNames.includes(n));
-    // build 2026-09-29.64: คนรอง (ไม่อยู่ใน POOL_PRIMARY) จะถูกบวกโทษ ~1 ปี
+    // build 2026-09-29.65: คนรอง (ไม่อยู่ใน POOL_PRIMARY) จะถูกบวกโทษ ~1 ปี
     // → คนหลักถูกเลือกก่อนเสมอ (เว้นแต่คนหลักทุกคนมีงานเต็มมากกว่า 1 ปีจากคนรอง)
     const primary = POOL_PRIMARY[pool] || roster;
+    const _now65 = Date.now(); // fallback สำหรับคนที่ไม่มี Step เลย = ว่างตั้งแต่วันนี้ (ไม่ใช่ epoch 0)
     const sorted = available.sort((a,b)=> {
-      const aEnd = (maxEndByPerson[a]||0) + (primary.includes(a) ? 0 : SECONDARY_PENALTY_MS);
-      const bEnd = (maxEndByPerson[b]||0) + (primary.includes(b) ? 0 : SECONDARY_PENALTY_MS);
+      const aEnd = (maxEndByPerson[a]||_now65) + (primary.includes(a) ? 0 : SECONDARY_PENALTY_MS);
+      const bEnd = (maxEndByPerson[b]||_now65) + (primary.includes(b) ? 0 : SECONDARY_PENALTY_MS);
       return aEnd - bEnd;
     });
-    // build .64 debug log
-    console.log(`[pickLBP .64] subteam=${subteam} pool=${pool} primary=${JSON.stringify(primary)} available=${JSON.stringify(available)} exclude=${JSON.stringify(excludeNames)}`);
-    console.log(`[pickLBP .64] sorted=${JSON.stringify(sorted)} maxEnd=${JSON.stringify(maxEndByPerson)}`);
+    // build .65 debug log
+    console.log(`[pickLBP .65] subteam=${subteam} pool=${pool} primary=${JSON.stringify(primary)} available=${JSON.stringify(available)} exclude=${JSON.stringify(excludeNames)}`);
+    console.log(`[pickLBP .65] sorted=${JSON.stringify(sorted)} maxEnd=${JSON.stringify(maxEndByPerson)}`);
     const chosenName = sorted[0] || null;
     const freeDateMs = chosenName ? (maxEndByPerson[chosenName] || 0) : 0;
     // build 2026-08-25.15: คืน maxEndByPerson ทั้ง dict กลับไป เพื่อให้ computeAISuggest
