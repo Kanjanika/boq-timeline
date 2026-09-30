@@ -330,7 +330,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-30.93</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-30.94</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -6631,7 +6631,7 @@ function renderPostView(){
     const collapsed = _pvCollapsed.has(d);
     const dAttr = esc(d).replace(/'/g,"\\'");
     left  += `<div onclick="pvToggleDept('${dAttr}')" title="${collapsed?'กดเพื่อขยาย':'กดเพื่อหุบ'}" style="cursor:pointer;user-select:none;height:${DH}px;box-sizing:border-box;display:flex;align-items:center;padding:0 12px;background:var(--primary-lt,#ecfdf5);border-bottom:1px solid var(--border);font-weight:700;font-size:13px;color:var(--primary)"><span style="display:inline-block;width:16px;font-size:11px">${collapsed?'▶':'▼'}</span>🏢 ${esc(d)}&nbsp;<span style="color:var(--text3);font-weight:500;font-size:12px">· ${list.length} งาน${collapsed?' (หุบอยู่)':''}</span></div>`;
-    right += `<div onclick="pvToggleDept('${dAttr}')" style="cursor:pointer;height:${DH}px;box-sizing:border-box;background:var(--primary-lt,#ecfdf5);border-bottom:1px solid var(--border)"></div>`;
+    right += `<div onclick="pvToggleDept('${dAttr}')" style="position:relative;cursor:pointer;height:${DH}px;box-sizing:border-box;background:var(--primary-lt,#ecfdf5);border-bottom:1px solid var(--border)">${sc ? pvTeamSummaryBar(list, sc) : ''}</div>`;
     if(collapsed) return;
     list.forEach(r => {
       const id = esc(r.id), ev = `onclick="openPostViewDetail('${id}')" onmouseover="${hoverIn(id)}" onmouseout="${hoverOut(id,bgOf(r))}"`;
@@ -6781,6 +6781,32 @@ function pvBarKind(r){
   if(st==='in progress') return 'prog';
   if(st.includes('review') || st.includes('ตรวจ')) return 'review';
   return 'wait';
+}
+// build 2026-09-30.94: แท่งสรุปของทีม (บรรทัดเดียวกับชื่อ Team) — ช่วงตั้งแต่งานแรกเริ่ม ถึงงานสุดท้ายจบ
+// สไตล์เดียวกับแท่งสรุปโครงการในหน้า Timeline (แคปซูลสีเขียวอ่อน + ขอบเขียว) · ข้อความ = เสร็จ/ทั้งหมด
+function pvTeamSummaryBar(list, sc){
+  let lo = null, hi = null, done = 0, late = 0;
+  list.forEach(r=>{
+    const due = pvD0(r.due), com = pvD0(r.committed), st0 = pvD0(r.start), fin = pvD0(r.finish);
+    const end0 = fin || due || com, start = st0 || end0;
+    if(r.done) done++; if(r.late) late++;
+    if(!start) return;
+    const end = (end0 && end0>=start) ? end0 : start;
+    if(!lo || start < lo) lo = start;
+    if(!hi || end > hi) hi = end;
+  });
+  if(!lo) return '';
+  let a = sc.x(lo), b = sc.x(hi) + sc.pxPerDay;
+  const clipL = a < 0, clipR = b > sc.width; a = Math.max(0,a); b = Math.min(sc.width,b);
+  if(b <= a) return '';
+  const w = Math.max(24, b-a);
+  const txt = `${done}/${list.length} งาน${late?` · เลยกำหนด ${late}`:''}`;
+  const tip = `ช่วงงานของทีม ${sc.fmtS(lo)}–${sc.fmtS(hi)} · เสร็จ ${done} จาก ${list.length} งาน${late?` · เลยกำหนด ${late}`:''}`;
+  const pct = list.length ? Math.round(done/list.length*100) : 0;
+  return `<div title="${tip}" style="position:absolute;top:8px;height:18px;left:${a}px;width:${w}px;box-sizing:border-box;background:#ccfbf1;border:1px solid #5eead4;border-radius:${clipL?'0':'9px'} ${clipR?'0':'9px'} ${clipR?'0':'9px'} ${clipL?'0':'9px'};overflow:hidden;z-index:2">
+      <div style="position:absolute;left:0;top:0;bottom:0;width:${pct}%;background:#99f6e4"></div>
+      <div style="position:relative;line-height:16px;font-size:10px;font-weight:700;color:#115e59;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 6px">${w>=60?txt:''}</div>
+    </div>`;
 }
 function pvWeekBar(r, sc){
   const esc = v => String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
