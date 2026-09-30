@@ -330,7 +330,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-30.91</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-30.93</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -6540,7 +6540,7 @@ function renderPostView(){
 
   const all = _pvItems.map(it=>{
     const f = it.fields||{};
-    const status = f.Status || 'Not Started';
+    const status = String(f.Status||'').trim() || PV_BLANK_STATUS;   // build .93: ไม่ระบุสถานะ → แยกเป็น "(ว่าง)" ไม่รวมกับ Not Started
     const done = DONE.has(status.toLowerCase());
     const due = f.Due_x0020_Date || f.DueDate || '';
     const dueD = due ? new Date(due) : null;
@@ -6552,6 +6552,7 @@ function renderPostView(){
       ver: f.Version || '', pic: pvPersonName(f.Person_x0020_in_x0020_Charge) || '—',
       team: team || '—', assignee: (Array.isArray(assignee)?assignee.join(', '):assignee) || '—',
       due, dueD, committed: f.CommittedFinish || '', start: f.StartDate || '', finish: f.FinishDate || '', status, done,
+      isCommitted: String(f.CommitStatus||'').trim().toLowerCase()==='committed',   // build .93
       late: !done && dueD && !isNaN(dueD) && dueD < today
     };
   });
@@ -6581,6 +6582,7 @@ function renderPostView(){
   const statusBadge = r => {
     const st = r.status.toLowerCase();
     const c = r.done ? ['#dcfce7','#15803d'] : st==='in progress' ? ['#dbeafe','#1d4ed8'] : (st.includes('review')||st.includes('ตรวจ')) ? ['#ede9fe','#6d28d9'] : (st==='on hold'||st==='reject') ? ['#fee2e2','#b91c1c'] : ['#f1f5f9','#475569'];
+    if(r.status===PV_BLANK_STATUS) return `<span title="ยังไม่ระบุสถานะ" style="background:#fff;color:#64748b;border:1px dashed #94a3b8;border-radius:5px;padding:0 7px;font-size:11px;font-weight:600;white-space:nowrap">(ว่าง)</span>`;
     return `<span style="background:${c[0]};color:${c[1]};border-radius:5px;padding:1px 7px;font-size:11px;font-weight:600;white-space:nowrap">${esc(r.status)}</span>`;
   };
   // สรุปจำนวนต่อ Department
@@ -6647,6 +6649,7 @@ function renderPostView(){
   const lg = (k,t)=>{ const b = PV_BAR[k]; return `<span style="display:inline-flex;align-items:center;gap:5px"><span style="width:22px;height:12px;border-radius:3px;background:${b.bg};opacity:${b.op};${b.bd||''}"></span>${t}</span>`; };
   const legend = lg('wait','รอเริ่ม') + lg('prog','กำลังทำ') + lg('review','Review') + lg('late','เลยกำหนด') + lg('done','เสร็จ')
     + `<span style="display:inline-flex;align-items:center;gap:7px">${PV_MARK_DUE}Due Date</span><span style="display:inline-flex;align-items:center;gap:6px">${PV_MARK_COM}BOQ รับปากส่ง</span>`
+    + `<span style="display:inline-flex;align-items:center;gap:5px"><span style="width:22px;height:12px;border-radius:3px;background:rgba(14,116,144,.16);border:1.5px dashed #64748b;box-sizing:border-box"></span>ยังไม่ Commit</span>`
     + `<span style="display:inline-flex;align-items:center;gap:4px"><span style="width:2px;height:14px;background:var(--bad,#dc2626)"></span>วันนี้</span>`;
   const _ph = document.getElementById('pvHeadScroll'), _pv = document.getElementById('pvScroll');
   const _keep = (_ph && _pv) ? [_ph.scrollLeft, _pv.scrollTop] : null;   // จำตำแหน่งเลื่อนไว้ตอน render ใหม่
@@ -6769,6 +6772,7 @@ const PV_BAR = {
 };
 const PV_MARK_DUE = `<span style="display:inline-block;width:6px;height:6px;background:#b45309;transform:rotate(45deg);border:1px solid #fff;box-shadow:0 0 0 1px #b45309"></span>`;
 const PV_MARK_COM = `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#0f766e;border:1px solid #fff;box-shadow:0 0 0 1px #0f766e"></span>`;
+const PV_BLANK_STATUS = '(ว่าง) ยังไม่ระบุสถานะ';   // build .93
 function pvBarKind(r){
   const st = r.status.toLowerCase();
   if(r.done) return 'done';
@@ -6785,15 +6789,17 @@ function pvWeekBar(r, sc){
   if(!start) return `<div style="position:absolute;top:12px;left:8px;font-size:10.5px;color:var(--text3)">ไม่มีวันที่</div>`;
   const end = (end0 && end0>=start) ? end0 : start;
   const k = PV_BAR[pvBarKind(r)];
+  const nc = !r.isCommitted;   // build .93: ยังไม่ Commit → แท่งโปร่งแสง + ขอบประ
   let a = sc.x(start), b = sc.x(end) + sc.pxPerDay;
   const clipL = a < 0, clipR = b > sc.width; a = Math.max(0,a); b = Math.min(sc.width,b);
   const w = Math.max(14, b-a);
-  const tip = esc(`${r.status} · ช่วงงาน ${sc.fmtS(start)}–${sc.fmtS(end)}${due?` · Due ${sc.fmtS(due)}`:''}${com?` · รับปากส่ง ${sc.fmtS(com)}`:''}`);
-  const label = w >= 70 ? esc(r.status) : '';
+  const tip = esc(`${r.status}${nc?' · ยังไม่ Commit':''} · ช่วงงาน ${sc.fmtS(start)}–${sc.fmtS(end)}${due?` · Due ${sc.fmtS(due)}`:''}${com?` · รับปากส่ง ${sc.fmtS(com)}`:''}`);
+  const label = w >= 70 ? esc(r.status===PV_BLANK_STATUS ? '(ว่าง)' : r.status) : '';
   // แท่งสูง 16px เท่าหน้า Timeline · ข้อความสถานะในแท่งถ้ากว้างพอ
   const bar = b > a ? `<div title="${tip}" style="position:absolute;top:10px;height:16px;left:${a}px;width:${w}px;border-radius:${clipL?'0':'3px'} ${clipR?'0':'3px'} ${clipR?'0':'3px'} ${clipL?'0':'3px'};z-index:2;overflow:hidden">
-      <div style="position:absolute;inset:0;background:${k.bg};opacity:${k.op};${k.bd||''};border-radius:inherit"></div>
-      <div style="position:relative;height:16px;line-height:16px;font-size:9.5px;font-weight:700;color:${pvBarKind(r)==='wait'||pvBarKind(r)==='other'?'#0f172a':'#fff'};text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 4px">${label}</div>
+      <div style="position:absolute;inset:0;background:${k.bg};opacity:${nc ? (k.op*0.35).toFixed(2) : k.op};${k.bd||''};border-radius:inherit"></div>
+      ${nc ? `<div style="position:absolute;inset:0;border:1.5px dashed #64748b;border-radius:inherit;opacity:.7"></div>` : ''}
+      <div style="position:relative;height:16px;line-height:16px;font-size:9.5px;font-weight:700;color:${nc||pvBarKind(r)==='wait'||pvBarKind(r)==='other'?'#0f172a':'#fff'};text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 4px">${label}</div>
     </div>` : '';
   const mark = (d, html, t) => { if(!d) return ''; const px = sc.x(d) + sc.pxPerDay/2; if(px<0||px>sc.width) return '';
     return `<div title="${t} ${sc.fmtS(d)}" style="position:absolute;top:34px;left:${px}px;transform:translate(-50%,-50%);z-index:4;line-height:0">${html}</div>`; };
@@ -6829,6 +6835,7 @@ function openPostViewDetail(id){
       ${line('Due Date', fd(r.due) + (r.late?' <span style="color:#dc2626;font-weight:700">⚠ เลยกำหนด</span>':''))}
       ${line('BOQ รับปากส่ง', fd(r.committed))}
       ${line('สถานะ', esc(r.status), true)}
+      ${line('Commit', r.isCommitted ? '<span style="color:#15803d;font-weight:700">✓ Committed</span>' : '<span style="color:#b45309">ยังไม่ Commit</span>')}
       <div style="font-size:11px;color:var(--text3);margin-top:10px">👁 ดูได้อย่างเดียว</div>
     </div>
   </div>`;
