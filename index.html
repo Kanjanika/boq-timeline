@@ -179,7 +179,7 @@ body{font-family:'Segoe UI','Sarabun','Tahoma',sans-serif;background:var(--bg);c
 .seg.dim{opacity:.15!important;pointer-events:none}
 .seg.hilite{outline:2px solid #f59e0b;outline-offset:1px;z-index:2}
 .today-line{position:absolute;top:0;bottom:0;width:2px;background:var(--bad);z-index:3;pointer-events:none}
-.today-line::after{content:'วันนี้';position:absolute;top:-1px;left:3px;font-size:8.5px;color:var(--bad);font-weight:700}
+.today-line::after{content:'วันนี้';position:absolute;top:-1px;left:3px;font-size:8.5px;color:var(--bad);font-weight:700;white-space:nowrap}
 
 /* summary bar (proj/pkg rows) */
 .sumlane{position:relative;height:16px}
@@ -330,7 +330,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-29.85</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-30.86</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -591,6 +591,7 @@ tr.pick:hover td{background:var(--bg)}
     <input id="pvSearch" type="search" placeholder="🔍 ค้นหาโครงการ / ผู้สั่งงาน..." oninput="renderPostView()"
       style="border:1px solid var(--border);border-radius:8px;padding:5px 10px;font-size:13px;background:var(--bg2);color:var(--text1);width:220px;outline:none">
     <select id="pvDept" onchange="renderPostView()" style="border:1px solid var(--border);border-radius:8px;padding:5px 8px;font-size:12.5px;background:var(--bg2);color:var(--text1)"><option value="">— ทุก Department —</option></select>
+    <select id="pvStatus" onchange="renderPostView()" title="กรองตามสถานะ" style="border:1px solid var(--border);border-radius:8px;padding:5px 8px;font-size:12.5px;background:var(--bg2);color:var(--text1)"><option value="">— สถานะ: งานที่ยังเดินอยู่ —</option></select>
     <label style="font-size:12.5px;color:var(--text2);display:flex;align-items:center;gap:6px">
       <input type="checkbox" id="pvShowDone" onchange="renderPostView()"> แสดงงานที่เสร็จแล้ว
     </label>
@@ -6553,8 +6554,22 @@ function renderPostView(){
     deptSel.innerHTML = `<option value="">— ทุก Department —</option>` + depts.map(d=>`<option value="${esc(d)}">${esc(d)}</option>`).join('');
     deptSel.dataset.key = depts.join('|'); if(depts.includes(cur)) deptSel.value = cur;
   }
+  // build 2026-09-30.86: ค่าเริ่มต้นไม่แสดง Reject / Replace · เลือกสถานะเจาะจงได้จาก dropdown
+  const HIDE_DEFAULT = new Set(['reject','replace']);
+  const stSel = document.getElementById('pvStatus');
+  const stF = stSel?.value || '';
+  const statuses = [...new Set(all.map(r=>r.status))].sort((a,b)=>a.localeCompare(b));
+  if(stSel && stSel.dataset.key !== statuses.join('|')){
+    const cur = stSel.value;
+    stSel.innerHTML = `<option value="">— สถานะ: งานที่ยังเดินอยู่ —</option><option value="__all__">ทุกสถานะ (รวม Reject / Replace)</option>`
+      + statuses.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('');
+    stSel.dataset.key = statuses.join('|'); if([...stSel.options].some(o=>o.value===cur)) stSel.value = cur;
+  }
+  const stOk = r => stF==='__all__' ? (showDone || !r.done)
+                  : stF ? r.status===stF
+                  : (!HIDE_DEFAULT.has(r.status.toLowerCase()) && (showDone || !r.done));
   const rows = all.filter(r=>
-    (showDone || !r.done) && (!deptF || r.dept===deptF) &&
+    stOk(r) && (!deptF || r.dept===deptF) &&
     (!q || [r.proj,r.pkg,r.svc,r.pic,r.assignee,r.dept].some(x=>String(x).toLowerCase().includes(q))));
   const lbl = document.getElementById('pvCountLabel');
   if(lbl) lbl.textContent = `${rows.length} / ${all.length} รายการ`;
@@ -6611,17 +6626,16 @@ function renderPostView(){
       right += `<div data-pvr="${id}" ${ev} style="position:relative;height:${RH}px;box-sizing:border-box;border-bottom:1px solid var(--border);cursor:pointer;background:${bgOf(r)}">${sc ? pvWeekBar(r, sc) : ''}</div>`;
     });
   });
-  const lg = (c,t)=>`<span style="display:inline-flex;align-items:center;gap:4px"><span style="width:12px;height:8px;border-radius:2px;background:${c}"></span>${t}</span>`;
-  const legend = lg('#94a3b8','รอเริ่ม') + lg('#2563eb','กำลังทำ') + lg('#7c3aed','Review') + lg('#dc2626','เลยกำหนด') + lg('#16a34a','เสร็จ')
-    + `<span><span style="color:#b45309">◆</span> Due Date</span><span><span style="color:#0f766e">●</span> BOQ รับปากส่ง</span>`
-    + `<span style="display:inline-flex;align-items:center;gap:4px"><span style="width:2px;height:12px;background:#ef4444"></span>วันนี้</span>`;
+  const lg = (k,t)=>{ const b = PV_BAR[k]; return `<span style="display:inline-flex;align-items:center;gap:5px"><span style="width:22px;height:12px;border-radius:3px;background:${b.bg};opacity:${b.op};${b.bd||''}"></span>${t}</span>`; };
+  const legend = lg('wait','รอเริ่ม') + lg('prog','กำลังทำ') + lg('review','Review') + lg('late','เลยกำหนด') + lg('done','เสร็จ')
+    + `<span style="display:inline-flex;align-items:center;gap:7px">${PV_MARK_DUE}Due Date</span><span style="display:inline-flex;align-items:center;gap:6px">${PV_MARK_COM}BOQ รับปากส่ง</span>`
+    + `<span style="display:inline-flex;align-items:center;gap:4px"><span style="width:2px;height:14px;background:var(--bad,#dc2626)"></span>วันนี้</span>`;
   const _ph = document.getElementById('pvHeadScroll'), _pv = document.getElementById('pvScroll');
   const _keep = (_ph && _pv) ? [_ph.scrollLeft, _pv.scrollTop] : null;   // จำตำแหน่งเลื่อนไว้ตอน render ใหม่
   const TW = sc ? sc.width : 600;
   const grid = sc ? sc.gridBg : '';
   body.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:10px">${order.map(d=>card(d,groups[d])).join('')}</div>
     <div style="display:flex;flex-wrap:wrap;gap:12px;font-size:11px;color:var(--text2);margin-top:12px;justify-content:flex-end">${legend}</div>
-    <style>#pvBodyScroll{scrollbar-width:none}#pvBodyScroll::-webkit-scrollbar{display:none}</style>
     <div id="pvScroll" style="margin-top:10px;border:1px solid var(--border);border-radius:11px;overflow-y:auto;overflow-x:hidden;max-height:calc(100vh - 300px);min-height:260px;background:#fff">
       <div style="display:flex;position:sticky;top:0;z-index:10;background:var(--primary);color:#fff;font-weight:600">
         <div style="flex:0 0 ${LW}px;width:${LW}px;${COLS};box-sizing:border-box">
@@ -6637,7 +6651,7 @@ function renderPostView(){
         <div id="pvBodyScroll" style="flex:1 1 auto;min-width:0;overflow-x:auto;overflow-y:hidden">
           <div style="position:relative;width:${TW}px;${grid}">
             ${right}
-            ${sc ? `<div style="position:absolute;top:0;bottom:0;left:${sc.todayPx}px;width:2px;background:#ef4444;z-index:3;pointer-events:none"></div>` : ''}
+            ${sc ? `<div class="today-line" style="left:${sc.todayPx}px;z-index:5"></div>` : ''}
           </div>
         </div>
       </div>
@@ -6684,21 +6698,46 @@ function pvWeekScale(rows){
   const gridBg = `background-image:repeating-linear-gradient(to right,transparent 0,transparent ${PV_WEEK_PX-1}px,#eef2f6 ${PV_WEEK_PX-1}px,#eef2f6 ${PV_WEEK_PX}px)`;
   return { start, width, x, pxPerDay, todayPx, fmtS, head, gridBg };
 }
+// build 2026-09-30.86: สีแท่งโทนเดียวกับหน้า Timeline (แผน = สีจาง .45 · กำลังทำ = ลายทางส้ม · เสร็จ/เลยกำหนด = สีทึบ)
+const PV_BAR = {
+  wait:   { bg:'#0e7490', op:.45 },                                                            // รอเริ่ม (โทนแผนของ Timeline)
+  prog:   { bg:'repeating-linear-gradient(45deg,#f59e0b,#f59e0b 5px,#fbbf24 5px,#fbbf24 10px)', op:1 }, // กำลังทำ
+  review: { bg:'#7e22ce', op:.55 },                                                            // Review / ตรวจ (โทน QA)
+  late:   { bg:'#dc2626', op:1 },                                                              // เลยกำหนด
+  done:   { bg:'#059669', op:.85 },                                                            // เสร็จ
+  other:  { bg:'#94a3b8', op:.45, bd:'border:1px dashed #64748b' }                             // Reject / Replace / อื่นๆ
+};
+const PV_MARK_DUE = `<span style="display:inline-block;width:11px;height:11px;background:#b45309;transform:rotate(45deg);border:2px solid #fff;box-shadow:0 0 0 1px #b45309"></span>`;
+const PV_MARK_COM = `<span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#0f766e;border:2px solid #fff;box-shadow:0 0 0 1px #0f766e"></span>`;
+function pvBarKind(r){
+  const st = r.status.toLowerCase();
+  if(r.done) return 'done';
+  if(st==='reject' || st==='replace' || st==='on hold') return 'other';
+  if(r.late) return 'late';
+  if(st==='in progress') return 'prog';
+  if(st.includes('review') || st.includes('ตรวจ')) return 'review';
+  return 'wait';
+}
 function pvWeekBar(r, sc){
   const esc = v => String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
   const due = pvD0(r.due), com = pvD0(r.committed), st0 = pvD0(r.start), fin = pvD0(r.finish);
   const end0 = fin || due || com, start = st0 || end0;
   if(!start) return `<div style="position:absolute;top:12px;left:8px;font-size:10.5px;color:var(--text3)">ไม่มีวันที่</div>`;
   const end = (end0 && end0>=start) ? end0 : start;
-  const st = r.status.toLowerCase();
-  const color = r.done ? '#16a34a' : r.late ? '#dc2626' : st==='in progress' ? '#2563eb' : (st.includes('review')||st.includes('ตรวจ')) ? '#7c3aed' : '#94a3b8';
+  const k = PV_BAR[pvBarKind(r)];
   let a = sc.x(start), b = sc.x(end) + sc.pxPerDay;
   const clipL = a < 0, clipR = b > sc.width; a = Math.max(0,a); b = Math.min(sc.width,b);
-  const tip = esc(`ช่วงงาน ${sc.fmtS(start)}–${sc.fmtS(end)}${due?` · Due ${sc.fmtS(due)}`:''}${com?` · รับปากส่ง ${sc.fmtS(com)}`:''}`);
-  const mark = (d, sym, clr, t) => { if(!d) return ''; const px = sc.x(d) + sc.pxPerDay/2; if(px<0||px>sc.width) return '';
-    return `<div title="${t} ${sc.fmtS(d)}" style="position:absolute;top:11px;left:${px}px;transform:translateX(-50%);font-size:12px;line-height:18px;color:${clr};z-index:4">${sym}</div>`; };
-  const bar = b > a ? `<div title="${tip}" style="position:absolute;top:14px;height:12px;left:${a}px;width:${Math.max(5,b-a)}px;background:${color};opacity:${r.done?'.65':'1'};border-radius:${clipL?'0':'4px'} ${clipR?'0':'4px'} ${clipR?'0':'4px'} ${clipL?'0':'4px'};z-index:2"></div>` : '';
-  return bar + mark(due,'◆','#b45309','Due Date') + mark(com,'●','#0f766e','BOQ รับปากส่ง');
+  const w = Math.max(14, b-a);
+  const tip = esc(`${r.status} · ช่วงงาน ${sc.fmtS(start)}–${sc.fmtS(end)}${due?` · Due ${sc.fmtS(due)}`:''}${com?` · รับปากส่ง ${sc.fmtS(com)}`:''}`);
+  const label = w >= 70 ? esc(r.status) : '';
+  // แท่งสูง 16px เท่าหน้า Timeline · ข้อความสถานะในแท่งถ้ากว้างพอ
+  const bar = b > a ? `<div title="${tip}" style="position:absolute;top:12px;height:16px;left:${a}px;width:${w}px;border-radius:${clipL?'0':'3px'} ${clipR?'0':'3px'} ${clipR?'0':'3px'} ${clipL?'0':'3px'};z-index:2;overflow:hidden">
+      <div style="position:absolute;inset:0;background:${k.bg};opacity:${k.op};${k.bd||''};border-radius:inherit"></div>
+      <div style="position:relative;height:16px;line-height:16px;font-size:9.5px;font-weight:700;color:${pvBarKind(r)==='wait'||pvBarKind(r)==='other'?'#0f172a':'#fff'};text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 4px">${label}</div>
+    </div>` : '';
+  const mark = (d, html, t) => { if(!d) return ''; const px = sc.x(d) + sc.pxPerDay/2; if(px<0||px>sc.width) return '';
+    return `<div title="${t} ${sc.fmtS(d)}" style="position:absolute;top:20px;left:${px}px;transform:translate(-50%,-50%);z-index:4;line-height:0">${html}</div>`; };
+  return bar + mark(com, PV_MARK_COM, 'BOQ รับปากส่ง') + mark(due, PV_MARK_DUE, 'Due Date');
 }
 // popup รายละเอียดงาน (ดูอย่างเดียว)
 function openPostViewDetail(id){
