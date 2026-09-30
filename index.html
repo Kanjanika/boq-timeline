@@ -330,7 +330,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-30.92</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-30.91</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -344,7 +344,7 @@ tr.pick:hover td{background:var(--bg)}
     <button class="btn btn2" id="loginBtn" style="display:none" onclick="doLogin()">🔐 เข้าสู่ระบบ SharePoint</button>
     <!-- build 2026-09-23.10: ซ่อน modeTag (MOCK DATA) — ไม่แสดงในโหมดปกติ แสดงเฉพาะตอน LIVE -->
     <span class="mock" id="modeTag" style="display:none"></span>
-    <button class="btn btn2" id="logoutBtn" style="display:none" onclick="doLogout()" title="ออกจากระบบ Microsoft / สลับ account">🚪 ออกจากระบบ (Sign out)</button>
+    <button class="btn btn2" id="logoutBtn" style="display:none" onclick="doLogout()" title="ออกจากระบบ Microsoft">🚪 ออกจากระบบ</button>
   </div>
 </div>
 
@@ -1616,7 +1616,7 @@ async function initAuth(){
 async function signIn(){
   if(!msalInstance) return false;
   try{
-    const res = await msalInstance.loginPopup({scopes:GRAPH_SCOPES, prompt:'select_account'}); // build .92: ให้เลือก account ได้ทุกครั้ง
+    const res = await msalInstance.loginPopup({scopes:GRAPH_SCOPES});
     graphAccount = res.account;
     return true;
   }catch(e){ console.warn('login failed', e); toastMsg('⚠️ เข้าสู่ระบบไม่สำเร็จ: '+e.message); return false; }
@@ -4074,7 +4074,7 @@ function updateModeTag(){
     if(logoutB) logoutB.style.display = ''; // โชว์ปุ่มออกจากระบบเมื่อ login สำเร็จ
   } else {
     if(tag) tag.style.display='none'; // build 2026-09-23.10: ซ่อน MOCK DATA ทั้งหมด
-    if(logoutB) logoutB.style.display = graphAccount ? '' : 'none'; // build .92: login แล้วแต่โหลดข้อมูลไม่สำเร็จ ก็ยัง Sign out ได้
+    if(logoutB) logoutB.style.display='none';
   }
 }
 // build 2026-09-08.1: Refresh ปุ่มบน Toolbar — clear cache แล้วโหลดใหม่
@@ -4124,7 +4124,6 @@ async function bootLive(){
       if(labelEl) labelEl.textContent = myWorkSysName ? `· ${myWorkSysName}${SYSTEM_ADMINS[email] ? ' — '+SYSTEM_ADMINS[email].role : ''} (${email})` : `· (${email})`;
       // build 2026-09-29.81: account ที่ไม่ได้ map ไว้ (ไม่ใช่ทีม BOQ และไม่ใช่ admin) → เห็นเฉพาะหน้า "ภาพรวมงาน (Team Post)"
       applyPostOnlyMode(!(myWorkSysName || FULL_ACCESS_EMAILS.includes(email)));
-      const _lo = document.getElementById('logoutBtn'); if(_lo) _lo.style.display = '';   // build .92: แสดงปุ่ม Sign out เสมอเมื่อ login แล้ว
     }
     // build 2026-08-25.13: ปรับประสิทธิภาพการโหลด — เดิม recalcTimelineWindow() ดึง STEP_LIST + WORKPLAN_LIST
     // เองก่อน แล้ว Promise.all ด้านล่างดึง STEP_LIST + WORKPLAN_LIST ซ้ำอีกรอบ รวมเป็น 4 round-trip sequential+parallel
@@ -4515,22 +4514,16 @@ async function doLogin(){
   const ok = await signIn();
   if(ok){ document.getElementById('loginBtn').style.display='none'; await bootLive(); }
 }
-// build 2026-09-30.92: Sign out ให้ออกได้จริงเสมอ — เดิมถ้า popup ถูกบล็อก account เดิมยังค้างใน cache
-// พอ reload ก็เข้าระบบอัตโนมัติด้วย account เดิม (สลับ account ไม่ได้) → ตอนนี้ล้าง cache ในเครื่องเสมอ
+// build 2026-09-23.10: ออกจากระบบ — ล้าง MSAL session แล้ว reload หน้า (clean slate)
 async function doLogout(){
   toastMsg('🚪 กำลังออกจากระบบ…');
-  const acct = graphAccount;
-  if(msalInstance){
-    try{
-      if(acct) await msalInstance.logoutPopup({ account: acct });   // ออกจาก Microsoft ด้วย (ถ้า popup เปิดได้)
-    }catch(e){
-      console.warn('logoutPopup error (อาจถูก popup blocker) → ล้าง cache ในเครื่องแทน', e);
-      try{ await msalInstance.logoutRedirect({ account: acct, onRedirectNavigate: () => false }); }catch(e2){ console.warn(e2); }
+  try{
+    if(msalInstance && graphAccount){
+      // logoutPopup ล้าง session ใน browser + Azure AD ให้เรียบร้อย
+      await msalInstance.logoutPopup({ account: graphAccount });
     }
-  }
-  // กันพลาด: ลบข้อมูล MSAL ที่ค้างใน browser ทั้งหมด
-  try{ [localStorage, sessionStorage].forEach(st => Object.keys(st).filter(k => /msal|login\.windows|login\.microsoftonline/i.test(k)).forEach(k => st.removeItem(k))); }catch(_){}
-  graphAccount = null;
+  }catch(e){ console.warn('logoutPopup error (อาจถูก popup blocker)', e); }
+  // reload หน้าเพื่อ reset state ทั้งหมด (ง่ายและปลอดภัยที่สุด)
   location.reload();
 }
 async function initApp(){
