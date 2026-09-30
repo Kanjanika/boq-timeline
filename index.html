@@ -330,7 +330,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-30.95</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-30.96</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -5093,7 +5093,8 @@ function renderRows(){
         // "เลยแผนของ S3 ตรวจ+ส่ง มาแล้ว 2 วัน") ไม่ต้องเดา
         const rowDelay = computeDelayStatus(row);
         const rowDelayBadge = rowDelay ? delayBadgeHtml(rowDelay.level, rowDelay.reasons) : '';
-        const wpInfoHtml = '';
+        // build 2026-09-30.96: ปุ่มเปิดรายละเอียดงาน (Details if have + Attachments) จาก BOQ Team Work Plan
+        const wpInfoHtml = row.parentTaskId ? `<span class="wp-info-btn" onclick="event.stopPropagation();openWpDetail('${row.parentTaskId}')" title="ดูรายละเอียดงาน · Details · ไฟล์แนบ" style="display:inline-block;margin-top:2px;font-size:10.5px;color:var(--primary);cursor:pointer;font-weight:600">📄 รายละเอียด</span>` : '';
         // Version: แสดง version string + badge "Rev" ถ้าเป็น revision (ลดระยะเวลา)
         const verHtml = (()=>{
           if(!row.version) return '<span style="color:#cbd5e1;font-size:9px">—</span>';
@@ -5101,7 +5102,7 @@ function renderRows(){
           return `<span style="font-size:9.5px">${row.version}</span>${revBadge}`;
         })();
         labelHtml += `<div class="lab-row leaf">
-          <div class="lab"><b>${row.team}</b> ${rowDelayBadge}<small>${people.join(' · ')}</small>${wpInfoHtml}</div>
+          <div class="lab" ${row.parentTaskId ? `onclick="openWpDetail('${row.parentTaskId}')" style="cursor:pointer" title="คลิกเพื่อดูรายละเอียดงาน"` : ''}><b>${row.team}</b> ${rowDelayBadge}<small>${people.join(' · ')}</small>${wpInfoHtml}</div>
           <div class="lane-tags"><span>แผน</span><span>จริง</span></div>
           <div class="svc">${row.service||''}</div>
           <div class="ver">${verHtml}</div>
@@ -6866,6 +6867,87 @@ function openPostViewDetail(id){
       <div style="font-size:11px;color:var(--text3);margin-top:10px">👁 ดูได้อย่างเดียว</div>
     </div>
   </div>`;
+}
+
+/* ============ build 2026-09-30.96: รายละเอียดงาน Work Plan (ดูอย่างเดียว) — เปิดจากหน้า Timeline ============ */
+async function openWpDetail(id){
+  id = String(id||'').split(':')[0];
+  if(!id) return;
+  const esc = v => String(v==null||v===''?'—':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  let ov = document.getElementById('wpDetailOv');
+  if(!ov){
+    ov = document.createElement('div'); ov.id = 'wpDetailOv';
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+    ov.onclick = e => { if(e.target===ov) ov.remove(); };
+    document.body.appendChild(ov);
+  }
+  const shell = inner => `<div style="background:#fff;color:var(--text1);border-radius:12px;max-width:620px;width:100%;max-height:90vh;overflow:auto;box-shadow:0 20px 50px rgba(0,0,0,.25)">${inner}</div>`;
+  ov.innerHTML = shell(`<div style="padding:24px;color:var(--text3)">⏳ กำลังโหลด...</div>`);
+  // หา item จากข้อมูลที่โหลดไว้แล้วก่อน (ไม่ต้องยิง API) ถ้าไม่เจอค่อยดึงจาก SharePoint
+  const pool = [ ...((typeof BOOT_CACHE!=='undefined' && BOOT_CACHE && BOOT_CACHE.workplanItems) || []), ...((typeof _wpItems!=='undefined' && _wpItems) || []) ];
+  let it = pool.find(x => String(x.id)===id);
+  if(!it){
+    try{ it = await graphFetch(`/sites/${SITE_ID}/lists/${WORKPLAN_LIST}/items/${id}?$expand=fields`); }
+    catch(e){ ov.innerHTML = shell(`<div style="padding:24px;color:#ef4444">❌ โหลดรายละเอียดไม่สำเร็จ: ${esc(e.message)}</div>`); return; }
+  }
+  const f = (it && it.fields) || {};
+  const fd = v => { if(!v) return '—'; const d = new Date(v); return isNaN(d) ? esc(v) : d.toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'numeric'}); };
+  const multi = v => Array.isArray(v) ? v.join(', ') : (v||'');
+  const person = v => (typeof pvPersonName==='function') ? pvPersonName(v) : (Array.isArray(v) ? v.map(x=>x.LookupValue||'').join(', ') : (v&&v.LookupValue)||v||'');
+  const assignee = (typeof extractWpAssignee==='function') ? extractWpAssignee(f) : '';
+  const link = f.Link_x0020_ ? (f.Link_x0020_.Url || f.Link_x0020_.url || '') : '';
+  const line = (k,v,bold) => `<div style="display:grid;grid-template-columns:150px 1fr;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px"><div style="color:var(--text3)">${k}</div><div style="${bold?'font-weight:700':''};word-break:break-word">${v}</div></div>`;
+  const sec = t => `<div style="margin:14px 0 4px;font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.04em">${t}</div>`;
+  const canEdit = !(typeof POST_ONLY_MODE!=='undefined' && POST_ONLY_MODE) && document.getElementById('tabWorkPlan') && document.getElementById('tabWorkPlan').style.display!=='none';
+  ov.innerHTML = shell(`
+    <div style="display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid var(--border);position:sticky;top:0;background:#fff;z-index:1">
+      <div style="font-weight:700;font-size:15px;flex:1">📄 ${esc(f.Project_x0020_Name||f.Title)} <span style="color:var(--text3);font-weight:500">· ${esc(f.Package)}</span></div>
+      ${canEdit ? `<button class="btn btn2" style="font-size:12px" onclick="document.getElementById('wpDetailOv').remove();wpOpenFromTimeline('${id}')">✏️ แก้ไขในหน้า Work Plan</button>` : ''}
+      <button class="btn btn2" onclick="document.getElementById('wpDetailOv').remove()">✕ ปิด</button>
+    </div>
+    <div style="padding:4px 16px 16px">
+      ${sec('งาน')}
+      ${line('Service Type', esc(f.Service_x0020_Type))}
+      ${line('Version', esc(f.Version))}
+      ${line('Status', esc(f.Status), true)}
+      ${line('Commit Status', esc(f.CommitStatus))}
+      ${sec('ทีม')}
+      ${line('Team', esc(multi(f.Team)))}
+      ${line('Assignee', esc(assignee))}
+      ${line('Department', esc(f.Department))}
+      ${line('Person in Charge', esc(person(f.Person_x0020_in_x0020_Charge)), true)}
+      ${sec('วันที่')}
+      ${line('Start / Finish', `${fd(f.StartDate)} – ${fd(f.FinishDate)}`)}
+      ${line('Due Date (Post ขอส่ง)', fd(f.Due_x0020_Date))}
+      ${line('Committed Finish', fd(f.CommittedFinish))}
+      ${sec('รายละเอียดเพิ่มเติม')}
+      <div style="font-size:11.5px;color:var(--text3);margin-top:2px">Details if have</div>
+      <div style="white-space:pre-wrap;word-break:break-word;font-size:13px;line-height:1.55;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-top:4px;max-height:260px;overflow:auto">${esc(f.Details_x0020_if_x0020_have)}</div>
+      <div style="font-size:11.5px;color:var(--text3);margin-top:12px">Attachments</div>
+      <div id="wpDetailAtt" style="margin-top:4px;font-size:12px;color:var(--text3)">⏳ กำลังโหลด...</div>
+      ${line('Link ข้อมูลส่งให้ Team BOQ', link ? `<a href="${esc(link)}" target="_blank" rel="noopener" style="color:var(--primary)">${esc(link)}</a>` : '—')}
+      ${sec('เอกสาร')}
+      ${line('Document Status', esc(multi(f.DocumentStatsus)))}
+      ${line('Document to Post', esc(multi(f.DocumenttoPost)))}
+      ${line('BOQ Remark', `<span style="white-space:pre-wrap">${esc(f.BOQRemark)}</span>`)}
+    </div>`);
+  // ไฟล์แนบ — ใช้ SharePoint REST เหมือนหน้า Work Plan
+  const attEl = document.getElementById('wpDetailAtt');
+  try{
+    const res = await spFetch(`/_api/web/lists(guid'${WORKPLAN_LIST}')/items(${id})/AttachmentFiles`);
+    const files = (res && res.value) || [];
+    if(!attEl) return;
+    attEl.innerHTML = files.length ? files.map(a => `<a href="https://costplan1.sharepoint.com${a.ServerRelativeUrl}" target="_blank" rel="noopener"
+        style="display:block;font-size:12.5px;color:var(--primary);text-decoration:none;padding:3px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">📎 ${esc(a.FileName)}</a>`).join('')
+      : '— ไม่มีไฟล์แนบ —';
+  }catch(e){ if(attEl) attEl.textContent = '— โหลดไฟล์แนบไม่สำเร็จ —'; console.warn('wpDetail attachments', e); }
+}
+// ไปหน้า Work Plan แล้วเปิดแผงแก้ไขของงานนี้
+async function wpOpenFromTimeline(id){
+  const tab = document.getElementById('tabWorkPlan'); if(!tab) return;
+  tab.click();
+  if(!_wpItems.length) await loadWorkPlan();
+  setTimeout(()=>{ try{ openWpEdit(id); }catch(e){ console.warn(e); } }, 50);
 }
 
 /* ============ COMMIT CHECK · AI Suggest ============ */
