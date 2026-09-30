@@ -330,7 +330,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-30.86</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-30.87</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -6707,8 +6707,8 @@ const PV_BAR = {
   done:   { bg:'#059669', op:.85 },                                                            // เสร็จ
   other:  { bg:'#94a3b8', op:.45, bd:'border:1px dashed #64748b' }                             // Reject / Replace / อื่นๆ
 };
-const PV_MARK_DUE = `<span style="display:inline-block;width:11px;height:11px;background:#b45309;transform:rotate(45deg);border:2px solid #fff;box-shadow:0 0 0 1px #b45309"></span>`;
-const PV_MARK_COM = `<span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#0f766e;border:2px solid #fff;box-shadow:0 0 0 1px #0f766e"></span>`;
+const PV_MARK_DUE = `<span style="display:inline-block;width:6px;height:6px;background:#b45309;transform:rotate(45deg);border:1px solid #fff;box-shadow:0 0 0 1px #b45309"></span>`;
+const PV_MARK_COM = `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#0f766e;border:1px solid #fff;box-shadow:0 0 0 1px #0f766e"></span>`;
 function pvBarKind(r){
   const st = r.status.toLowerCase();
   if(r.done) return 'done';
@@ -6731,12 +6731,12 @@ function pvWeekBar(r, sc){
   const tip = esc(`${r.status} · ช่วงงาน ${sc.fmtS(start)}–${sc.fmtS(end)}${due?` · Due ${sc.fmtS(due)}`:''}${com?` · รับปากส่ง ${sc.fmtS(com)}`:''}`);
   const label = w >= 70 ? esc(r.status) : '';
   // แท่งสูง 16px เท่าหน้า Timeline · ข้อความสถานะในแท่งถ้ากว้างพอ
-  const bar = b > a ? `<div title="${tip}" style="position:absolute;top:12px;height:16px;left:${a}px;width:${w}px;border-radius:${clipL?'0':'3px'} ${clipR?'0':'3px'} ${clipR?'0':'3px'} ${clipL?'0':'3px'};z-index:2;overflow:hidden">
+  const bar = b > a ? `<div title="${tip}" style="position:absolute;top:10px;height:16px;left:${a}px;width:${w}px;border-radius:${clipL?'0':'3px'} ${clipR?'0':'3px'} ${clipR?'0':'3px'} ${clipL?'0':'3px'};z-index:2;overflow:hidden">
       <div style="position:absolute;inset:0;background:${k.bg};opacity:${k.op};${k.bd||''};border-radius:inherit"></div>
       <div style="position:relative;height:16px;line-height:16px;font-size:9.5px;font-weight:700;color:${pvBarKind(r)==='wait'||pvBarKind(r)==='other'?'#0f172a':'#fff'};text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 4px">${label}</div>
     </div>` : '';
   const mark = (d, html, t) => { if(!d) return ''; const px = sc.x(d) + sc.pxPerDay/2; if(px<0||px>sc.width) return '';
-    return `<div title="${t} ${sc.fmtS(d)}" style="position:absolute;top:20px;left:${px}px;transform:translate(-50%,-50%);z-index:4;line-height:0">${html}</div>`; };
+    return `<div title="${t} ${sc.fmtS(d)}" style="position:absolute;top:34px;left:${px}px;transform:translate(-50%,-50%);z-index:4;line-height:0">${html}</div>`; };
   return bar + mark(com, PV_MARK_COM, 'BOQ รับปากส่ง') + mark(due, PV_MARK_DUE, 'Due Date');
 }
 // popup รายละเอียดงาน (ดูอย่างเดียว)
