@@ -330,7 +330,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-30.98</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-30.99</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -6783,31 +6783,47 @@ function pvBarKind(r){
   if(st.includes('review') || st.includes('ตรวจ')) return 'review';
   return 'wait';
 }
-// build 2026-09-30.94: แท่งสรุปของทีม (บรรทัดเดียวกับชื่อ Team) — ช่วงตั้งแต่งานแรกเริ่ม ถึงงานสุดท้ายจบ
-// สไตล์เดียวกับแท่งสรุปโครงการในหน้า Timeline (แคปซูลสีเขียวอ่อน + ขอบเขียว) · ข้อความ = เสร็จ/ทั้งหมด
+// build 2026-09-30.99: แท่งสรุปของทีม (บรรทัดเดียวกับชื่อ Team) — แบ่งเป็นช่วงๆ ตามวันที่มีงานจริง
+// วันไหนไม่มีงานเลย = เว้นว่าง (gap) · ข้อความ เสร็จ/ทั้งหมด อยู่ในช่วงที่กว้างที่สุด (ถ้าแคบไปจะแสดงต่อท้ายช่วงสุดท้าย)
 function pvTeamSummaryBar(list, sc){
-  let lo = null, hi = null, done = 0, late = 0;
+  const DAY = 864e5;
+  let done = 0, late = 0;
+  const iv = [];
   list.forEach(r=>{
+    if(r.done) done++; if(r.late) late++;
     const due = pvD0(r.due), com = pvD0(r.committed), st0 = pvD0(r.start), fin = pvD0(r.finish);
     const end0 = fin || due || com, start = st0 || end0;
-    if(r.done) done++; if(r.late) late++;
     if(!start) return;
     const end = (end0 && end0>=start) ? end0 : start;
-    if(!lo || start < lo) lo = start;
-    if(!hi || end > hi) hi = end;
+    iv.push([start.getTime(), end.getTime() + DAY]);   // ช่วงแบบ [เริ่ม, วันถัดจากวันจบ)
   });
-  if(!lo) return '';
-  let a = sc.x(lo), b = sc.x(hi) + sc.pxPerDay;
-  const clipL = a < 0, clipR = b > sc.width; a = Math.max(0,a); b = Math.min(sc.width,b);
-  if(b <= a) return '';
-  const w = Math.max(24, b-a);
-  const txt = `${done}/${list.length} งาน${late?` · เลยกำหนด ${late}`:''}`;
-  const tip = `ช่วงงานของทีม ${sc.fmtS(lo)}–${sc.fmtS(hi)} · เสร็จ ${done} จาก ${list.length} งาน${late?` · เลยกำหนด ${late}`:''}`;
-  const pct = list.length ? Math.round(done/list.length*100) : 0;
-  return `<div title="${tip}" style="position:absolute;top:8px;height:18px;left:${a}px;width:${w}px;box-sizing:border-box;background:#ccfbf1;border:1px solid #5eead4;border-radius:${clipL?'0':'9px'} ${clipR?'0':'9px'} ${clipR?'0':'9px'} ${clipL?'0':'9px'};overflow:hidden;z-index:2">
-      <div style="position:absolute;left:0;top:0;bottom:0;width:${pct}%;background:#99f6e4"></div>
-      <div style="position:relative;line-height:16px;font-size:10px;font-weight:700;color:#115e59;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 6px">${w>=60?txt:''}</div>
+  if(!iv.length) return '';
+  iv.sort((x,y)=>x[0]-y[0]);
+  const merged = [];
+  iv.forEach(([a,b])=>{ const last = merged[merged.length-1]; if(last && a <= last[1]) last[1] = Math.max(last[1], b); else merged.push([a,b]); });
+  const txt = `${done}/${list.length} งาน${late?` · ⚠ ${late}`:''}`;   // เต็มอยู่ใน tooltip: เสร็จ/ทั้งหมด · เลยกำหนด
+  const fmtS = sc.fmtS;
+  const segs = merged.map(([a,b])=>{
+    let x1 = sc.x(new Date(a)), x2 = sc.x(new Date(b));
+    const clipL = x1 < 0, clipR = x2 > sc.width; x1 = Math.max(0,x1); x2 = Math.min(sc.width,x2);
+    return { x1, x2, w: Math.max(8, x2-x1), clipL, clipR, a, b };
+  }).filter(g => g.x2 > g.x1);
+  if(!segs.length) return '';
+  // ใส่ข้อความในช่วงที่กว้างพอและอยู่ใกล้ "วันนี้" ที่สุด (ช่วงไกลๆ อาจถูกเลื่อนออกนอกจอ)
+  const wide = segs.filter(g => g.w >= 70);
+  const widest = wide.length ? wide.reduce((m,g)=> Math.abs((g.x1+g.x2)/2 - sc.todayPx) < Math.abs((m.x1+m.x2)/2 - sc.todayPx) ? g : m, wide[0]) : null;
+  const labelInside = !!widest;
+  const html = segs.map(g=>{
+    const tip = `มีงาน ${fmtS(new Date(g.a))}–${fmtS(new Date(g.b - DAY))} · ทีมนี้เสร็จ ${done} จาก ${list.length} งาน${late?` · เลยกำหนด ${late}`:''}`;
+    const r = `${g.clipL?'0':'9px'} ${g.clipR?'0':'9px'} ${g.clipR?'0':'9px'} ${g.clipL?'0':'9px'}`;
+    return `<div title="${tip}" style="position:absolute;top:8px;height:18px;left:${g.x1}px;width:${g.w}px;box-sizing:border-box;background:#ccfbf1;border:1px solid #5eead4;border-radius:${r};overflow:hidden;z-index:2">
+      ${labelInside && g===widest ? `<div style="line-height:16px;font-size:10px;font-weight:700;color:#115e59;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 6px">${txt}</div>` : ''}
     </div>`;
+  }).join('');
+  // ไม่มีช่วงที่กว้างพอ → แสดงข้อความต่อท้ายช่วงที่อยู่หลัง "วันนี้" ช่วงแรก (หรือช่วงสุดท้าย)
+  const last = segs.find(g => g.x2 >= sc.todayPx) || segs[segs.length-1];
+  const outside = labelInside ? '' : `<div style="position:absolute;top:9px;left:${Math.min(last.x1+last.w+6, sc.width-4)}px;font-size:10px;font-weight:700;color:#115e59;white-space:nowrap;z-index:2">${txt}</div>`;
+  return html + outside;
 }
 function pvWeekBar(r, sc){
   const esc = v => String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
