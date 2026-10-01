@@ -330,7 +330,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-10-01.101</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-10-01.102</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -732,6 +732,7 @@ tr.pick:hover td{background:var(--bg)}
           <div style="flex:1">
             <label style="font-size:11px;color:var(--text3);font-weight:600">Status</label>
             <select id="wpfStatus" style="width:100%;margin-top:3px;border:1px solid var(--border);border-radius:7px;padding:6px 9px;background:var(--bg1);color:var(--text1);font-size:13px">
+              <option value="">— ว่าง (ยังไม่ระบุ) —</option>
               <option>Not Started</option>
               <option>Review เอกสาร</option>
               <option>In Progress</option>
@@ -746,7 +747,7 @@ tr.pick:hover td{background:var(--bg)}
         <div>
           <label style="font-size:11px;color:var(--text3);font-weight:600">Commit Status</label>
           <select id="wpfCommitStatus" style="width:100%;margin-top:3px;border:1px solid var(--border);border-radius:7px;padding:6px 9px;background:var(--bg1);color:var(--text1);font-size:13px">
-            <option value="">— เลือก —</option>
+            <option value="">— ว่าง (ยังไม่ระบุ) —</option>
             <option>Committed</option>
             <option>Tentative</option>
             <option>Not Committed</option>
@@ -6206,7 +6207,7 @@ function openWpEdit(id){
   document.getElementById('wpfService').value = f.Service_x0020_Type || '';
   document.getElementById('wpfPackage').value = f.Package || '';
   document.getElementById('wpfVersion').value = f.Version || '';
-  document.getElementById('wpfStatus').value = f.Status || 'Not Started';
+  document.getElementById('wpfStatus').value = f.Status || '';   // build .102: ไม่มีสถานะ = ว่าง (ไม่เติม Not Started ให้เอง)
   document.getElementById('wpfCommitStatus').value = f.CommitStatus || '';
   document.getElementById('wpfDept').value = f.Department || '';
   // Person_x0020_in_x0020_Charge คือคนจาก Team Post ที่สั่งงานเข้ามา — ไม่ใช่ BOQ team member
@@ -6296,7 +6297,7 @@ function openWpNew(){
   ].forEach(fid=>{ const el=document.getElementById(fid); if(el) el.value=''; });
   const attEl2 = document.getElementById('wpfAttachments');
   if(attEl2) attEl2.innerHTML = '<span style="color:var(--text3)">— บันทึกก่อนเพื่อเพิ่มไฟล์แนบ —</span>';
-  document.getElementById('wpfStatus').value = 'Not Started';
+  document.getElementById('wpfStatus').value = '';   // build .102: งานใหม่เริ่มที่ค่าว่าง ให้เลือกเอง
   // uncheck all checkbox groups
   document.querySelectorAll('#wpfTeamBoxes input[type=checkbox]').forEach(cb=>cb.checked=false);
   document.querySelectorAll('#wpfDocStatusBoxes input[type=checkbox]').forEach(cb=>cb.checked=false);
@@ -6343,8 +6344,8 @@ async function saveWpItem(){
     Service_x0020_Type:   gv('wpfService'),
     Package:              gv('wpfPackage'),
     Version:              gv('wpfVersion'),
-    Status:               gv('wpfStatus') || 'Not Started',
-    CommitStatus:         gv('wpfCommitStatus'),
+    Status:               gv('wpfStatus') || null,          // build .102: เลือกว่างได้
+    CommitStatus:         gv('wpfCommitStatus') || null,
     Team:                 teamVal || null,
     // build 2026-09-29.60: Department re-added — confirmed valid SP Choice field (Team Benz/Meen/Prang/Sak/Pair/BOQ)
     Department:           gv('wpfDept'),
@@ -6363,6 +6364,9 @@ async function saveWpItem(){
   // Remove null keys for PATCH
   if(_wpEditId){
     Object.keys(patchFields).forEach(k=>{ if(patchFields[k]===null) delete patchFields[k]; });
+    // build .102: เลือก "ว่าง" ที่ Status / Commit Status = ล้างค่าใน SharePoint (ส่ง null ไปจริงๆ)
+    if(!gv('wpfStatus')) patchFields.Status = null;
+    if(!gv('wpfCommitStatus')) patchFields.CommitStatus = null;
   }
 
   const statusEl = document.getElementById('wpSaveStatus');
