@@ -330,11 +330,12 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-09-30.99</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-10-01.100</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
     <div class="tab" data-p="pgReport">📊 Planning vs Actual · รายงาน</div>
+    <div class="tab" data-p="pgExec" id="tabExec">📑 สรุปผู้บริหาร</div>
     <div class="tab" data-p="pgToday">📋 งานวันนี้</div>
     <div class="tab" data-p="pgMyWork" id="tabMyWork" style="display:none">👤 งานของฉัน</div>
     <div class="tab" data-p="pgWorkPlan" id="tabWorkPlan" style="display:none">📝 Work Plan</div>
@@ -518,6 +519,19 @@ tr.pick:hover td{background:var(--bg)}
 </div>
 
 <!-- ============ PAGE 3 · REPORT · build 2026-08-25.11 ============ -->
+<!-- ============ PAGE · สรุปผู้บริหาร (build 2026-10-01.100) — สรุปรายเดือนตาม Due Date ส่งงาน ============ -->
+<div class="page" id="pgExec">
+  <div class="tools" style="flex-wrap:wrap;row-gap:8px;align-items:center">
+    <span style="font-weight:700;font-size:14px">📑 สรุปผู้บริหาร · ทีม BOQ</span>
+    <span style="font-size:12.5px;color:var(--text2);margin-left:10px">เดือนที่ Due Date ส่งงาน:</span>
+    <select id="exMonth" onchange="renderExec()" style="border:1px solid var(--border);border-radius:8px;padding:5px 8px;font-size:12.5px;background:var(--bg2);color:var(--text1)"></select>
+    <span style="flex:1"></span>
+    <button class="btn btn2" onclick="loadExec(true)">🔄 รีเฟรช</button>
+    <button class="btn" onclick="printExec()">🖨️ พิมพ์ / บันทึก PDF</button>
+  </div>
+  <div id="exBody" style="margin-top:14px"></div>
+</div>
+
 <div class="page" id="pgReport">
   <div class="tools" style="flex-wrap:wrap;row-gap:8px">
     <div class="rpt-toggle">
@@ -6475,6 +6489,7 @@ document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
   if(t.dataset.p==='pgMyWork') renderMyWork(); // build 2026-09-23.3: render งานของฉันทุกครั้งที่สลับมา tab นี้
   if(t.dataset.p==='pgWorkPlan' && !_wpItems.length) loadWorkPlan(); // build 2026-09-25.24: โหลด Work Plan ครั้งแรก
   if(t.dataset.p==='pgPostView') loadPostView(false); // build .81
+  if(t.dataset.p==='pgExec') loadExec(false); // build .100
 }));
 
 /* ============ ภาพรวมงานสำหรับ Team Post (build 2026-09-29.81) ============ */
@@ -6963,6 +6978,205 @@ async function wpOpenFromTimeline(id){
   tab.click();
   if(!_wpItems.length) await loadWorkPlan();
   setTimeout(()=>{ try{ openWpEdit(id); }catch(e){ console.warn(e); } }, 50);
+}
+
+/* ============ สรุปผู้บริหาร (build 2026-10-01.100) ============
+   แหล่งข้อมูล: BOQ Team Work Plan (Due Date, Status, Service, Person in Charge, Team, Assignee)
+              + BOQ Step Tracking (ActualEnd ล่าสุดของงาน = วันส่งจริง)
+              + BOQ Date History (การเลื่อนวัน: DeltaDays, ChangeReason)
+   "ทันกำหนด" = เสร็จแล้ว และวันส่งจริง ≤ Due Date · "เลยกำหนด" = เสร็จหลัง Due Date หรือยังไม่เสร็จทั้งที่เลย Due Date แล้ว
+   ไม่นับ Reject / Replace ในตัวเลขหลัก (แสดงจำนวนแยกไว้) */
+let _exWp = null, _exSteps = null, _exHist = null;
+async function loadExec(force){
+  const body = document.getElementById('exBody'); if(!body) return;
+  if(!graphAccount){ body.innerHTML = `<div style="padding:32px;text-align:center;color:var(--text3)">🔐 กรุณาเข้าสู่ระบบ SharePoint ก่อน</div>`; return; }
+  try{
+    body.innerHTML = `<div style="padding:24px;color:var(--text3)">⏳ กำลังโหลดข้อมูล...</div>`;
+    const bc = (typeof BOOT_CACHE!=='undefined' && BOOT_CACHE) || {};
+    if(force || !_exWp) _exWp = (!force && bc.workplanItems && bc.workplanItems.length) ? bc.workplanItems
+      : await graphFetchAllItems(`/sites/${SITE_ID}/lists/${WORKPLAN_LIST}/items?$expand=fields&$top=200`);
+    if(force || !_exSteps) _exSteps = (!force && bc.stepItems && bc.stepItems.length) ? bc.stepItems
+      : await graphFetchAllItems(`/sites/${SITE_ID}/lists/${STEP_LIST}/items?$expand=fields($select=ParentTaskID,ActualEnd,ActualStart)&$top=200`).catch(()=>[]);
+    if(force || !_exHist){
+      const hid = await resolveHistoryListId();
+      _exHist = hid ? await graphFetchAllItems(`/sites/${SITE_ID}/lists/${hid}/items?$expand=fields&$top=200`).catch(()=>[]) : [];
+    }
+    renderExec();
+  }catch(e){ body.innerHTML = `<div style="padding:20px;color:#ef4444">❌ โหลดข้อมูลไม่สำเร็จ: ${String(e.message).replace(/</g,'&lt;')}</div>`; }
+}
+function printExec(){
+  const pg = document.getElementById('pgExec'); pg.classList.add('print-target');
+  window.print(); setTimeout(()=>pg.classList.remove('print-target'), 500);
+}
+function exBuildRows(){
+  const DAY = 864e5, d0 = v => { if(!v) return null; const d = new Date(v); if(isNaN(d)) return null; d.setHours(0,0,0,0); return d; };
+  const today = new Date(); today.setHours(0,0,0,0);
+  // วันส่งจริง = ActualEnd ล่าสุดของทุก Step ที่ผูกกับงานนี้
+  const endById = {};
+  (_exSteps||[]).forEach(it=>{ const f = it.fields||{}; const id = String(f.ParentTaskID||'').split(':')[0].trim(); const e = d0(f.ActualEnd);
+    if(id && e && (!endById[id] || e > endById[id])) endById[id] = e; });
+  // ประวัติการเลื่อนต่องาน
+  const histById = {};
+  (_exHist||[]).forEach(it=>{ const f = it.fields||{}; const id = String(f.WorkPlanItemId||''); if(!id || id==='0') return;
+    (histById[id] = histById[id] || []).push({ field:f.FieldChanged||'', delta:Number(f.DeltaDays)||0, reason:String(f.ChangeReason||'').trim(), at:f.Created || it.createdDateTime || '' }); });
+  const DONE = new Set(['done','completed','complete','เสร็จ']);
+  return (_exWp||[]).map(it=>{
+    const f = it.fields||{}, id = String(it.id);
+    const status = String(f.Status||'').trim() || '(ว่าง)';
+    const st = status.toLowerCase();
+    const due = d0(f.Due_x0020_Date);
+    const done = DONE.has(st);
+    const doneAt = endById[id] || null;
+    const excluded = st==='reject' || st==='replace';
+    let result = 'open';
+    if(done){ result = doneAt && due ? (doneAt <= due ? 'ontime' : 'late') : 'done-nodate'; }
+    else if(due && due < today) result = 'overdue';
+    const lateDays = (result==='late') ? Math.round((doneAt-due)/DAY) : (result==='overdue' ? Math.round((today-due)/DAY) : 0);
+    const hist = (histById[id]||[]).filter(h => h.delta > 0 && /due|commitend|finish/i.test(h.field));
+    const assignee = (typeof extractWpAssignee==='function') ? extractWpAssignee(f) : '';
+    const svc = String(f.Service_x0020_Type||'').trim();
+    return { id, proj: f.Project_x0020_Name || f.Title || '—', pkg: f.Package || '', svc: svc || 'ไม่ระบุ',
+      svcGroup: svc ? svc.split(/\s+-\s+/)[0].trim() : 'ไม่ระบุ',
+      pic: (typeof pvPersonName==='function' ? pvPersonName(f.Person_x0020_in_x0020_Charge) : '') || 'ไม่ระบุ',
+      dept: f.Department || 'ไม่ระบุ', team: Array.isArray(f.Team) ? f.Team : (f.Team ? String(f.Team).split(/\s*[,;]\s*/) : []),
+      people: String(Array.isArray(assignee)?assignee.join(', '):assignee||'').split(/\s*,\s*/).filter(Boolean),
+      status, due, done, doneAt, excluded, result, lateDays, hist,
+      committed: String(f.CommitStatus||'').trim().toLowerCase()==='committed',
+      monthKey: due ? `${due.getFullYear()}-${String(due.getMonth()+1).padStart(2,'0')}` : '' };
+  });
+}
+function exMonthLabel(k){ if(!k) return ''; const [y,m] = k.split('-').map(Number); return new Date(y, m-1, 1).toLocaleDateString('th-TH',{month:'long',year:'numeric'}); }
+function exShiftMonth(k, n){ const [y,m] = k.split('-').map(Number); const d = new Date(y, m-1+n, 1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; }
+function exStats(list){
+  const main = list.filter(r=>!r.excluded);
+  const c = k => main.filter(r=>r.result===k).length;
+  const ontime = c('ontime'), late = c('late'), overdue = c('overdue'), open = c('open'), nodate = c('done-nodate');
+  const judged = ontime + late + overdue;   // งานที่ตัดสินได้แล้วว่าทัน/ไม่ทัน
+  const lateList = main.filter(r=>r.result==='late' || r.result==='overdue');
+  const postponed = main.filter(r=>r.hist.length);
+  const postDays = postponed.map(r=>r.hist.reduce((s,h)=>s+h.delta,0));
+  return { total: main.length, excluded: list.length - main.length, ontime, late, overdue, open, nodate, judged,
+    pct: judged ? Math.round(ontime/judged*100) : null,
+    avgLate: lateList.length ? (lateList.reduce((s,r)=>s+r.lateDays,0)/lateList.length) : 0,
+    postponed: postponed.length, avgPost: postDays.length ? postDays.reduce((a,b)=>a+b,0)/postDays.length : 0, main };
+}
+function renderExec(){
+  const body = document.getElementById('exBody'); if(!body || !_exWp) return;
+  const esc = v => String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+  const fd = d => d ? d.toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'}) : '—';
+  const rows = exBuildRows();
+  const now = new Date(), curKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const months = [...new Set(rows.map(r=>r.monthKey).filter(Boolean))].sort().reverse();
+  const sel = document.getElementById('exMonth');
+  if(sel && sel.dataset.key !== months.join('|')){
+    const cur = sel.value || (months.includes(curKey) ? curKey : months[0]);
+    sel.innerHTML = months.map(k=>`<option value="${k}">${exMonthLabel(k)}</option>`).join('');
+    sel.dataset.key = months.join('|'); sel.value = months.includes(cur) ? cur : (months[0]||'');
+  }
+  const mk = sel ? sel.value : curKey;
+  if(!mk){ body.innerHTML = '<div style="padding:24px;color:var(--text3)">ยังไม่มีงานที่มี Due Date</div>'; return; }
+  const inMonth = rows.filter(r=>r.monthKey===mk);
+  const S = exStats(inMonth), P = exStats(rows.filter(r=>r.monthKey===exShiftMonth(mk,-1)));
+  const card = (label, val, sub, color) => `<div style="flex:1 1 150px;border:1px solid var(--border);border-radius:10px;padding:12px 14px;background:#fff">
+      <div style="font-size:11.5px;color:var(--text3);font-weight:600">${label}</div>
+      <div style="font-size:26px;font-weight:800;color:${color||'var(--text1)'};line-height:1.2">${val}</div>
+      <div style="font-size:11px;color:var(--text2);margin-top:2px">${sub||''}</div></div>`;
+  const diff = (a,b,unit,goodUp) => { if(a==null || b==null) return ''; const d = a-b; if(!d) return `<span style="color:var(--text3)">เท่าเดือนก่อน</span>`;
+    const good = goodUp ? d>0 : d<0; return `<span style="color:${good?'#15803d':'#dc2626'};font-weight:700">${d>0?'▲':'▼'} ${Math.abs(Math.round(d*10)/10)}${unit}</span> <span style="color:var(--text3)">จากเดือนก่อน</span>`; };
+  const pctColor = S.pct==null ? 'var(--text3)' : S.pct>=80 ? '#15803d' : S.pct>=60 ? '#d97706' : '#dc2626';
+  const kpis = `<div style="display:flex;flex-wrap:wrap;gap:10px">
+    ${card('% ส่งตรงเวลา', S.pct==null?'—':S.pct+'%', diff(S.pct,P.pct,' จุด',true), pctColor)}
+    ${card('งานทั้งหมดที่ Due เดือนนี้', S.total, `${diff(S.total,P.total,' งาน',true)}${S.excluded?` · ไม่นับ Reject/Replace ${S.excluded}`:''}`)}
+    ${card('เสร็จทันกำหนด', S.ontime, S.nodate?`+ เสร็จแต่ไม่มีวันปิด Step ${S.nodate}`:'', '#15803d')}
+    ${card('เลยกำหนด', S.late + S.overdue, `ส่งช้า ${S.late} · ยังไม่ส่ง ${S.overdue} · ช้าเฉลี่ย ${S.avgLate.toFixed(1)} วัน`, '#dc2626')}
+    ${card('ยังไม่ถึงกำหนด', S.open, 'กำลังดำเนินการ')}
+    ${card('งานที่ถูกเลื่อนวัน', S.postponed, S.postponed?`เลื่อนเฉลี่ย ${S.avgPost.toFixed(1)} วัน/งาน`:'', '#b45309')}
+  </div>`;
+  // ตารางสรุปแยกกลุ่ม
+  const groupTable = (title, keyFn, keyLabel) => {
+    const g = {};
+    S.main.forEach(r => [].concat(keyFn(r)).forEach(k => { k = k || 'ไม่ระบุ'; (g[k] = g[k] || []).push(r); }));
+    const keys = Object.keys(g).sort((a,b)=> g[b].length - g[a].length || a.localeCompare(b));
+    if(!keys.length) return '';
+    const th = 'padding:6px 8px;font-size:11px;color:var(--text3);text-align:right;border-bottom:2px solid var(--border);white-space:nowrap';
+    const td = 'padding:6px 8px;font-size:12.5px;text-align:right;border-bottom:1px solid var(--border)';
+    return `<div class="ex-box"><div class="ex-h">${title}</div><table style="width:100%;border-collapse:collapse">
+      <thead><tr><th style="${th};text-align:left">${keyLabel}</th><th style="${th}">ทั้งหมด</th><th style="${th}">ทัน</th><th style="${th}">เลย</th><th style="${th}">ยังไม่ถึง</th><th style="${th}">เลื่อน</th><th style="${th}">% ตรงเวลา</th></tr></thead>
+      <tbody>${keys.map(k=>{ const st = exStats(g[k]); return `<tr><td style="${td};text-align:left;font-weight:600">${esc(k)}</td><td style="${td}">${st.total}</td>
+        <td style="${td};color:#15803d">${st.ontime||''}</td><td style="${td};color:#dc2626">${(st.late+st.overdue)||''}</td><td style="${td}">${st.open||''}</td>
+        <td style="${td};color:#b45309">${st.postponed||''}</td><td style="${td};font-weight:700">${st.pct==null?'—':st.pct+'%'}</td></tr>`; }).join('')}</tbody></table></div>`;
+  };
+  // เหตุผลการเลื่อน
+  const reasons = {};
+  S.main.forEach(r => r.hist.forEach(h => { const k = h.reason || 'ไม่ระบุเหตุผล'; reasons[k] = reasons[k] || { n:0, days:0, jobs:new Set() }; reasons[k].n++; reasons[k].days += h.delta; reasons[k].jobs.add(r.proj); }));
+  const reasonKeys = Object.keys(reasons).sort((a,b)=>reasons[b].n - reasons[a].n);
+  const reasonBox = `<div class="ex-box"><div class="ex-h">เหตุผลที่เลื่อนวัน (${S.postponed} งาน)</div>${reasonKeys.length ? reasonKeys.map(k=>`
+      <div style="display:flex;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:12.5px"><div style="flex:1">${esc(k)}<div style="font-size:10.5px;color:var(--text3)">${esc([...reasons[k].jobs].slice(0,4).join(', '))}${reasons[k].jobs.size>4?' …':''}</div></div>
+      <div style="white-space:nowrap;text-align:right"><b>${reasons[k].n}</b> ครั้ง<div style="font-size:10.5px;color:var(--text3)">รวม ${reasons[k].days} วัน</div></div></div>`).join('')
+      : '<div style="font-size:12.5px;color:var(--text3);padding:6px 0">ไม่มีการเลื่อนวันในเดือนนี้</div>'}
+    <div style="font-size:10.5px;color:var(--text3);margin-top:6px">ที่มา: BOQ Date History (บันทึกเมื่อแก้วันที่ผ่านปุ่ม ✏️ ในหน้า Timeline พร้อมใส่เหตุผล)</div></div>`;
+  // แนวโน้ม 6 เดือน
+  const trendKeys = [5,4,3,2,1,0].map(n=>exShiftMonth(mk,-n));
+  const trend = trendKeys.map(k=>({ k, s: exStats(rows.filter(r=>r.monthKey===k)) }));
+  const maxN = Math.max(1, ...trend.map(t=>t.s.total));
+  const trendBox = `<div class="ex-box"><div class="ex-h">แนวโน้ม 6 เดือน — จำนวนงาน และ % ส่งตรงเวลา</div>
+    <div style="display:flex;align-items:flex-end;gap:10px;height:150px;padding:6px 4px 0">${trend.map(t=>{
+      const h = Math.round(t.s.total/maxN*100), on = t.s.total ? Math.round(t.s.ontime/t.s.total*h) : 0;
+      return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%" title="${exMonthLabel(t.k)}: ${t.s.total} งาน · ทัน ${t.s.ontime} · เลย ${t.s.late+t.s.overdue}">
+        <div style="font-size:11px;font-weight:700;color:${t.s.pct==null?'var(--text3)':t.s.pct>=80?'#15803d':t.s.pct>=60?'#d97706':'#dc2626'}">${t.s.pct==null?'—':t.s.pct+'%'}</div>
+        <div style="width:70%;max-width:46px;height:${h}%;min-height:2px;background:#cbd5e1;border-radius:4px 4px 0 0;position:relative;overflow:hidden;${t.k===mk?'outline:2px solid var(--primary);outline-offset:1px':''}">
+          <div style="position:absolute;left:0;right:0;bottom:0;height:${t.s.total?Math.round(t.s.ontime/t.s.total*100):0}%;background:#059669"></div></div>
+        <div style="font-size:10.5px;color:var(--text2);margin-top:4px;white-space:nowrap">${new Date(+t.k.slice(0,4), +t.k.slice(5)-1, 1).toLocaleDateString('th-TH',{month:'short'})} · ${t.s.total}</div></div>`; }).join('')}</div>
+    <div style="font-size:10.5px;color:var(--text3);margin-top:6px"><span style="display:inline-block;width:10px;height:8px;background:#059669;border-radius:2px"></span> ส่งทัน &nbsp; <span style="display:inline-block;width:10px;height:8px;background:#cbd5e1;border-radius:2px"></span> งานอื่น · ตัวเลขบนแท่ง = % ส่งตรงเวลา</div></div>`;
+  // ภาระงานต่อคน
+  const ppl = {};
+  S.main.forEach(r => r.people.forEach(p => { ppl[p] = ppl[p] || { n:0, late:0 }; ppl[p].n++; if(r.result==='late'||r.result==='overdue') ppl[p].late++; }));
+  const pplKeys = Object.keys(ppl).sort((a,b)=>ppl[b].n-ppl[a].n);
+  const maxP = Math.max(1, ...pplKeys.map(k=>ppl[k].n));
+  const peopleBox = `<div class="ex-box"><div class="ex-h">ภาระงานต่อคน (งานที่ Due เดือนนี้)</div>${pplKeys.length ? pplKeys.map(k=>`
+      <div style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:12px"><div style="width:80px;font-weight:600">${esc(k)}</div>
+      <div style="flex:1;background:#f1f5f9;border-radius:3px;height:12px;position:relative"><div style="width:${ppl[k].n/maxP*100}%;height:100%;background:#0e7490;opacity:.55;border-radius:3px"></div></div>
+      <div style="width:70px;text-align:right">${ppl[k].n} งาน${ppl[k].late?` <span style="color:#dc2626">(${ppl[k].late})</span>`:''}</div></div>`).join('')
+      : '<div style="font-size:12.5px;color:var(--text3)">ไม่มีข้อมูลผู้ทำ</div>'}
+    <div style="font-size:10.5px;color:var(--text3);margin-top:4px">ตัวเลขสีแดง = งานที่เลยกำหนด · 1 งานมีหลายคนทำ นับให้ทุกคน</div></div>`;
+  // งานเลยกำหนด / เลื่อน (รายการ)
+  const lateRows = S.main.filter(r=>r.result==='late'||r.result==='overdue'||r.hist.length).sort((a,b)=>b.lateDays-a.lateDays);
+  const thL = 'padding:6px 8px;font-size:11px;color:var(--text3);text-align:left;border-bottom:2px solid var(--border);white-space:nowrap';
+  const tdL = 'padding:6px 8px;font-size:12px;border-bottom:1px solid var(--border);vertical-align:top';
+  const lateBox = `<div class="ex-box"><div class="ex-h">รายการงานที่เลยกำหนด / ถูกเลื่อน (${lateRows.length})</div>${lateRows.length ? `<table style="width:100%;border-collapse:collapse">
+    <thead><tr><th style="${thL}">โครงการ</th><th style="${thL}">Service</th><th style="${thL}">ผู้สั่งงาน</th><th style="${thL}">Due</th><th style="${thL}">ส่งจริง</th><th style="${thL}">ผล</th><th style="${thL}">เลื่อน / เหตุผล</th></tr></thead>
+    <tbody>${lateRows.map(r=>`<tr><td style="${tdL};font-weight:600">${esc(r.proj)}<div style="font-size:10.5px;color:var(--text3);font-weight:400">${esc(r.pkg)}</div></td>
+      <td style="${tdL}">${esc(r.svc)}</td><td style="${tdL}">${esc(r.pic)}</td><td style="${tdL};white-space:nowrap">${fd(r.due)}</td><td style="${tdL};white-space:nowrap">${fd(r.doneAt)}</td>
+      <td style="${tdL};white-space:nowrap">${r.result==='late'?`<span style="color:#dc2626">ส่งช้า ${r.lateDays} วัน</span>`:r.result==='overdue'?`<span style="color:#dc2626;font-weight:700">ยังไม่ส่ง · เลย ${r.lateDays} วัน</span>`:r.result==='ontime'?'<span style="color:#15803d">ทัน</span>':'<span style="color:var(--text3)">ยังไม่ถึงกำหนด</span>'}</td>
+      <td style="${tdL}">${r.hist.length ? r.hist.map(h=>`+${h.delta} วัน · ${esc(h.reason||'ไม่ระบุเหตุผล')}`).join('<br>') : '—'}</td></tr>`).join('')}</tbody></table>` : '<div style="font-size:12.5px;color:var(--text3)">ไม่มีงานที่เลยกำหนดหรือถูกเลื่อน 👍</div>'}</div>`;
+  // งานเสี่ยงเดือนหน้า
+  const nk = exShiftMonth(mk, 1);
+  const today = new Date(); today.setHours(0,0,0,0);
+  const risk = rows.filter(r=>r.monthKey===nk && !r.excluded && !r.done).map(r=>{
+    const why = [];
+    if(!r.committed) why.push('ยังไม่ Commit');
+    if(r.status==='(ว่าง)') why.push('ยังไม่ระบุสถานะ');
+    else if(r.status.toLowerCase()==='not started') why.push('ยังไม่เริ่ม');
+    if(r.hist.length) why.push(`เคยเลื่อนแล้ว ${r.hist.length} ครั้ง`);
+    if(r.due && (r.due - today)/864e5 <= 14) why.push(`อีก ${Math.max(0,Math.round((r.due-today)/864e5))} วันถึงกำหนด`);
+    return { r, why };
+  }).filter(x=>x.why.length).sort((a,b)=> b.why.length - a.why.length || a.r.due - b.r.due);
+  const riskBox = `<div class="ex-box"><div class="ex-h">⚠ งานเสี่ยงเดือนหน้า · ${exMonthLabel(nk)} (${risk.length})</div>${risk.length ? `<table style="width:100%;border-collapse:collapse">
+    <thead><tr><th style="${thL}">โครงการ</th><th style="${thL}">Service</th><th style="${thL}">ผู้สั่งงาน</th><th style="${thL}">Due</th><th style="${thL}">สัญญาณเสี่ยง</th></tr></thead>
+    <tbody>${risk.slice(0,20).map(({r,why})=>`<tr><td style="${tdL};font-weight:600">${esc(r.proj)}<div style="font-size:10.5px;color:var(--text3);font-weight:400">${esc(r.pkg)}</div></td><td style="${tdL}">${esc(r.svc)}</td><td style="${tdL}">${esc(r.pic)}</td>
+      <td style="${tdL};white-space:nowrap">${fd(r.due)}</td><td style="${tdL};color:#b45309">${why.join(' · ')}</td></tr>`).join('')}</tbody></table>${risk.length>20?`<div style="font-size:11px;color:var(--text3);margin-top:4px">แสดง 20 จาก ${risk.length} งาน</div>`:''}` : '<div style="font-size:12.5px;color:var(--text3)">ไม่พบงานเสี่ยง</div>'}</div>`;
+  body.innerHTML = `<style>.ex-box{border:1px solid var(--border);border-radius:10px;padding:12px 14px;background:#fff;break-inside:avoid}.ex-h{font-weight:700;font-size:13.5px;margin-bottom:8px;color:var(--text1)}
+      .ex-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:12px;margin-top:12px}
+      @media print{.ex-grid{grid-template-columns:1fr 1fr}#pgExec{padding:0}}</style>
+    <div style="margin-bottom:10px"><div style="font-size:18px;font-weight:800">สรุปผลงานทีม BOQ · ${exMonthLabel(mk)}</div>
+      <div style="font-size:12px;color:var(--text3)">นับจากงานที่ Due Date (วันที่ Post ขอส่ง) อยู่ในเดือนนี้ · ข้อมูล ณ ${new Date().toLocaleDateString('th-TH',{day:'numeric',month:'long',year:'numeric'})}</div></div>
+    ${kpis}
+    <div class="ex-grid">${trendBox}${reasonBox}</div>
+    <div class="ex-grid">${groupTable('แยกตามประเภทงาน (Service Type)', r=>r.svcGroup, 'ประเภทงาน')}${groupTable('แยกตามผู้สั่งงาน (Team Post)', r=>r.pic, 'ผู้สั่งงาน')}</div>
+    <div class="ex-grid">${groupTable('แยกตาม Department', r=>r.dept, 'Department')}${groupTable('ภาระงานต่อทีม BOQ', r=>r.team.length?r.team:['ไม่ระบุ'], 'ทีม')}</div>
+    <div class="ex-grid">${peopleBox}${riskBox}</div>
+    <div style="margin-top:12px">${lateBox}</div>
+    <p style="font-size:11px;color:var(--text3);margin:12px 2px">หมายเหตุ: "ทันกำหนด" = เสร็จแล้วและวันปิด Step สุดท้าย ≤ Due Date · "เลยกำหนด" = ส่งหลัง Due Date หรือยังไม่ส่งทั้งที่เลย Due Date แล้ว · % ส่งตรงเวลา คิดจากงานที่ตัดสินได้แล้ว (ทัน + เลย) · ไม่นับงาน Reject / Replace · งานที่ Status = Done แต่ไม่มีวันปิด Step จะไม่ถูกนับใน %</p>`;
 }
 
 /* ============ COMMIT CHECK · AI Suggest ============ */
