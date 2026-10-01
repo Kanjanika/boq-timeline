@@ -330,7 +330,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-10-01.102</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-10-01.103</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -1811,6 +1811,8 @@ function canonicalProjId(name){
 }
 // build 2026-08-18.10: เพิ่ม 'Budget' แยกออกมาเป็น pool ของตัวเอง (BUDGET) — เดิม fallback ไป 'MEP' หมดถ้าไม่ใช่
 // ST/AR&ID ทำให้ทีม Budget (Best/Yo/Stamp/Jack) ไม่มีตัวเลือกจริงๆ ในหน้า Commit เลย
+// build .103: dropdown เลือกผู้ทำได้ทุกทีม (ST/AR&ID/Budget เหมือนงานระบบ)
+function assignSelId(st){ return 'mepAssign_'+String(st).replace(/[^A-Za-z0-9]/g,''); }
 function subToPool(sub){
   if(sub==='ST') return 'ST';
   if(sub==='AR&ID') return 'AR';
@@ -2710,10 +2712,8 @@ async function commitAndGenerateSteps(task, sug, selectedSubs, editedStart, edit
   for(const st of subs){
     // MEP: อ่านจาก dropdown ที่ PCM เลือกเอง; ทีมอื่น: ใช้ AI suggest
     let stepWho = whoBySubteam[st] || null;
-    if(MEP_SUBTEAMS.includes(st)){
-      const sel = document.getElementById(`mepAssign_${st}`);
-      if(sel && sel.value) stepWho = sel.value;
-    }
+    { const sel = document.getElementById(assignSelId(st));
+      if(sel && sel.value) stepWho = sel.value; }
     const stepUid = stepWho ? getUserId(stepWho) : null;
     // QA = หัวหน้าทีม (ตาม QA_LEADS) — กรอกอัตโนมัติทุก step
     const stepQA = QA_LEADS[st] || null;
@@ -5493,24 +5493,24 @@ function renderMEPAssignDropdowns(){
   if(!section) return;
   const it = INTAKE[curIntake];
   const ws = it?._liveSug?.whoBySubteam || {};
-  const checkedMEP = MEP_SUBTEAMS.filter(s=>{ const el=document.getElementById(subteamDomId(s)); return el&&el.checked; });
+  const checkedMEP = ALL_SUBTEAMS.filter(s=>{ const el=document.getElementById(subteamDomId(s)); return el&&el.checked; });
   if(!checkedMEP.length){ section.style.display='none'; section.innerHTML=''; return; }
-  const mepPool = POOLS['MEP'] || [];
   // เก็บค่าที่เคยเลือกไว้ก่อนสร้าง DOM ใหม่ (กัน reset เมื่อ checkbox อื่นถูกติ๊ก)
   const prev = {};
-  MEP_SUBTEAMS.forEach(s=>{ const sel=document.getElementById(`mepAssign_${s}`); if(sel) prev[s]=sel.value; });
+  ALL_SUBTEAMS.forEach(s=>{ const sel=document.getElementById(assignSelId(s)); if(sel) prev[s]=sel.value; });
   section.style.display='block';
   const rows = checkedMEP.map(st=>{
+    const mepPool = POOLS[subToPool(st)] || [];
     const suggested = prev[st] || ws[st] || (mepPool[0]||'');
     const opts = mepPool.map(n=>`<option value="${n}" ${n===suggested?'selected':''}>${n}</option>`).join('');
     return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
-      <span style="min-width:34px;font-size:13px;font-weight:600;color:var(--primary)">${st}</span>
-      <select id="mepAssign_${st}" onchange="_refreshAIWhoText()" style="font-size:13px;padding:3px 8px;border:1px solid var(--border);border-radius:5px">${opts}</select>
-      <small style="color:var(--text2)">QA: Stamp</small>
+      <span style="min-width:52px;font-size:13px;font-weight:600;color:var(--primary)">${st}</span>
+      <select id="${assignSelId(st)}" onchange="_refreshAIWhoText()" style="font-size:13px;padding:3px 8px;border:1px solid var(--border);border-radius:5px">${opts}</select>
+      <small style="color:var(--text2)">QA: ${QA_LEADS[st]||'—'}</small>
     </div>`;
   }).join('');
   section.innerHTML = `<div style="padding:8px 12px;background:#f0fdfa;border:1px solid #99f6e4;border-radius:7px">
-    <div style="font-size:12px;color:var(--text2);margin-bottom:7px">🔧 มอบหมายทีมระบบ MEP — PCM เลือกว่าใครทำระบบไหน (แก้ได้ก่อน Commit)</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:7px">🔧 มอบหมายผู้ทำแต่ละทีม — PCM เลือกว่าใครทำทีมไหน (แก้ได้ก่อน Commit)</div>
     ${rows}
   </div>`;
 }
@@ -5524,12 +5524,8 @@ function _refreshAIWhoText(){
   const parts = [];
   for(const st of checkedSubs){
     let p;
-    if(MEP_SUBTEAMS.includes(st)){
-      const sel = document.getElementById(`mepAssign_${st}`);
-      p = sel ? sel.value : ws[st];
-    } else {
-      p = ws[st];
-    }
+    { const sel = document.getElementById(assignSelId(st));
+      p = sel ? sel.value : ws[st]; }
     if(p && !namesSeen.has(p)){
       namesSeen.add(p);
       parts.push(p);
