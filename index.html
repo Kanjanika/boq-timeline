@@ -42,6 +42,7 @@ body{font-family:'Segoe UI','Sarabun','Tahoma',sans-serif;background:var(--bg);c
 .btn2{background:#fff;border:1px solid var(--border);color:var(--text2)}
 .btn2:hover{background:var(--bg);color:var(--text)}
 .btn-amber{background:var(--warn)}
+.btn-red{background:#dc2626}
 .btn-amber:hover{background:#b45309}
 .btn-teal{background:#0d9488;color:#fff}
 .btn-teal:hover{background:#0f766e}
@@ -330,7 +331,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-10-02.104</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-10-02.105</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -508,6 +509,7 @@ tr.pick:hover td{background:var(--bg)}
 
       <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap" id="ciActions">
         <button class="btn" onclick="doCommit(this)">✓ PCM ยืนยัน Commit</button>
+        <button class="btn btn-red" onclick="doReject(this)">✕ Reject</button>
         <button class="btn btn2" onclick="copyNego()">✉️ Copy ข้อความต่อรอง Post</button>
         <button class="btn btn-amber" id="btnScen" onclick="showScenario()" style="display:none">➕ ต่อรองไม่ได้ → เพิ่มกำลังคน</button>
         <button class="btn btn-teal" id="btnDueCon" onclick="toggleDueConstraint()" style="display:none">📐 ยึด Due Date · ปรับสัดส่วน Stage</button>
@@ -2787,6 +2789,37 @@ async function doCommit(btn){
     toastMsg('⚠️ Commit ไม่สำเร็จ: '+e.message);
     _committing = false;
     if(btn) btn.disabled = false;
+  }
+}
+// build .105: ปุ่ม Reject ที่หน้า Commit Check → เปลี่ยน Status ของงานใน BOQ Team Work Plan เป็น "Reject"
+// (ไม่สร้าง Step) — รายการ Status=Reject ถูกกรองออกจากลิสต์ "รอ Commit" อยู่แล้ว (CLOSED_STATUSES)
+async function doReject(btn){
+  const it = INTAKE[curIntake];
+  if(!it) return;
+  if(!LIVE_MODE || !it._liveTask){ toastMsg('✕ Reject แล้ว (โหมด MOCK)'); return; }
+  if(_committing){ toastMsg('⏳ กำลังบันทึกอยู่ · กรุณารอสักครู่'); return; }
+  const t = it._liveTask;
+  if(!confirm(`ยืนยัน Reject งานนี้?\n${t.name||''} · ${t.packageName||''} · ${t.service||''}\n\nStatus จะเปลี่ยนเป็น "Reject" และงานจะหายจากลิสต์รอ Commit`)) return;
+  const safeTaskId = String(t.itemId).split(':')[0];
+  _committing = true; if(btn) btn.disabled = true;
+  try{
+    toastMsg('⏳ กำลัง Reject...');
+    const spToken = await getSpToken();
+    const r = await fetch(`${SP_SITE_URL}/_api/web/lists/getById('${WORKPLAN_LIST}')/items(${safeTaskId})`, {
+      method:'POST',
+      headers:{'Authorization':`Bearer ${spToken}`,'Accept':'application/json;odata=nometadata','Content-Type':'application/json;odata=nometadata','X-HTTP-Method':'MERGE','IF-MATCH':'*'},
+      body: JSON.stringify({Status:'Reject'})
+    });
+    if(!r.ok && r.status!==204){
+      const tx = await r.text().catch(()=>r.statusText); let msg=tx;
+      try{ msg = JSON.parse(tx)?.['odata.error']?.message?.value || tx; }catch(_){}
+      throw new Error(`SP ${r.status}: ${msg}`);
+    }
+    toastMsg('✕ Reject แล้ว · กำลังโหลดหน้าใหม่...');
+    setTimeout(()=>{ location.reload(); }, 1200);
+  }catch(e){
+    console.error(e); toastMsg('⚠️ Reject ไม่สำเร็จ: '+e.message);
+    _committing = false; if(btn) btn.disabled = false;
   }
 }
 // findExistingStepTrackingItems: เช็คของจริงใน SharePoint ก่อนเสมอว่า Project+Package+SubTeam นี้มี Step จริงสร้างไว้
