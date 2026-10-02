@@ -331,7 +331,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-10-02.105</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-10-02.106</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -1246,7 +1246,11 @@ function saveStepTemplatesToStorage(){
 function getTemplateForService(serviceType){
   // build 2026-09-29.69: ตรวจ exact match ก่อนเสมอ — เช่น 'VE - Budget Stage' มี template 2-stage ของตัวเองแล้ว
   // ถ้าไม่เช็คก่อน topLevelServiceType() จะแปลง 'VE - Budget Stage' → 'VE' แล้วดึง template 4-stage ผิดๆมาใช้
+  // build .106: normalize ช่องว่างเกิน/ตัวพิมพ์ — เดิม "Cost Exercise - Budget Stage " (มีวรรคท้าย) หาไม่เจอ → ตกไป Blank BOQ 4 Step
+  serviceType = String(serviceType==null?'':serviceType).replace(/\s+/g,' ').trim();
   if(STEP_TEMPLATES[serviceType] && STEP_TEMPLATES[serviceType].length) return STEP_TEMPLATES[serviceType];
+  { const ci = Object.keys(STEP_TEMPLATES).find(k=>k.toLowerCase()===serviceType.toLowerCase());
+    if(ci && STEP_TEMPLATES[ci].length) return STEP_TEMPLATES[ci]; }
   // topLevelServiceType: รองรับค่า Service Type แบบละเอียดใหม่ตาม PDF4 (เช่น "Budget - Breakdown Detail (as EIA
   // Drawing)") ให้ยังหา Step Template ของหมวดบนสุด (Budget) เจอ แทนที่จะหาไม่เจอแล้ว fallback ไป Blank BOQ ผิดๆ
   const top = topLevelServiceType(serviceType);
@@ -4390,7 +4394,20 @@ async function bootLive(){
           // parentTaskId ตรงๆ แม่นสุด (เจาะจงตัวงานจริงเลย ไม่ต้องพึ่งกุญแจ Package ที่อาจคลุมเครือ) ถ้ามีให้ใช้ก่อนเสมอ
           let hintService = pkgSvcRaw;
           if(row.parentTaskId && Object.prototype.hasOwnProperty.call(svcTypeById, row.parentTaskId)) hintService = svcTypeById[row.parentTaskId];
-          hintService = hintService || 'Blank BOQ';
+          hintService = (hintService ? String(hintService).replace(/\s+/g,' ').trim() : '') || 'Blank BOQ';
+          // build .106: Service Type อื่นที่ไม่ใช่ Blank BOQ/Pretender → ซ่อน Step เกินจำนวนใน Template (เช่น S3/S4 ค้างจาก
+          // การ Commit ที่เคยตกไปใช้ Blank BOQ 4 Step) ข้อมูลใน SharePoint ไม่ถูกลบ
+          if(hintService!=='Blank BOQ' && hintService!=='Pretender'){
+            const _tl = getTemplateForService(hintService).length;
+            if(_tl && row.steps.some(st=>st.s>_tl)){
+              console.warn('[.106] ซ่อน Step เกิน Template', pj.name, pk.name, row.team, hintService, row.steps.filter(st=>st.s>_tl).map(st=>'S'+st.s+' item '+(row.itemIds||{})[st.s]));
+              row.steps = row.steps.filter(st=>st.s<=_tl);
+              Object.keys(row.closed||{}).forEach(k=>{ if(+k>_tl) delete row.closed[k]; });
+              Object.keys(row.astart||{}).forEach(k=>{ if(+k>_tl) delete row.astart[k]; });
+              let _ip=0; row.steps.forEach(_s=>{ if(row.closed[_s.s]) _ip=Math.max(_ip,_s.s+1); else if(row.astart[_s.s]!==undefined) _ip=Math.max(_ip,_s.s); });
+              row.inprog=_ip;
+            }
+          }
           row.steps.forEach(st=>{ st.name = resolveStepName(st.s, hintService); });
           // แถวหนึ่ง (ทีม) อาจรวม Blank BOQ (S1-S4) กับ Pretender (S5-S8) เข้าด้วยกัน ถ้า commit แยกกันแต่ตกที่
           // Project+Package+SubTeam เดียวกัน — resolveRowServiceLabel เช็คจากเลข Step จริงในแถวนี้เพื่อไม่ให้เห็นแค่
