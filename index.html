@@ -331,7 +331,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-10-02.106</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-10-02.108</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -630,13 +630,15 @@ tr.pick:hover td{background:var(--bg)}
     <!-- Status checkbox filter -->
     <div style="position:relative">
       <button class="team-filter-btn" id="wpSfBtn" onclick="toggleWpStatusPanel()">
-        <span id="wpSfLabel">— สถานะทั้งหมด —</span> ▾
+        <span id="wpSfLabel">— สถานะค่าเริ่มต้น —</span> ▾
       </button>
       <div class="team-filter-panel" id="wpStatusPanel" style="display:none;min-width:180px">
         <div style="padding:4px 12px 2px;display:flex;gap:8px;font-size:11px">
           <span style="cursor:pointer;color:var(--primary);font-weight:600" onclick="wpSfAll(true)">เลือกทั้งหมด</span>
           <span style="color:var(--text3)">|</span>
           <span style="cursor:pointer;color:var(--primary);font-weight:600" onclick="wpSfAll(false)">ล้าง</span>
+          <span style="color:var(--text3)">|</span>
+          <span style="cursor:pointer;color:var(--primary);font-weight:600" onclick="wpSfDefault()" title="ไม่แสดง Done / Reject / Replace">ค่าเริ่มต้น</span>
         </div>
         <hr class="team-divider">
         <label class="team-check-item"><input type="checkbox" class="wp-sf-cb" value="Not Started" checked onchange="filterWpRows();updateWpSfLabel()"> Not Started</label>
@@ -1440,6 +1442,7 @@ const USER_MAP = {
   'peerada@costplan.co.th':   'Best',
   'poorisit@costplan.co.th':  'Yo',
   'patipat@costplan.co.th':   'Jack',
+  'wimwipha@costplan.co.th':  'Wim',   // build .108: Wimwipha Jitkamen · MEP · COS_Wim · ผู้ทำ
 };
 let myWorkSysName = null; // ชื่อในระบบของ user ที่ login (จาก USER_MAP + MSAL graphAccount.username)
 // build 2026-09-30.90: ผู้ดูแลระบบ — เห็นทุกหน้าเหมือน PCM และดูงานของทุกคนได้ แต่ "ไม่อยู่ในทีม BOQ"
@@ -5905,12 +5908,18 @@ function wpSfAll(v){
   document.querySelectorAll('.wp-sf-cb').forEach(cb=>{ cb.checked=v; });
   filterWpRows(); updateWpSfLabel();
 }
+// build .107: ค่าเริ่มต้น = ตามที่ติ๊กไว้ตอนเปิดหน้า (checked ใน HTML) — ไม่แสดง Done/Reject/Replace
+function wpSfDefault(){
+  document.querySelectorAll('.wp-sf-cb').forEach(cb=>{ cb.checked=cb.defaultChecked; });
+  filterWpRows(); updateWpSfLabel();
+}
 function updateWpSfLabel(){
   const all = [...document.querySelectorAll('.wp-sf-cb')];
   const checked = all.filter(c=>c.checked);
   const lbl = document.getElementById('wpSfLabel');
   if(!lbl) return;
-  if(checked.length===0) lbl.textContent='ไม่แสดงสถานะใดๆ';
+  if(all.every(c=>c.checked===c.defaultChecked) && checked.length!==all.length) lbl.textContent='— สถานะค่าเริ่มต้น —';
+  else if(checked.length===0) lbl.textContent='ไม่แสดงสถานะใดๆ';
   else if(checked.length===all.length) lbl.textContent='— สถานะทั้งหมด —';
   else lbl.textContent = `สถานะ: ${checked.length} รายการ`;
 }
