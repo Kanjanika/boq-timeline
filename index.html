@@ -331,7 +331,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-10-09.115</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-10-09.116</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -668,7 +668,7 @@ tr.pick:hover td{background:var(--bg)}
     <a class="btn btn2" href="https://costplan1.sharepoint.com/:l:/s/BOQTeam/JABVdFka-QxLSKQUvXtPbfaeATc-zs9gGzDQx8Pfz5M5XMQ?nav=MTExZmQ3MTEtYWMxNy00NGI2LWI1Y2EtMjdlNTc4YWRhYzY3" target="_blank" rel="noopener" style="text-decoration:none;display:inline-block" title="เปิดฟอร์มกรอกงานใน SharePoint (แท็บใหม่)">📝 BOQ Assignment Form</a>
     <button class="btn btn2" onclick="inspectWpColumns()">🔍 ดูคอลัมน์</button>
     <button class="btn btn2" onclick="loadWorkPlan()">🔄 รีเฟรช</button>
-    <button class="btn btn2" id="btnBackfillSF" onclick="backfillStartFinish(this)" title="งานที่ Commit แล้วแต่ Start Date / Finish Date ยังว่าง → เติมให้จากวันที่ตอน Commit">📅 เติม Start/Finish ย้อนหลัง</button>
+    <button class="btn btn2" id="btnBackfillSF" onclick="backfillStartFinish(this)" title="งานที่ Commit แล้ว: เติม/แก้ Start Date · Finish Date ให้ตรงกับแผน Step จริง">📅 เติม Start/Finish ย้อนหลัง</button>
   </div>
   <!-- Column inspector panel -->
   <div id="wpColPanel" style="display:none;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-top:10px;font-size:12px">
@@ -1751,29 +1751,42 @@ async function backfillStartFinish(btn){
     ]);
     const span = {};
     steps.forEach(it=>{ const f=it.fields||{}; const pid=f.ParentTaskID!=null?String(f.ParentTaskID).trim():''; if(!pid) return;
-      const a=f.PlanStart?new Date(f.PlanStart):null, e=f.PlanEnd?new Date(f.PlanEnd):null;
+      // ปัดเป็นวันเต็มแบบเดียวกับหน้า Timeline (Math.round) กันวันเพี้ยน 1 วันจาก timezone (เช่น 17:00Z = วันถัดไปเวลาไทย)
+      const rd = v => { const t=new Date(v).getTime(); return isNaN(t)? null : new Date(Math.round(t/864e5)*864e5); };
+      const a=f.PlanStart?rd(f.PlanStart):null; let e=f.PlanEnd?rd(f.PlanEnd):null;
+      // PlanEnd เก็บแบบ "วันถัดจากวันจบ" (หน้าจัดการ Step แสดง PlanEnd−1) → ใช้วันจบจริงที่เห็นบนหน้าจอ
+      if(a && e && e>a) e = new Date(e.getTime()-864e5);
       const o=span[pid]||(span[pid]={s:null,e:null});
       if(a&&!isNaN(a)&&(!o.s||a<o.s)) o.s=a; if(e&&!isNaN(e)&&(!o.e||e>o.e)) o.e=e; });
     const d10 = v => v ? String(v).slice(0,10) : '';
     const todo = [];
+    // build .116: ใช้แผนของ Step จริง (PlanStart ต่ำสุด / วันจบสูงสุด) เป็นหลัก — ตรงกับแผนที่เห็นใน Timeline
+    // ไม่มี Step ค่อยใช้ AISuggestStart/Finish → CommittedFinish · งานที่ Start/Finish มีค่าแล้วแต่ไม่ตรงกับแผน Step → เสนอแก้ให้ตรง
     wp.forEach(it=>{ const f=it.fields||{};
       if(String(f.CommitStatus||'').trim().toLowerCase()!=='committed') return;
-      const curS = f.StartDate || f.Start_x0020_Date, curF = f.FinishDate || f.Finish_x0020_Date;
-      if(curS && curF) return;
+      const curS = d10(f.StartDate || f.Start_x0020_Date), curF = d10(f.FinishDate || f.Finish_x0020_Date);
       const id = String(it.id).split(':')[0], sp = span[id]||{};
-      const newS = curS ? null : (d10(f.AISuggestStart) || (sp.s? toISO(sp.s) : ''));
-      const newF = curF ? null : (d10(f.AISuggestFinish) || d10(f.CommittedFinish) || (sp.e? toISO(sp.e) : ''));
-      const body = {};
-      if(newS) body.StartDate = newS+'T00:00:00Z';
-      if(newF) body.FinishDate = newF+'T00:00:00Z';
-      todo.push({id, name:`${f.Title||f.Project_x0020_Name||'-'} · ${f.Package||'-'} · ${f.Service_x0020_Type||'-'}`, newS, newF, body, miss:(!curS&&!newS)||(!curF&&!newF)});
+      const spS = sp.s? toISO(sp.s) : '', spF = sp.e? toISO(sp.e) : '';
+      const wantS = spS || d10(f.AISuggestStart);
+      const wantF = spF || d10(f.AISuggestFinish) || d10(f.CommittedFinish);
+      const body = {}; let kind = '';
+      if(wantS && wantS!==curS && (!curS || spS)){ body.StartDate = wantS+'T00:00:00Z'; kind = curS?'แก้':'เติม'; }
+      if(wantF && wantF!==curF && (!curF || spF)){ body.FinishDate = wantF+'T00:00:00Z'; kind = kind==='เติม'||!curF?'เติม':'แก้'; }
+      // build .116: Committed Finish ใช้วันจบตามแผน Step เหมือน Finish Date
+      const curC = d10(f.CommittedFinish);
+      if(wantF && wantF!==curC && (!curC || spF)){ body.CommittedFinish = wantF+'T00:00:00Z'; if(!kind) kind = curC?'แก้':'เติม'; }
+      const blank = !curS || !curF;
+      if(!Object.keys(body).length && !blank) return;
+      todo.push({id, name:`${f.Title||f.Project_x0020_Name||'-'} · ${f.Package||'-'} · ${f.Service_x0020_Type||'-'}`,
+        newS: body.StartDate?wantS:null, newF: body.FinishDate?wantF:null, newC: body.CommittedFinish?wantF:null, oldS:curS, oldF:curF, oldC:curC, body, kind});
     });
     const ok = todo.filter(t=>Object.keys(t.body).length);
     const nodata = todo.filter(t=>!Object.keys(t.body).length);
     if(!todo.length){ toastMsg('✓ งานที่ Commit แล้วมี Start/Finish ครบทุกรายการ'); return; }
     const fmt = v => v? fmtY(new Date(v)) : '—';
-    const preview = ok.slice(0,15).map(t=>`#${t.id} ${t.name}\n   Start ${t.newS?fmt(t.newS):'(มีอยู่แล้ว)'} · Finish ${t.newF?fmt(t.newF):'(มีอยู่แล้ว)'}`).join('\n');
-    const msg = `พบงานที่ Commit แล้วแต่ Start/Finish ยังว่าง ${todo.length} รายการ\n· เติมได้ ${ok.length} รายการ${nodata.length?`\n· หาวันที่ไม่ได้ ${nodata.length} รายการ (ข้าม — ดูใน Console)`:''}\n\n${preview}${ok.length>15?`\n… และอีก ${ok.length-15} รายการ`:''}\n\nยืนยันบันทึกลง SharePoint?`;
+    const preview = ok.slice(0,15).map(t=>`[${t.kind}] #${t.id} ${t.name}\n   Start ${t.newS?(t.oldS?fmt(t.oldS)+' → ':'')+fmt(t.newS):'(ไม่เปลี่ยน)'} · Finish ${t.newF?(t.oldF?fmt(t.oldF)+' → ':'')+fmt(t.newF):'(ไม่เปลี่ยน)'} · Committed Finish ${t.newC?(t.oldC?fmt(t.oldC)+' → ':'')+fmt(t.newC):'(ไม่เปลี่ยน)'}`).join('\n');
+    const nFix = ok.filter(t=>t.kind==='แก้').length;
+    const msg = `งานที่ Commit แล้ว: Start/Finish ว่างหรือไม่ตรงกับแผน Step ${todo.length} รายการ\n· บันทึกได้ ${ok.length} รายการ (เติมช่องว่าง ${ok.length-nFix} · แก้ให้ตรงแผน Step ${nFix})${nodata.length?`\n· หาวันที่ไม่ได้ ${nodata.length} รายการ (ข้าม — ดูใน Console)`:''}\n\n${preview}${ok.length>15?`\n… และอีก ${ok.length-15} รายการ`:''}\n\nยืนยันบันทึกลง SharePoint?`;
     if(nodata.length) console.table(nodata.map(t=>({id:t.id, งาน:t.name})));
     if(!ok.length){ alert(msg.replace('\n\nยืนยันบันทึกลง SharePoint?','')); return; }
     if(!confirm(msg)) return;
