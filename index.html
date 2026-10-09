@@ -331,7 +331,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-10-09.113</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-10-09.115</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -668,6 +668,7 @@ tr.pick:hover td{background:var(--bg)}
     <a class="btn btn2" href="https://costplan1.sharepoint.com/:l:/s/BOQTeam/JABVdFka-QxLSKQUvXtPbfaeATc-zs9gGzDQx8Pfz5M5XMQ?nav=MTExZmQ3MTEtYWMxNy00NGI2LWI1Y2EtMjdlNTc4YWRhYzY3" target="_blank" rel="noopener" style="text-decoration:none;display:inline-block" title="เปิดฟอร์มกรอกงานใน SharePoint (แท็บใหม่)">📝 BOQ Assignment Form</a>
     <button class="btn btn2" onclick="inspectWpColumns()">🔍 ดูคอลัมน์</button>
     <button class="btn btn2" onclick="loadWorkPlan()">🔄 รีเฟรช</button>
+    <button class="btn btn2" id="btnBackfillSF" onclick="backfillStartFinish(this)" title="งานที่ Commit แล้วแต่ Start Date / Finish Date ยังว่าง → เติมให้จากวันที่ตอน Commit">📅 เติม Start/Finish ย้อนหลัง</button>
   </div>
   <!-- Column inspector panel -->
   <div id="wpColPanel" style="display:none;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-top:10px;font-size:12px">
@@ -1736,6 +1737,64 @@ async function spFetch(apiPath){
 // Graph มักตัด response เป็นหลายหน้า (@odata.nextLink) โดยเฉพาะตอน $expand=fields แม้จะขอ $top ใหญ่ๆ ก็ตาม
 // ถ้าดึงแค่หน้าแรกหน้าเดียว รายการที่อยู่หน้าถัดไป (เช่นโครงการจริงที่เพิ่ง Post เข้ามาใหม่) จะหายไปเงียบๆ
 // ฟังก์ชันนี้จึงวนดึงทุกหน้าจนกว่าจะไม่มี nextLink แล้วรวมผลลัพธ์ทั้งหมด
+// build .115: เติม Start Date / Finish Date ย้อนหลังให้งานที่ Commit แล้วแต่ยังว่าง
+// แหล่งข้อมูล (ตามลำดับ): AISuggestStart/Finish (ก่อน .114 ระบบเขียนวันที่ PCM กำหนดไว้ที่นี่) → CommittedFinish (เฉพาะ Finish)
+// → แผนของ Step จริงใน BOQ Step Tracking (PlanStart ต่ำสุด / PlanEnd สูงสุด ของ ParentTaskID นั้น) · เติมเฉพาะช่องที่ว่าง
+async function backfillStartFinish(btn){
+  if(!LIVE_MODE){ toastMsg('ต้อง login ก่อน'); return; }
+  if(btn) btn.disabled = true;
+  try{
+    toastMsg('⏳ กำลังตรวจรายการที่ Commit แล้ว...');
+    const [wp, steps] = await Promise.all([
+      graphFetchAllItems(`/sites/${SITE_ID}/lists/${WORKPLAN_LIST}/items?$expand=fields&$top=200`),
+      graphFetchAllItems(`/sites/${SITE_ID}/lists/${STEP_LIST}/items?$expand=fields($select=ParentTaskID,PlanStart,PlanEnd)&$top=500`)
+    ]);
+    const span = {};
+    steps.forEach(it=>{ const f=it.fields||{}; const pid=f.ParentTaskID!=null?String(f.ParentTaskID).trim():''; if(!pid) return;
+      const a=f.PlanStart?new Date(f.PlanStart):null, e=f.PlanEnd?new Date(f.PlanEnd):null;
+      const o=span[pid]||(span[pid]={s:null,e:null});
+      if(a&&!isNaN(a)&&(!o.s||a<o.s)) o.s=a; if(e&&!isNaN(e)&&(!o.e||e>o.e)) o.e=e; });
+    const d10 = v => v ? String(v).slice(0,10) : '';
+    const todo = [];
+    wp.forEach(it=>{ const f=it.fields||{};
+      if(String(f.CommitStatus||'').trim().toLowerCase()!=='committed') return;
+      const curS = f.StartDate || f.Start_x0020_Date, curF = f.FinishDate || f.Finish_x0020_Date;
+      if(curS && curF) return;
+      const id = String(it.id).split(':')[0], sp = span[id]||{};
+      const newS = curS ? null : (d10(f.AISuggestStart) || (sp.s? toISO(sp.s) : ''));
+      const newF = curF ? null : (d10(f.AISuggestFinish) || d10(f.CommittedFinish) || (sp.e? toISO(sp.e) : ''));
+      const body = {};
+      if(newS) body.StartDate = newS+'T00:00:00Z';
+      if(newF) body.FinishDate = newF+'T00:00:00Z';
+      todo.push({id, name:`${f.Title||f.Project_x0020_Name||'-'} · ${f.Package||'-'} · ${f.Service_x0020_Type||'-'}`, newS, newF, body, miss:(!curS&&!newS)||(!curF&&!newF)});
+    });
+    const ok = todo.filter(t=>Object.keys(t.body).length);
+    const nodata = todo.filter(t=>!Object.keys(t.body).length);
+    if(!todo.length){ toastMsg('✓ งานที่ Commit แล้วมี Start/Finish ครบทุกรายการ'); return; }
+    const fmt = v => v? fmtY(new Date(v)) : '—';
+    const preview = ok.slice(0,15).map(t=>`#${t.id} ${t.name}\n   Start ${t.newS?fmt(t.newS):'(มีอยู่แล้ว)'} · Finish ${t.newF?fmt(t.newF):'(มีอยู่แล้ว)'}`).join('\n');
+    const msg = `พบงานที่ Commit แล้วแต่ Start/Finish ยังว่าง ${todo.length} รายการ\n· เติมได้ ${ok.length} รายการ${nodata.length?`\n· หาวันที่ไม่ได้ ${nodata.length} รายการ (ข้าม — ดูใน Console)`:''}\n\n${preview}${ok.length>15?`\n… และอีก ${ok.length-15} รายการ`:''}\n\nยืนยันบันทึกลง SharePoint?`;
+    if(nodata.length) console.table(nodata.map(t=>({id:t.id, งาน:t.name})));
+    if(!ok.length){ alert(msg.replace('\n\nยืนยันบันทึกลง SharePoint?','')); return; }
+    if(!confirm(msg)) return;
+    const spToken = await getSpToken();
+    let done=0, fail=[];
+    for(const t of ok){
+      try{
+        const r = await fetch(`${SP_SITE_URL}/_api/web/lists/getById('${WORKPLAN_LIST}')/items(${t.id})`, {method:'POST',
+          headers:{'Authorization':`Bearer ${spToken}`,'Accept':'application/json;odata=nometadata','Content-Type':'application/json;odata=nometadata','X-HTTP-Method':'MERGE','IF-MATCH':'*'},
+          body: JSON.stringify(t.body)});
+        if(!r.ok && r.status!==204) throw new Error('SP '+r.status+' '+(await r.text().catch(()=>'')).slice(0,150));
+        done++;
+      }catch(e){ fail.push(`#${t.id}: ${e.message}`); }
+      if(done%10===0) toastMsg(`⏳ บันทึกแล้ว ${done}/${ok.length}`);
+    }
+    if(fail.length) console.warn('[.115] เติม Start/Finish ไม่สำเร็จ', fail);
+    toastMsg(`✓ เติม Start/Finish แล้ว ${done}/${ok.length} รายการ${fail.length?` · ไม่สำเร็จ ${fail.length} (ดู Console)`:''}`);
+    if(typeof loadWorkPlan==='function') loadWorkPlan();
+  }catch(e){ console.error(e); toastMsg('⚠️ ตรวจ/เติม Start/Finish ไม่สำเร็จ: '+e.message); }
+  finally{ if(btn) btn.disabled = false; }
+}
 async function graphFetchAllItems(initialPath){
   const token = await getToken();
   let url = `${GRAPH}${initialPath}`;
@@ -2656,8 +2715,12 @@ async function commitAndGenerateSteps(task, sug, selectedSubs, editedStart, edit
     CommitStatus: 'Committed',
     Status: 'Not Started',  // build 2026-08-25.10: เพื่อให้รายการใหม่ผ่าน isActive และแสดงใน Timeline ทันที
     CommittedFinish: toSpDate(finish),
-    AISuggestStart: toSpDate(start),
-    AISuggestFinish: toSpDate(finish),
+    // build .114: วันที่ PCM กำหนดเองตอน Commit → บันทึกที่ Start Date / Finish Date (ช่องเดียวกับหน้า Work Plan)
+    StartDate: toSpDate(start),
+    FinishDate: toSpDate(finish),
+    // AISuggestStart/Finish = ค่าที่ AI แนะนำไว้ก่อน PCM ปรับ (เก็บไว้เทียบ)
+    AISuggestStart: toSpDate(sug.start),
+    AISuggestFinish: toSpDate(sug.finish),
     AISuggestAssignee: sug.who || undefined,
     Team: teamArr.length ? teamArr : undefined,  // multi-choice → array
   };
