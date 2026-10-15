@@ -331,7 +331,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-10-15.117</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-10-15.118</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -2881,6 +2881,16 @@ async function doCommit(btn){
   if(!startVal || !finishVal){ toastMsg('⚠️ กรอกวันเริ่ม/วันจบให้ครบก่อน Commit'); return; }
   const editedStart = new Date(startVal), editedFinish = new Date(finishVal);
   if(isNaN(editedStart) || isNaN(editedFinish) || editedFinish < editedStart){ toastMsg('⚠️ วันที่ไม่ถูกต้อง (วันจบต้องไม่ก่อนวันเริ่ม)'); return; }
+  // build .118: ยืนยันทีม/ผู้ทำก่อน Commit + เตือนถ้าไม่ตรงกับ column Team ใน Work Plan
+  { const t = it._liveTask;
+    const wpTeams = parseTeamField(t.team);
+    const selWp = [...new Set(selectedSubs.map(x=> MEP_SUBTEAMS.includes(x) ? 'MEP' : x))];
+    const wpNorm = [...new Set(wpTeams.map(x=> MEP_SUBTEAMS.includes(x) ? 'MEP' : x))];
+    const mismatch = wpNorm.length && (selWp.some(x=>!wpNorm.includes(x)) || wpNorm.some(x=>!selWp.includes(x)));
+    const lines = selectedSubs.map(x=>{ const sel=document.getElementById(assignSelId(x)); return `• ${x}: ${(sel&&sel.value)||'-'} (QA: ${QA_LEADS[x]||'-'})`; }).join('\n');
+    const msg = `ยืนยัน Commit\n${t.name} · ${t.packageName} · ${t.service}\n${fmtY(editedStart)} – ${fmtY(editedFinish)}\n\nทีมที่จะสร้าง Step:\n${lines}`
+      + (mismatch ? `\n\n⚠️ ไม่ตรงกับ Team ใน Work Plan (${wpTeams.join(', ')}) — ตรวจอีกครั้งว่าติ๊กทีมถูกต้อง` : '');
+    if(!confirm(msg)) return; }
   _committing = true;
   if(btn) btn.disabled = true;
   try{
@@ -7478,15 +7488,17 @@ function renderIntake(){
   const startInput = document.getElementById('ciStartInput'), finishInput = document.getElementById('ciFinishInput');
   const sugStartValid = it._liveSug && it._liveSug.start instanceof Date && !isNaN(it._liveSug.start);
   const sugFinishValid = it._liveSug && it._liveSug.finish instanceof Date && !isNaN(it._liveSug.finish);
-  if(startInput) startInput.value = sugStartValid ? toISO(it._liveSug.start) : '';
-  if(finishInput) finishInput.value = sugFinishValid ? toISO(it._liveSug.finish) : '';
+  if(startInput) startInput.value = sugStartValid ? localISO(it._liveSug.start) : ''; // build .118: วันที่ตามเวลาไทย (เดิม toISO = UTC เพี้ยน 1 วัน)
+  if(finishInput) finishInput.value = sugFinishValid ? localISO(it._liveSug.finish) : '';
   // ทีมย่อยที่จะสร้าง Step ให้: เลิกเดาจากชื่อ Package แล้ว (build .13) — โชว์ checkbox ครบทั้ง 6 ทีมย่อยจริงเสมอ
   // ค่าเริ่มต้นติ๊กไว้ให้จาก column "Team" จริง (parseTeamField) ถ้ามี ไม่งั้น fallback ไปใช้คำแนะนำจากชื่อ Package
   // (subteamsForRawPackage) เป็นแค่จุดเริ่มต้นที่สะดวก — PCM ยังเห็น/ติ๊กเพิ่ม-ลดเองได้เสมอก่อนกด Commit จริง
   const checksEl = document.getElementById('subteamChecks');
   if(checksEl){
     const teamFieldSubs = it._liveTask ? parseTeamField(it._liveTask.team) : [];
-    const defaultChecked = teamFieldSubs.length ? teamFieldSubs : (it._liveTask ? subteamsForRawPackage(it._liveTask.packageName) : ALL_SUBTEAMS);
+    // build .118: ไม่เดาทีมจากชื่อ Package แล้ว (เช่น "Overall" เคยถูกเดาเป็น ST+AR&ID จนสร้าง Step ผิดทีม)
+    // ติ๊กให้เฉพาะทีมที่กรอกไว้ใน column "Team" — ถ้า Team ว่าง PCM ต้องติ๊กเอง
+    const defaultChecked = it._liveTask ? teamFieldSubs : ALL_SUBTEAMS;
     checksEl.innerHTML = ALL_SUBTEAMS.map(code=>{
       const id = subteamDomId(code);
       const checked = defaultChecked.includes(code) ? 'checked' : '';
