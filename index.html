@@ -331,7 +331,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-10-09.116</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-10-15.117</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -2191,6 +2191,8 @@ function addBusinessDays(date, days){
 // วันส่งงานโดยรวมจาก Procurement Plan Reference เป็นคนละแนวคิดกัน ไม่ใช่ Stage เดียวเจาะจง) กันผลกระทบลามไปที่อื่นที่
 // ไม่ได้ขอให้แก้ — ถ้า date เองตกวันหยุด (ไม่ควรเกิดขึ้นจริงเพราะ Stage ก่อนหน้าควรจบวันทำการเสมอ) จะเลื่อนไปนับวันทำการ
 // ถัดไปเป็นวันที่ 1 แทน กันพลาด
+// build .117: วันที่ตามเวลาเครื่อง (ไม่ใช่ UTC) รูปแบบ YYYY-MM-DD
+function localISO(d){ const z=new Date(d); return `${z.getFullYear()}-${String(z.getMonth()+1).padStart(2,'0')}-${String(z.getDate()).padStart(2,'0')}`; }
 function addBusinessDaysInclusive(date, days){
   let d = new Date(date), added=0;
   const wd0 = d.getDay();
@@ -2846,6 +2848,7 @@ async function commitAndGenerateSteps(task, sug, selectedSubs, editedStart, edit
       if(stepUid) stepFields.StepAssigneeLookupId = stepUid;
       if(stepQA) stepFields.StepQA = stepQA;
       if(stepQAUid) stepFields.StepQALookupId = stepQAUid;
+      if(_scenCo && _scenCo[st] && _scenCo[st].length) stepFields.StepCoAssignees = _scenCo[st].filter(n=>n!==stepWho).join(','); // build .117
       await graphFetch(`/sites/${SITE_ID}/lists/${STEP_LIST}/items`, {
         method:'POST',
         body: JSON.stringify({ fields: stepFields })
@@ -7447,7 +7450,8 @@ function renderIntake(){
   // อย่าเข้าถึง it.xxx ต่อ เพราะ it จะเป็น undefined แล้ว throw ทำให้ initApp() หยุดทำงานกลางทาง (login/bootLive ไม่ทำงานเลย)
   if(!it) return;
   // build 2026-09-24.22: reset Due Date constraint เมื่อสลับงาน
-  _dueConstraintMode=false; _dueConstraintDurations=null;
+  _dueConstraintMode=false; _dueConstraintDurations=null; _scenCo=null;
+  { const _si=document.getElementById('ciStartInput'); if(_si) _si._origStart=null; }
   const _dcBox=document.getElementById('dueConstraintBox'); if(_dcBox) _dcBox.style.display='none';
   const _dcBtn=document.getElementById('btnDueCon');
   if(_dcBtn){ _dcBtn.textContent='📐 ยึด Due Date · ปรับสัดส่วน Stage'; _dcBtn.classList.remove('active'); _dcBtn.style.display='none'; }
@@ -7510,8 +7514,67 @@ function renderIntake(){
     const _btnD=document.getElementById('btnDueCon'); if(_btnD) _btnD.style.display='inline-block';
   }
 }
+// build .117: Scenario เพิ่มกำลังคน (โหมด LIVE) — ดึงคนในทีมเดียวกันที่ว่างเร็วสุดมาช่วย แล้วประมาณวันส่งใหม่
+// สมมติฐาน: งานแบ่งทำคู่ขนานได้ → ระยะเวลา ≈ วันทำการที่ต้องใช้ ÷ จำนวนคน · เริ่มได้เมื่อทุกคนในชุดว่าง
+let _scenCo = null; // {subteam: [ผู้ร่วมทีม]} — ใช้ตอน Commit เขียน StepCoAssignees
+function buildLiveScenario(it){
+  const sug=it._liveSug; if(!sug) return null;
+  const need=Math.max(Number(sug.needDays)||20,1);
+  const subs=ALL_SUBTEAMS.filter(x=>{ const el=document.getElementById(subteamDomId(x)); return el&&el.checked; });
+  if(!subs.length) return null;
+  const mp=computeManpower();
+  const today=new Date(); today.setHours(0,0,0,0);
+  const freeOf=n=>{ const e=mp[n]&&mp[n].maxEnd!=null?mp[n].maxEnd:TODAY_D; const d=addD(T0,Math.max(e,TODAY_D)); d.setHours(0,0,0,0); return d<today?today:d; };
+  const due=it._liveTask&&it._liveTask.due?new Date(localISO(new Date(it._liveTask.due))+'T00:00:00'):null;
+  const per={};
+  subs.forEach(st=>{
+    const pool=POOLS[subToPool(st)]||[];
+    const sel=document.getElementById(assignSelId(st));
+    const primary=(sel&&sel.value)||(sug.whoBySubteam||{})[st]||pool[0];
+    const cands=pool.filter(n=>n!==primary).sort((a,b)=>freeOf(a)-freeOf(b));
+    let best=null;
+    for(let k=0;k<=Math.min(2,cands.length);k++){
+      const team=[primary,...cands.slice(0,k)];
+      const start=new Date(Math.max(...team.map(n=>freeOf(n).getTime())));
+      const dur=Math.ceil(need/team.length);
+      const finish=addBusinessDaysInclusive(start,dur);
+      if(!best || finish<best.finish) best={team,start,finish,dur};
+    }
+    per[st]=best;
+  });
+  const start=new Date(Math.max(...Object.values(per).map(p=>p.start.getTime())));
+  const dur=Math.max(...Object.values(per).map(p=>p.dur));
+  const finish=addBusinessDaysInclusive(start,dur);
+  return {per,start,finish,dur,need,due,ok:due?finish<=due:null};
+}
+function applyLiveScenario(){
+  const it=INTAKE[curIntake]; const sc=it&&it._scenLive; if(!sc) return;
+  const si=document.getElementById('ciStartInput'), fi=document.getElementById('ciFinishInput');
+  if(si) si.value=localISO(sc.start); if(fi) fi.value=localISO(sc.finish);
+  _scenCo={};
+  Object.entries(sc.per).forEach(([st,p])=>{ const sel=document.getElementById(assignSelId(st)); if(sel) sel.value=p.team[0]; _scenCo[st]=p.team.slice(1); });
+  if(typeof updateAIDurationDisplay==='function') updateAIDurationDisplay();
+  if(typeof _refreshAIWhoText==='function') _refreshAIWhoText();
+  toastMsg('✓ ใช้ scenario แล้ว · ตรวจวันที่/ผู้ทำ แล้วกด ✓ PCM ยืนยัน Commit');
+}
 function showScenario(){
-  const it=INTAKE[curIntake]; if(!it.scen)return;
+  const it=INTAKE[curIntake]; if(!it) return;
+  if(!it.scen && it._liveTask){
+    const sc=buildLiveScenario(it);
+    const b=document.getElementById('scenBox');
+    b.className='scenario show';
+    if(!sc){ b.innerHTML='<h4>➕ Scenario เพิ่มกำลังคน</h4>เลือกทีมย่อยอย่างน้อย 1 ทีมก่อน'; return; }
+    it._scenLive=sc;
+    const rows=Object.entries(sc.per).map(([st,p])=>`<li><b>${st}</b>: ${p.team.map((n,i)=>i?n:'<b>'+n+'</b>').join(' + ')} · เริ่มได้ ${fmtY(p.start)} · ใช้ ${p.dur} วันทำการ</li>`).join('');
+    const verdict = sc.ok===null ? '' : (sc.ok ? `<span style="color:#047857;font-weight:700">🟢 ทัน Due ${fmtY(sc.due)}</span>` : `<span style="color:#b91c1c;font-weight:700">🔴 ยังไม่ทัน Due ${fmtY(sc.due)} — พิจารณา "ยึด Due Date" ต่อ</span>`);
+    b.innerHTML=`<h4>➕ Scenario เพิ่มกำลังคน</h4>
+      <ul style="margin:4px 0 6px 18px;padding:0">${rows}</ul>
+      <b>เริ่ม:</b> ${fmtY(sc.start)} · <b>ส่งได้:</b> ${fmtY(sc.finish)} ${verdict}
+      <div style="margin-top:6px;font-size:12px;color:var(--text2)">ประมาณจากงาน ${sc.need} วันทำการ แบ่งตามจำนวนคน · คนที่ดึงมาคือคนในทีมเดียวกันที่ว่างเร็วสุด (ตาม Manpower) · ชื่อตัวหนา = ผู้ทำหลัก คนอื่นเป็นผู้ร่วมทีม</div>
+      <div style="margin-top:8px"><button class="btn" onclick="applyLiveScenario()">✓ ใช้ scenario นี้ (ใส่วันที่ + ผู้ร่วมทีม)</button></div>`;
+    return;
+  }
+  if(!it.scen)return;
   const b=document.getElementById('scenBox');
   b.className='scenario show';
   b.innerHTML=`<h4>➕ Scenario เพิ่มกำลังคน</h4>
@@ -7531,7 +7594,8 @@ function toggleDueConstraint(){
     // ยกเลิก mode → คืนค่า finish เดิม
     _dueConstraintMode=false; _dueConstraintDurations=null;
     const fi=document.getElementById('ciFinishInput');
-    if(fi && it._liveSug.finish instanceof Date && !isNaN(it._liveSug.finish)) fi.value=toISO(it._liveSug.finish);
+    if(fi && it._liveSug.finish instanceof Date && !isNaN(it._liveSug.finish)) fi.value=localISO(it._liveSug.finish);
+    const _si=document.getElementById('ciStartInput'); if(_si && _si._origStart){ _si.value=_si._origStart; _si._origStart=null; }
     const box=document.getElementById('dueConstraintBox'); if(box) box.style.display='none';
     const btn=document.getElementById('btnDueCon');
     if(btn){ btn.textContent='📐 ยึด Due Date · ปรับสัดส่วน Stage'; btn.classList.remove('active'); }
@@ -7539,12 +7603,23 @@ function toggleDueConstraint(){
   }
   // เปิด mode — ตรวจสอบข้อมูลก่อน
   const dueRaw=it._liveTask.due; if(!dueRaw||dueRaw==='—'){ toastMsg('⚠️ ไม่พบ Due Date'); return; }
-  const dueDate=new Date(dueRaw); if(isNaN(dueDate)){ toastMsg('⚠️ Due Date ไม่ถูกต้อง'); return; }
+  const _dueAny=new Date(dueRaw); if(isNaN(_dueAny)){ toastMsg('⚠️ Due Date ไม่ถูกต้อง'); return; }
+  // build .117: Due Date จาก SharePoint เป็นเวลา UTC (เช่น 23 ต.ค. 17:00Z = 24 ต.ค. เวลาไทย) → แปลงเป็นวันที่ตามเวลาเครื่อง
+  // เดิมใช้ toISO (UTC) ทำให้ Finish ได้ก่อน Due Date 1 วัน
+  const dueISO=localISO(_dueAny);
+  const dueDate=new Date(dueISO+'T00:00:00');
   // build 2026-09-29.62: ใช้วันที่ใน ciStartInput (ที่ user กรอก/แก้ไข) ไม่ใช่ liveSug.start
   // liveSug.start = วันที่ทีมว่างจริง (อาจอยู่หลัง Due Date) → ทำให้ availDays < 0 โดยไม่จำเป็น
   const ciStartVal = document.getElementById('ciStartInput')?.value;
-  const sugStart = ciStartVal ? new Date(ciStartVal) : it._liveSug.start;
+  let sugStart = ciStartVal ? new Date(ciStartVal+'T00:00:00') : it._liveSug.start;
   if(!sugStart||isNaN(sugStart)){ toastMsg('⚠️ ไม่พบวันเริ่มงาน'); return; }
+  // build .117: วันเริ่มอยู่หลัง Due Date → เลื่อนวันเริ่มมาเป็นวันนี้ (หรือวัน Due ถ้าวันนี้เลย Due แล้ว) กัน Finish ก่อน Start
+  if(sugStart > dueDate){
+    const _t=new Date(); _t.setHours(0,0,0,0);
+    sugStart = _t <= dueDate ? _t : new Date(dueDate);
+    const _si=document.getElementById('ciStartInput'); if(_si){ _si._origStart=_si._origStart||ciStartVal; _si.value=localISO(sugStart); }
+    toastMsg('⚠️ วันเริ่มเดิมอยู่หลัง Due Date — เลื่อนวันเริ่มเป็น '+fmtY(sugStart));
+  }
   const dueNext=new Date(dueDate.getTime()+864e5); // +1 วัน เพราะ countWorkingDays end exclusive
   let availDays=countWorkingDays(sugStart, dueNext);
   if(availDays<1){
@@ -7560,7 +7635,7 @@ function toggleDueConstraint(){
   const compressed=computeCompressedDurations(weights, availDays);
   _dueConstraintMode=true; _dueConstraintDurations=compressed;
   // อัปเดต finish input → Due Date
-  const fi=document.getElementById('ciFinishInput'); if(fi) fi.value=toISO(dueDate);
+  const fi=document.getElementById('ciFinishInput'); if(fi) fi.value=dueISO;
   // สร้าง info box แสดงสัดส่วนที่บีบแล้ว
   const stdTotal=weights.reduce((a,w)=>a+w,0);
   const rows=tmpl.map((s,i)=>{
