@@ -331,7 +331,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-10-15.118</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-10-15.120</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -341,6 +341,7 @@ tr.pick:hover td{background:var(--bg)}
     <div class="tab" data-p="pgMyWork" id="tabMyWork" style="display:none">👤 งานของฉัน</div>
     <div class="tab" data-p="pgWorkPlan" id="tabWorkPlan" style="display:none">📝 Work Plan</div>
     <div class="tab" data-p="pgPostView" id="tabPostView" style="display:none">📬 ภาพรวมงาน (Team Post)</div>
+    <div class="tab" data-p="pgCapacity" id="tabCapacity" style="display:none">🗓️ ทีมรับงานได้อีกทีเมื่อไร</div>
   </div>
   <div class="right">
     <button class="btn btn2" id="loginBtn" style="display:none" onclick="doLogin()">🔐 เข้าสู่ระบบ SharePoint</button>
@@ -619,6 +620,19 @@ tr.pick:hover td{background:var(--bg)}
     <button class="btn btn2" onclick="loadPostView(true)">🔄 รีเฟรช</button>
   </div>
   <div id="pvBody" style="margin-top:14px"></div>
+</div>
+
+<!-- ============ PAGE · ทีมรับงานได้อีกทีเมื่อไร (build .119) — ดูได้อย่างเดียว ============ -->
+<div class="page" id="pgCapacity">
+  <div class="tools" style="flex-wrap:wrap;row-gap:8px;align-items:center">
+    <span style="font-weight:700;font-size:14px">🗓️ ทีมรับงานได้อีกทีเมื่อไร</span>
+    <span id="capLabel" style="font-size:12px;color:var(--text3);margin-left:6px"></span>
+    <span style="flex:1"></span>
+    <button type="button" class="btn btn2" onclick="capCollapseAll(true)">⊟ หุบทั้งหมด</button>
+    <button type="button" class="btn btn2" onclick="capCollapseAll(false)">⊞ ขยายทั้งหมด</button>
+    <button class="btn btn2" onclick="renderCapacity()">🔄 รีเฟรช</button>
+  </div>
+  <div id="capBody" style="margin-top:14px"></div>
 </div>
 
 <!-- ============ PAGE · BOQ Team Work Plan (build 2026-09-25.31) ============ -->
@@ -1469,6 +1483,7 @@ let myWorkSysName = null; // ชื่อในระบบของ user ที
 // (ไม่อยู่ใน USER_MAP / POOLS / รายชื่อ Assignee → ไม่ถูกเลือกเป็นผู้ทำงาน ไม่ขึ้นในตาราง Manpower)
 const SYSTEM_ADMINS = {
   'kanjanika@costplan.co.th': { name:'Noon', display:'COS_Noon', role:'IT · ผู้ดูแลระบบ' },
+  'bhakbhoom@costplan.co.th': { name:'Tong', display:'COS_Tong', role:'ผู้ดูแล · เห็นทุกคน' }, // build .120
 };
 // Fields จริงที่ใช้ใน loadStepsFromGraph + bootLive — ลด payload ~60%
 const STEP_SELECT = [
@@ -6718,6 +6733,7 @@ document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
   if(t.dataset.p==='pgMyWork') renderMyWork(); // build 2026-09-23.3: render งานของฉันทุกครั้งที่สลับมา tab นี้
   if(t.dataset.p==='pgWorkPlan' && !_wpItems.length) loadWorkPlan(); // build 2026-09-25.24: โหลด Work Plan ครั้งแรก
   if(t.dataset.p==='pgPostView') loadPostView(false); // build .81
+  if(t.dataset.p==='pgCapacity') renderCapacity(); // build .119
   if(t.dataset.p==='pgExec') loadExec(false); // build .100
 }));
 
@@ -6726,13 +6742,14 @@ document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
 // account ที่ไม่อยู่ใน USER_MAP และไม่อยู่ใน FULL_ACCESS_EMAILS จะเห็นเฉพาะหน้านี้หน้าเดียว
 // หมายเหตุ: เป็นการซ่อนที่หน้าเว็บ ไม่ใช่สิทธิ์ใน SharePoint — ผู้ใช้ต้องมีสิทธิ์อ่านลิสต์ BOQ Team Work Plan ด้วย
 // build 2026-09-30.91: เหลือเฉพาะผู้ดูแลระบบ — costplan1@costplan1.onmicrosoft.com และ account อื่นที่ไม่ได้ map จะเห็นเฉพาะหน้า Team Post
-const FULL_ACCESS_EMAILS = ['kanjanika@costplan.co.th']; // admin เห็นทุกหน้า (Noon · IT)
+const FULL_ACCESS_EMAILS = ['kanjanika@costplan.co.th','bhakbhoom@costplan.co.th']; // admin เห็นทุกหน้า (Noon · IT, Tong — build .120)
 let POST_ONLY_MODE = false;
 let _pvItems = null;
 function applyPostOnlyMode(on){
   POST_ONLY_MODE = !!on;
   const pvTab = document.getElementById('tabPostView');
   if(pvTab) pvTab.style.display = '';
+  { const ct=document.getElementById('tabCapacity'); if(ct) ct.style.display = on ? 'none' : ''; } // build .120: ทีม Post ไม่เห็นหน้านี้
   document.querySelectorAll('.tab').forEach(t=>{
     if(t.id==='tabPostView') return;
     if(on) t.style.display = 'none';
@@ -7091,6 +7108,131 @@ function pvWeekBar(r, sc){
   const mark = (d, html, t) => { if(!d) return ''; const px = sc.x(d) + sc.pxPerDay/2; if(px<0||px>sc.width) return '';
     return `<div title="${t} ${sc.fmtS(d)}" style="position:absolute;top:34px;left:${px}px;transform:translate(-50%,-50%);z-index:4;line-height:0">${html}</div>`; };
   return bar + mark(com, PV_MARK_COM, 'BOQ รับปากส่ง') + mark(due, PV_MARK_DUE, 'Due Date');
+}
+/* ============ ทีมรับงานได้อีกทีเมื่อไร (build .119) ============ */
+// คำนวณจาก Step ที่ยังไม่ปิดในหน้า Timeline (ผู้ทำหลัก + ผู้ร่วมทีม) — ช่วงที่ติดงาน = แผนของ Step
+// Step ที่เลยแผนแต่ยังไม่ปิด ถือว่ายังติดงานถึงวันนี้ (แสดงสีแดง) · "รับงานได้อีกที" = วันทำการถัดจากวันจบงานสุดท้าย
+// ทีม = สมาชิกหลักใน POOL_PRIMARY (คนที่ร่วมหลายทีมแสดงเป็น "ร่วมทีม" และไม่นับในวันรับงานของทีม)
+const CAP_TEAMS = [['Budget','BUDGET'],['ST','ST'],['AR&ID','AR'],['MEP','MEP']];
+const _capCollapsed = new Set();
+function capCollapseAll(on){ _capCollapsed.clear(); if(on) CAP_TEAMS.forEach(t=>_capCollapsed.add(t[0])); renderCapacity(); }
+function capToggle(t){ _capCollapsed.has(t)?_capCollapsed.delete(t):_capCollapsed.add(t); renderCapacity(); }
+function capNextWorkday(d){ const x=new Date(d); while(x.getDay()===0||x.getDay()===6) x.setDate(x.getDate()+1); return x; }
+function capBusyByPerson(){
+  const DAY=864e5, today=new Date(); today.setHours(0,0,0,0);
+  const out={};
+  (DATA||[]).forEach(pj=>(pj.pkgs||[]).forEach(pk=>(pk.rows||[]).forEach(row=>(row.steps||[]).forEach(st=>{
+    if(row.closed && row.closed[st.s]) return;
+    const who=[st.who,...(st.coAssignees||[])].filter(n=>n && ALL_TEAM_MEMBERS.has(n));
+    if(!who.length) return;
+    const a=addD(T0,st.start); a.setHours(0,0,0,0);
+    let b=addD(T0,st.start+Math.max(st.dur,1)); b.setHours(0,0,0,0);
+    let overdue=false;
+    if(b<=today){ overdue=true; b=new Date(today.getTime()+DAY); }
+    const lbl=`${pj.name} · ${pk.name} · ${row.team} · S${st.s} ${st.name||''}`;
+    [...new Set(who)].forEach(n=>{ (out[n]=out[n]||[]).push({a:a.getTime(), b:b.getTime(), overdue, lbl, sEnd:addD(T0,st.start+Math.max(st.dur,1)-1)}); });
+  }))));
+  return out;
+}
+function renderCapacity(){
+  const body=document.getElementById('capBody'); if(!body) return;
+  if(!DATA || !DATA.length){ body.innerHTML=`<div style="padding:32px 16px;text-align:center;color:var(--text3)">⏳ ยังไม่มีข้อมูล Timeline — รอโหลดสักครู่แล้วกด 🔄 รีเฟรช</div>`; return; }
+  const esc=v=>String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+  const DAY=864e5, today=new Date(); today.setHours(0,0,0,0);
+  const fmtD=d=>d.toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'});
+  const busy=capBusyByPerson();
+  const person=n=>{
+    const iv=(busy[n]||[]).filter(x=>x.b>today.getTime()).sort((x,y)=>x.a-y.a);
+    const segs=[]; iv.forEach(x=>{ const l=segs[segs.length-1]; if(l && x.a<=l.b){ l.b=Math.max(l.b,x.b); l.items.push(x); l.overdue=l.overdue||x.overdue; } else segs.push({a:x.a,b:x.b,items:[x],overdue:x.overdue}); });
+    const lastEnd=iv.length?Math.max(...iv.map(x=>x.b)):null;
+    // รับงานใหม่ได้ = หลังจบงานที่มีอยู่ทั้งหมด (รวมงานที่ Commit ไว้ล่วงหน้า) · ไม่มีงานค้างเลย = ว่างตอนนี้
+    const freeNow=!iv.length;
+    const free=freeNow?capNextWorkday(today):capNextWorkday(new Date(lastEnd));
+    return {n, iv, segs, free, freeNow, nOpen:iv.length, nOver:iv.filter(x=>x.overdue).length};
+  };
+  const pts=[today.getTime()];
+  const teams=CAP_TEAMS.map(([label,pool])=>{
+    const prim=POOL_PRIMARY[pool]||[];
+    const mem=(POOLS[pool]||[]).map(n=>({...person(n), secondary:!prim.includes(n)}));
+    mem.sort((x,y)=>(x.secondary-y.secondary)||(x.free-y.free)||x.n.localeCompare(y.n));
+    const core=mem.filter(m=>!m.secondary); const base=core.length?core:mem;
+    const first=base.reduce((m,x)=>!m||x.free<m.free?x:m,null);
+    mem.forEach(m=>m.iv.forEach(x=>{pts.push(x.a,x.b);}));
+    return {label, mem, first, teamFree:first?first.free:today};
+  });
+  const sc=pvWeekScale([{start:new Date(Math.min(...pts)).toISOString(), finish:new Date(Math.max(...pts)).toISOString()}]);
+  const LW=470, RH=34, TH=38;
+  const COLS='display:grid;grid-template-columns:170px 150px 150px';
+  const dc='padding:0 10px;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;align-items:center';
+  const freeTxt=m=> m.freeNow ? `<span style="color:#047857;font-weight:700">ว่างตอนนี้</span>` : `<b>${fmtD(m.free)}</b>`;
+  let left='', right='';
+  teams.forEach(t=>{
+    const col=_capCollapsed.has(t.label), tA=esc(t.label).replace(/'/g,"\\'");
+    const tf=t.first;
+    const tfTxt = tf ? (tf.freeNow ? `<span style="color:#047857">ว่างรับงานได้ตอนนี้</span> · ${esc(tf.n)}` : `รับงานได้อีกที <b>${fmtD(tf.free)}</b> · ${esc(tf.n)}`) : '—';
+    left+=`<div onclick="capToggle('${tA}')" style="cursor:pointer;user-select:none;height:${TH}px;box-sizing:border-box;display:flex;align-items:center;gap:6px;padding:0 12px;background:var(--primary-lt,#ecfdf5);border-bottom:1px solid var(--border);font-size:13px;color:var(--primary)"><span style="width:14px;font-size:11px">${col?'▶':'▼'}</span><b>👥 ${esc(t.label)}</b><span style="color:var(--text2);font-size:12px;font-weight:500">· ${tfTxt}</span></div>`;
+    let tb='';
+    if(sc){
+      const x1=Math.max(0,sc.x(today)), x2=Math.min(sc.width, sc.x(t.teamFree));
+      if(tf && !tf.freeNow && x2>x1) tb+=`<div title="ทุกคนในทีมติดงานจนถึง ${fmtD(new Date(t.teamFree.getTime()-DAY))}" style="position:absolute;top:10px;height:18px;left:${x1}px;width:${x2-x1}px;background:#ccfbf1;border:1px solid #5eead4;border-radius:9px;box-sizing:border-box"></div>`;
+      const fx=sc.x(t.teamFree)+sc.pxPerDay/2;
+      if(fx>=0 && fx<=sc.width) tb+=`<div style="position:absolute;top:8px;left:${fx}px;transform:translateX(-50%);z-index:4;background:#059669;color:#fff;border-radius:9px;padding:1px 8px;font-size:10.5px;font-weight:700;white-space:nowrap">✓ ${fmtD(t.teamFree)}</div>`;
+    }
+    right+=`<div onclick="capToggle('${tA}')" style="position:relative;cursor:pointer;height:${TH}px;box-sizing:border-box;background:var(--primary-lt,#ecfdf5);border-bottom:1px solid var(--border)">${tb}</div>`;
+    if(col) return;
+    t.mem.forEach(m=>{
+      const bg=m.secondary?'#fafafa':'#fff';
+      left+=`<div style="${COLS};height:${RH}px;box-sizing:border-box;border-bottom:1px solid var(--border);background:${bg}">
+        <div style="${dc};padding-left:30px;${m.secondary?'color:var(--text3)':'font-weight:600'}">${esc(m.n)}${m.secondary?'&nbsp;<span style="font-size:10px;font-weight:400">(ร่วมทีม)</span>':''}</div>
+        <div style="${dc}">${freeTxt(m)}</div>
+        <div style="${dc};color:var(--text2)">${m.nOpen?`${m.nOpen} Step`:'—'}${m.nOver?`&nbsp;<span style="color:#dc2626;font-weight:700">· ค้าง ${m.nOver}</span>`:''}</div></div>`;
+      let rb='';
+      if(sc){
+        m.segs.forEach(g=>{
+          let x1=sc.x(new Date(g.a)), x2=sc.x(new Date(g.b)); x1=Math.max(0,x1); x2=Math.min(sc.width,x2); if(x2<=x1) return;
+          const tip=esc(g.items.map(x=>`${x.overdue?'⚠ เลยแผน · ':''}${x.lbl} (ถึง ${fmtD(x.sEnd)})`).join('\n'));
+          rb+=`<div title="${tip}" style="position:absolute;top:9px;height:16px;left:${x1}px;width:${Math.max(6,x2-x1)}px;border-radius:3px;background:${g.overdue?'#dc2626':'#0e7490'};opacity:${g.overdue?.85:.55};box-sizing:border-box"></div>`;
+        });
+        const fx=sc.x(m.free)+sc.pxPerDay/2;
+        if(!m.freeNow && fx>=0 && fx<=sc.width) rb+=`<div title="รับงานได้อีกที ${fmtD(m.free)}" style="position:absolute;top:17px;left:${fx}px;transform:translate(-50%,-50%);width:9px;height:9px;border-radius:50%;background:#059669;border:2px solid #fff;box-shadow:0 0 0 1px #059669;z-index:4"></div>`;
+      }
+      right+=`<div style="position:relative;height:${RH}px;box-sizing:border-box;border-bottom:1px solid var(--border);background:${bg}">${rb}</div>`;
+    });
+  });
+  const lbl=document.getElementById('capLabel'); if(lbl) lbl.textContent=`ข้อมูลจาก Step ที่ยังไม่ปิดในหน้า Timeline · ${fmtD(today)}`;
+  const _hs=document.getElementById('capHeadScroll'); const keepX=_hs?_hs.scrollLeft:null;
+  const TW=sc?sc.width:600;
+  const card=t=>{ const tf=t.first; return `<div style="border:1px solid var(--border);border-radius:10px;padding:10px 12px;background:#fff;min-width:180px;flex:1 1 180px">
+      <div style="font-weight:700;font-size:13px">👥 ${esc(t.label)}</div>
+      <div style="font-size:20px;font-weight:700;color:${tf&&tf.freeNow?'#047857':'var(--primary)'};margin:2px 0">${tf?(tf.freeNow?'ว่างตอนนี้':fmtD(tf.free)):'—'}</div>
+      <div style="font-size:11px;color:var(--text2)">${tf?`คนแรกที่ว่าง: <b>${esc(tf.n)}</b>`:''} · ติดงานอยู่ ${t.mem.filter(m=>!m.secondary&&!m.freeNow).length}/${t.mem.filter(m=>!m.secondary).length} คน</div></div>`; };
+  body.innerHTML=`<div style="display:flex;flex-wrap:wrap;gap:10px">${teams.map(card).join('')}</div>
+    <div style="display:flex;flex-wrap:wrap;gap:14px;font-size:11px;color:var(--text2);margin-top:12px;justify-content:flex-end">
+      <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:22px;height:12px;border-radius:3px;background:#0e7490;opacity:.55"></span>ติดงาน (ตามแผน Step)</span>
+      <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:22px;height:12px;border-radius:3px;background:#dc2626;opacity:.85"></span>เลยแผนแต่ยังไม่ปิด</span>
+      <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:9px;height:9px;border-radius:50%;background:#059669"></span>รับงานได้อีกที</span>
+      <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:22px;height:12px;border-radius:9px;background:#ccfbf1;border:1px solid #5eead4"></span>ทั้งทีมติดงาน</span>
+      <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:2px;height:14px;background:var(--bad,#dc2626)"></span>วันนี้</span></div>
+    <div id="capScroll" style="margin-top:10px;border:1px solid var(--border);border-radius:11px;overflow-y:auto;overflow-x:hidden;max-height:calc(100vh - 290px);min-height:260px;background:#fff">
+      <div style="display:flex;position:sticky;top:0;z-index:10;background:var(--primary);color:#fff;font-weight:600">
+        <div style="flex:0 0 ${LW}px;width:${LW}px;${COLS};box-sizing:border-box;font-size:12px">
+          <div style="padding:8px 12px;display:flex;align-items:center">ทีม · สมาชิก</div>
+          <div style="padding:8px 10px;display:flex;align-items:center;border-left:1px solid rgba(255,255,255,.25)">รับงานได้อีกที</div>
+          <div style="padding:8px 10px;display:flex;align-items:center;border-left:1px solid rgba(255,255,255,.25)">งานที่ถืออยู่</div>
+        </div>
+        <div id="capHeadScroll" style="flex:1 1 auto;min-width:0;overflow-x:auto;overflow-y:hidden;border-left:1px solid rgba(255,255,255,.25)"><div style="position:relative;width:${TW}px">${sc?sc.head:''}</div></div>
+      </div>
+      <div style="display:flex;align-items:flex-start">
+        <div style="flex:0 0 ${LW}px;width:${LW}px;border-right:1px solid var(--border)">${left}</div>
+        <div id="capBodyScroll" style="flex:1 1 auto;min-width:0;overflow-x:auto;overflow-y:hidden"><div style="position:relative;width:${TW}px;${sc?sc.gridBg:''}">${right}${sc?`<div class="today-line" style="left:${sc.todayPx}px;z-index:5"></div>`:''}</div></div>
+      </div>
+    </div>
+    <p style="margin:12px 4px;font-size:11.5px;color:var(--text3)">👁 ดูได้อย่างเดียว · ชี้ที่แถบเพื่อดูว่าติดงานอะไร · "ทีมรับงานได้อีกที" = วันที่สมาชิกหลักคนแรกว่าง · ข้อมูลจะตรงเมื่อปิด Step ที่ทำเสร็จแล้วในหน้า Timeline</p>`;
+  const hs=document.getElementById('capHeadScroll'), bs=document.getElementById('capBodyScroll');
+  if(hs&&bs){ let lock=false;
+    hs.addEventListener('scroll',()=>{ if(lock) return; lock=true; bs.scrollLeft=hs.scrollLeft; lock=false; });
+    bs.addEventListener('scroll',()=>{ if(lock) return; lock=true; hs.scrollLeft=bs.scrollLeft; lock=false; });
+    const x = keepX!=null ? keepX : (sc ? Math.max(0, sc.todayPx-140) : 0); hs.scrollLeft=x; bs.scrollLeft=x; }
 }
 // popup รายละเอียดงาน (ดูอย่างเดียว)
 function openPostViewDetail(id){
@@ -8206,7 +8348,7 @@ function copyAI(){ copyReportForAI(); }
 // build 2026-09-29.80: สิทธิ์ดูงานในหน้า "งานของฉัน"
 // Su, Yo = เห็นทุกคน · Stamp = MEP · May = ST · Best = Budget · Yim = AR&ID · คนอื่นเห็นเฉพาะงานตัวเอง
 // หมายเหตุ: เป็นการกรองที่หน้าเว็บ (ไม่ใช่สิทธิ์ใน SharePoint)
-const MYWORK_LEAD_SCOPE = { Su:'ALL', Yo:'ALL', Stamp:'MEP', May:'ST', Best:'BUDGET', Yim:'AR', Noon:'ALL' }; // Noon = IT ผู้ดูแลระบบ
+const MYWORK_LEAD_SCOPE = { Su:'ALL', Yo:'ALL', Stamp:'MEP', May:'ST', Best:'BUDGET', Yim:'AR', Noon:'ALL', Tong:'ALL' }; // Noon = IT ผู้ดูแลระบบ
 const MYWORK_POOL_LABEL = { ST:'ST', AR:'AR&ID', MEP:'MEP', BUDGET:'Budget' };
 function myWorkScopeMembers(me){
   const scope = MYWORK_LEAD_SCOPE[me];
