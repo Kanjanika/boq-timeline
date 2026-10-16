@@ -331,7 +331,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-10-15.120</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-10-16.121</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -630,7 +630,12 @@ tr.pick:hover td{background:var(--bg)}
     <span style="flex:1"></span>
     <button type="button" class="btn btn2" onclick="capCollapseAll(true)">⊟ หุบทั้งหมด</button>
     <button type="button" class="btn btn2" onclick="capCollapseAll(false)">⊞ ขยายทั้งหมด</button>
-    <button class="btn btn2" onclick="renderCapacity()">🔄 รีเฟรช</button>
+    <div class="fc-mode" style="display:inline-flex;border:1px solid var(--border);border-radius:8px;overflow:hidden;font-size:12px">
+      <button type="button" data-fcm="A" onclick="setFcMode('A')" style="border:0;padding:5px 9px;cursor:pointer;font-family:inherit">Assignment</button>
+      <button type="button" data-fcm="F" onclick="setFcMode('F')" style="border:0;border-left:1px solid var(--border);padding:5px 9px;cursor:pointer;font-family:inherit">Forecast</button>
+      <button type="button" data-fcm="AF" onclick="setFcMode('AF')" style="border:0;border-left:1px solid var(--border);padding:5px 9px;cursor:pointer;font-family:inherit">Assignment+Forecast</button>
+    </div>
+    <button class="btn btn2" onclick="fcLoad(true).then(renderCapacity)">🔄 รีเฟรช</button>
   </div>
   <div id="capBody" style="margin-top:14px"></div>
 </div>
@@ -681,6 +686,11 @@ tr.pick:hover td{background:var(--bg)}
     <button class="btn btn-teal" onclick="openWpNew()">＋ เพิ่มงานใหม่</button>
     <a class="btn btn2" href="https://costplan1.sharepoint.com/:l:/s/BOQTeam/JABVdFka-QxLSKQUvXtPbfaeATc-zs9gGzDQx8Pfz5M5XMQ?nav=MTExZmQ3MTEtYWMxNy00NGI2LWI1Y2EtMjdlNTc4YWRhYzY3" target="_blank" rel="noopener" style="text-decoration:none;display:inline-block" title="เปิดฟอร์มกรอกงานใน SharePoint (แท็บใหม่)">📝 BOQ Assignment Form</a>
     <button class="btn btn2" onclick="inspectWpColumns()">🔍 ดูคอลัมน์</button>
+    <div class="fc-mode" style="display:inline-flex;border:1px solid var(--border);border-radius:8px;overflow:hidden;font-size:12px">
+      <button type="button" data-fcm="A" onclick="setFcMode('A')" style="border:0;padding:5px 9px;cursor:pointer;font-family:inherit">Assignment</button>
+      <button type="button" data-fcm="F" onclick="setFcMode('F')" style="border:0;border-left:1px solid var(--border);padding:5px 9px;cursor:pointer;font-family:inherit">Forecast</button>
+      <button type="button" data-fcm="AF" onclick="setFcMode('AF')" style="border:0;border-left:1px solid var(--border);padding:5px 9px;cursor:pointer;font-family:inherit">Assignment+Forecast</button>
+    </div>
     <button class="btn btn2" onclick="loadWorkPlan()">🔄 รีเฟรช</button>
     <button class="btn btn2" id="btnBackfillSF" onclick="backfillStartFinish(this)" title="งานที่ Commit แล้ว: เติม/แก้ Start Date · Finish Date ให้ตรงกับแผน Step จริง">📅 เติม Start/Finish ย้อนหลัง</button>
   </div>
@@ -693,8 +703,10 @@ tr.pick:hover td{background:var(--bg)}
     <div id="wpColBody">⏳ กำลังโหลด...</div>
   </div>
 
+  <!-- build .121: Forecast (BOQ Forecast list) -->
+  <div id="wpFcBox" style="display:none;margin-top:12px"></div>
   <!-- Main area: table + edit panel side by side -->
-  <div style="display:flex;gap:14px;margin-top:12px;align-items:flex-start">
+  <div id="wpMainArea" style="display:flex;gap:14px;margin-top:12px;align-items:flex-start">
     <!-- Table -->
     <!-- build 2026-09-30.95: กล่องตารางเลื่อนเองในกรอบ (สูงพอดีจอ) → หัวตาราง sticky อยู่กับที่ ไม่เลื่อนตาม mouse scroll -->
     <div id="wpScroll" style="flex:1;min-width:0;overflow:auto;max-height:calc(100vh - 230px);min-height:300px;border:1px solid var(--border);border-radius:10px;background:#fff">
@@ -6041,6 +6053,7 @@ async function loadWorkPlan(){
     // build .79: เรียงตาม ID จากน้อยไปมาก เสมอ → รายการที่เพิ่มใหม่อยู่ท้ายสุด
     _wpItems.sort((a,b)=> (Number(a.id)||0) - (Number(b.id)||0));
     renderWpTable();
+    if(_fcItems) fcAutoMatch().then(fcRenderWp); // build .121: Post สั่งงานใหม่ → จับคู่ Forecast
   }catch(e){
     if(body) body.innerHTML = `<div style="padding:20px;color:#ef4444">❌ โหลดข้อมูลไม่สำเร็จ: ${e.message}</div>`;
   }
@@ -6079,6 +6092,7 @@ function updateWpSfLabel(){
   else lbl.textContent = `สถานะ: ${checked.length} รายการ`;
 }
 function filterWpRows(){
+  if(typeof fcRenderWp==='function' && _fcMode!=='A') fcRenderWp(); // build .121
   const q = (document.getElementById('wpSearch')||{}).value||'';
   const ql = q.toLowerCase();
   const checkedSet = new Set([...document.querySelectorAll('.wp-sf-cb:checked')].map(c=>c.value.toLowerCase()));
@@ -6732,6 +6746,7 @@ document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
   if(t.dataset.p==='pgToday') renderTodayTasks(); // build 2026-09-11.2: render งานวันนี้ทุกครั้งที่สลับมา tab นี้
   if(t.dataset.p==='pgMyWork') renderMyWork(); // build 2026-09-23.3: render งานของฉันทุกครั้งที่สลับมา tab นี้
   if(t.dataset.p==='pgWorkPlan' && !_wpItems.length) loadWorkPlan(); // build 2026-09-25.24: โหลด Work Plan ครั้งแรก
+  if(t.dataset.p==='pgWorkPlan' || t.dataset.p==='pgCapacity'){ fcApplyModeUI(); fcLoad(false).then(()=>{ fcRenderWp(); if(t.dataset.p==='pgCapacity') renderCapacity(); }); } // build .121
   if(t.dataset.p==='pgPostView') loadPostView(false); // build .81
   if(t.dataset.p==='pgCapacity') renderCapacity(); // build .119
   if(t.dataset.p==='pgExec') loadExec(false); // build .100
@@ -7109,6 +7124,187 @@ function pvWeekBar(r, sc){
     return `<div title="${t} ${sc.fmtS(d)}" style="position:absolute;top:34px;left:${px}px;transform:translate(-50%,-50%);z-index:4;line-height:0">${html}</div>`; };
   return bar + mark(com, PV_MARK_COM, 'BOQ รับปากส่ง') + mark(due, PV_MARK_DUE, 'Due Date');
 }
+/* ============ Forecast · BOQ Forecast list (build .121) ============ */
+// PCM เพิ่มงานคาดการณ์ (ยังไม่ถูกสั่งจาก Team Post) → แสดงในหน้า Work Plan และหน้าทีมรับงานได้อีกทีเมื่อไร
+// เมื่อ Team Post สั่งงานจริง (มีรายการใน Work Plan ที่ โครงการ+Package+Service Type ตรงกัน และสร้างหลัง Forecast)
+// ระบบเปลี่ยน ForecastStatus → Assigned + ใส่ LinkedWorkPlanID ให้อัตโนมัติ แล้วรายการจะหายจากหน้าเว็บ
+let FC_LIST = null, _fcItems = null, _fcLoading = null, _fcShowAll = false;
+let _fcMode = (()=>{ try{ return localStorage.getItem('boq_fc_mode') || 'A'; }catch(e){ return 'A'; } })();
+function setFcMode(m){ _fcMode=m; try{ localStorage.setItem('boq_fc_mode',m); }catch(e){} fcApplyModeUI(); fcRenderWp(); if(document.getElementById('pgCapacity')?.classList.contains('on')) renderCapacity(); }
+function fcApplyModeUI(){
+  document.querySelectorAll('.fc-mode button').forEach(b=>{ const on=b.dataset.fcm===_fcMode; b.style.background=on?'var(--primary)':'var(--bg2)'; b.style.color=on?'#fff':'var(--text1)'; b.style.fontWeight=on?'700':'400'; });
+  const main=document.getElementById('wpMainArea'); if(main) main.style.display = _fcMode==='F' ? 'none' : 'flex';
+  const box=document.getElementById('wpFcBox'); if(box) box.style.display = _fcMode==='A' ? 'none' : '';
+}
+async function fcResolveList(){
+  if(FC_LIST) return FC_LIST;
+  const d = await graphFetch(`/sites/${SITE_ID}/lists?$filter=displayName eq 'BOQ Forecast'&$select=id,displayName`);
+  FC_LIST = d?.value?.[0]?.id || null;
+  if(!FC_LIST) console.warn('[BOQ Forecast] ไม่พบ list "BOQ Forecast" ใน site');
+  return FC_LIST;
+}
+const fcD10 = v => { if(!v) return ''; const d=new Date(v); return isNaN(d) ? '' : localISO(d); };
+const fcNorm = v => String(v==null?'':v).replace(/\s+/g,' ').trim().toLowerCase();
+async function fcLoad(force){
+  if(typeof graphAccount!=='undefined' && !graphAccount) return;
+  if(_fcItems && !force) return;
+  if(_fcLoading) return _fcLoading;
+  _fcLoading = (async()=>{
+    try{
+      const id = await fcResolveList(); if(!id){ _fcItems=[]; return; }
+      _fcItems = await graphFetchAllItems(`/sites/${SITE_ID}/lists/${id}/items?$expand=fields&$top=200`);
+      await fcAutoMatch();
+    }catch(e){ console.error('[BOQ Forecast] โหลดไม่สำเร็จ', e); _fcItems = _fcItems || []; }
+    finally{ _fcLoading = null; }
+  })();
+  return _fcLoading;
+}
+async function fcSpWrite(itemId, body){
+  const token = await getSpToken();
+  const url = itemId ? `${SP_SITE_URL}/_api/web/lists/getById('${FC_LIST}')/items(${itemId})` : `${SP_SITE_URL}/_api/web/lists/getById('${FC_LIST}')/items`;
+  const headers = {'Authorization':`Bearer ${token}`,'Accept':'application/json;odata=nometadata','Content-Type':'application/json;odata=nometadata'};
+  if(itemId){ headers['X-HTTP-Method']='MERGE'; headers['IF-MATCH']='*'; }
+  const r = await fetch(url,{method:'POST',headers,body:JSON.stringify(body)});
+  if(!r.ok && r.status!==204){ const t=await r.text().catch(()=>''); let m=t; try{ m=JSON.parse(t)?.['odata.error']?.message?.value||t; }catch(_){} throw new Error(`SP ${r.status}: ${String(m).slice(0,200)}`); }
+  return itemId ? null : await r.json().catch(()=>null);
+}
+// จับคู่ Forecast ↔ งานจริงใน Work Plan (โครงการ + Package + Service Type ตรงกัน · สร้างหลัง Forecast · ไม่ใช่ Reject/Replace)
+async function fcAutoMatch(){
+  const wp = (_wpItems && _wpItems.length) ? _wpItems : ((BOOT_CACHE && BOOT_CACHE.workplanItems) || []);
+  if(!wp.length || !_fcItems) return;
+  const used = new Set(_fcItems.map(it=>String((it.fields||{}).LinkedWorkPlanID||'')).filter(Boolean));
+  for(const it of _fcItems){
+    const f = it.fields||{};
+    if(String(f.ForecastStatus||'Forecast')!=='Forecast') continue;
+    const fCreated = new Date(f.Created || it.createdDateTime || 0).getTime();
+    const hit = wp.find(w=>{ const g=w.fields||{}; const wid=String(w.id).split(':')[0];
+      if(used.has(wid)) return false;
+      if(/reject|replace/i.test(String(g.Status||''))) return false;
+      if(canonicalProjId(g.Project_x0020_Name||g.Title||'')!==canonicalProjId(f.Title||'')) return false;
+      if(canonicalProjId(g.Package||'')!==canonicalProjId(f.Package||'')) return false;
+      if(fcNorm(g.Service_x0020_Type)!==fcNorm(f.ServiceType)) return false;
+      const wCreated = new Date(g.Created || w.createdDateTime || 0).getTime();
+      return wCreated >= fCreated;
+    });
+    if(!hit) continue;
+    const wid = String(hit.id).split(':')[0];
+    try{ await fcSpWrite(it.id, {ForecastStatus:'Assigned', LinkedWorkPlanID:Number(wid)}); f.ForecastStatus='Assigned'; f.LinkedWorkPlanID=Number(wid); used.add(wid);
+      console.info('[BOQ Forecast] Assigned อัตโนมัติ', f.Title, '→ Work Plan #'+wid); }
+    catch(e){ console.warn('[BOQ Forecast] อัปเดตสถานะไม่สำเร็จ', it.id, e.message); }
+  }
+}
+function fcActive(){ return (_fcItems||[]).filter(it=>String((it.fields||{}).ForecastStatus||'Forecast')==='Forecast'); }
+function fcPeople(f){ return String(f.ForecastAssignee||'').split(/[,;]/).map(x=>x.trim()).filter(x=>x && ALL_TEAM_MEMBERS.has(x)); }
+function fcBusyIntervals(){
+  const DAY=864e5, today=new Date(); today.setHours(0,0,0,0);
+  const out=[];
+  fcActive().forEach(it=>{ const f=it.fields||{};
+    const s=fcD10(f.ForecastStart), e=fcD10(f.ForecastFinish)||s; if(!s) return;
+    const a=new Date(s+'T00:00:00').getTime(), b=new Date(e+'T00:00:00').getTime()+DAY;
+    if(b<=today.getTime()) return;
+    fcPeople(f).forEach(n=>out.push({n, a, b, fc:true, overdue:false, lbl:`${f.Title||'-'} · ${f.Package||'-'} · ${f.ServiceType||'-'}`, sEnd:new Date(b-DAY)}));
+  });
+  return out;
+}
+function fcRenderWp(){
+  const box=document.getElementById('wpFcBox'); if(!box || _fcMode==='A') return;
+  const esc=v=>String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+  if(!_fcItems){ box.innerHTML='<div style="padding:14px;color:var(--text3)">⏳ กำลังโหลด Forecast...</div>'; return; }
+  if(!FC_LIST){ box.innerHTML='<div style="padding:14px;color:#b91c1c">⚠️ ไม่พบ list "BOQ Forecast" ใน SharePoint site นี้</div>'; return; }
+  const q=(document.getElementById('wpSearch')?.value||'').trim().toLowerCase();
+  const fd=v=>{ const x=fcD10(v); return x? fmtY(new Date(x+'T00:00:00')) : '—'; };
+  const list=(_fcItems||[]).filter(it=>{ const f=it.fields||{}; const st=String(f.ForecastStatus||'Forecast');
+    if(!_fcShowAll && st!=='Forecast') return false;
+    return !q || [f.Title,f.Package,f.ServiceType,f.ForecastAssignee].some(x=>String(x||'').toLowerCase().includes(q)); })
+    .sort((a,b)=> String(fcD10(a.fields.ForecastStart)).localeCompare(String(fcD10(b.fields.ForecastStart))));
+  const th='padding:7px 8px;text-align:left;font-size:11.5px;font-weight:600;white-space:nowrap';
+  const td='padding:6px 8px;border-top:1px solid var(--border);font-size:12.5px;vertical-align:middle';
+  const stBadge=st=> st==='Forecast' ? '<span style="background:#ede9fe;color:#6d28d9;border-radius:5px;padding:1px 7px;font-size:11px;font-weight:700">Forecast</span>'
+    : st==='Assigned' ? '<span style="background:#dcfce7;color:#15803d;border-radius:5px;padding:1px 7px;font-size:11px;font-weight:700">Assigned</span>'
+    : `<span style="background:#f1f5f9;color:#64748b;border-radius:5px;padding:1px 7px;font-size:11px;font-weight:700">${esc(st)}</span>`;
+  const rows=list.map(it=>{ const f=it.fields||{}; const st=String(f.ForecastStatus||'Forecast'); const team=Array.isArray(f.Team)?f.Team.join(', '):(f.Team||'');
+    return `<tr><td style="${td};color:var(--text3)">F${esc(it.id)}</td>
+      <td style="${td}"><b>${esc(f.Title||'—')}</b><div style="font-size:11px;color:var(--text3)">${esc(f.Package||'')}</div></td>
+      <td style="${td};color:var(--primary)">${esc(f.ServiceType||'—')}</td><td style="${td}">${esc(team||'—')}</td>
+      <td style="${td}">${esc(f.ForecastAssignee||'—')}</td><td style="${td};white-space:nowrap">${fd(f.ForecastStart)} – ${fd(f.ForecastFinish)}</td>
+      <td style="${td}">${stBadge(st)}${f.LinkedWorkPlanID?`<div style="font-size:10.5px;color:var(--text3)">→ Work Plan #${esc(f.LinkedWorkPlanID)}</div>`:''}</td>
+      <td style="${td};white-space:nowrap">${st==='Forecast'?`<button class="btn btn2" style="padding:2px 7px;font-size:11px" onclick="fcOpenForm('${esc(it.id)}')">✏️</button>
+        <button class="btn btn2" style="padding:2px 7px;font-size:11px" title="ผูกกับงานใน Work Plan (เลข #)" onclick="fcLinkManual('${esc(it.id)}')">🔗</button>
+        <button class="btn btn2" style="padding:2px 7px;font-size:11px;color:#b91c1c" title="ยกเลิก Forecast" onclick="fcCancel('${esc(it.id)}')">✕</button>`:''}</td></tr>`; }).join('');
+  box.innerHTML=`<div style="border:1.5px solid #c4b5fd;border-radius:11px;background:#faf5ff;overflow:hidden">
+    <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;flex-wrap:wrap">
+      <b style="color:#6d28d9">🔮 Forecast (PCM คาดการณ์ · ยังไม่ถูก Assign)</b><span style="font-size:12px;color:var(--text3)">${fcActive().length} รายการ</span>
+      <span style="flex:1"></span>
+      <label style="font-size:12px;display:flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" ${_fcShowAll?'checked':''} onchange="_fcShowAll=this.checked;fcRenderWp()"> แสดงที่ Assigned / ยกเลิกแล้ว</label>
+      <button class="btn" style="padding:4px 10px;font-size:12px;background:#7c3aed" onclick="fcOpenForm(null)">＋ เพิ่ม Forecast</button>
+      <button class="btn btn2" style="padding:4px 10px;font-size:12px" onclick="fcLoad(true).then(fcRenderWp)">🔄</button>
+    </div>
+    <div style="overflow:auto;max-height:${_fcMode==='F'?'calc(100vh - 260px)':'300px'};background:#fff">
+      <table style="width:100%;border-collapse:collapse"><thead style="position:sticky;top:0;background:#ede9fe;color:#4c1d95"><tr>
+        <th style="${th}">#</th><th style="${th}">โครงการ · Package</th><th style="${th}">Service Type</th><th style="${th}">ทีม</th><th style="${th}">ผู้ทำ (คาดการณ์)</th><th style="${th}">Start – Finish</th><th style="${th}">สถานะ</th><th style="${th}"></th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="8" style="${td};text-align:center;color:var(--text3);padding:18px">ยังไม่มี Forecast — กด ＋ เพิ่ม Forecast</td></tr>`}</tbody></table></div></div>`;
+}
+function fcOpenForm(id){
+  const it = id ? (_fcItems||[]).find(x=>String(x.id)===String(id)) : null; const f = it ? (it.fields||{}) : {};
+  const esc=v=>String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+  const teams = Array.isArray(f.Team) ? f.Team : String(f.Team||'').split(/[,;]/).map(x=>x.trim()).filter(Boolean);
+  const ppl = fcPeople(f);
+  const names = [...ALL_TEAM_MEMBERS.keys()].sort((a,b)=>a.localeCompare(b));
+  let ov=document.getElementById('fcFormOv');
+  if(!ov){ ov=document.createElement('div'); ov.id='fcFormOv'; ov.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:1000;display:flex;align-items:flex-start;justify-content:center;padding:40px 12px;overflow:auto'; document.body.appendChild(ov); }
+  const inp='width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:7px;padding:6px 9px;font-size:13px;font-family:inherit';
+  const lab='display:block;font-size:12px;color:var(--text2);margin:9px 0 3px';
+  ov.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:560px;width:100%;padding:18px 20px;box-shadow:0 20px 50px rgba(0,0,0,.25)">
+    <div style="display:flex;align-items:center;gap:8px"><b style="font-size:15px;color:#6d28d9">🔮 ${it?'แก้ไข':'เพิ่ม'} Forecast</b><span style="flex:1"></span><button class="btn btn2" onclick="document.getElementById('fcFormOv').remove()">✕</button></div>
+    <label style="${lab}">โครงการ *</label><input id="fcProj" list="fcProjList" style="${inp}" value="${esc(f.Title||'')}"><datalist id="fcProjList">${WP_PROJECT_NAMES.map(p=>`<option value="${esc(p)}">`).join('')}</datalist>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div><label style="${lab}">Package</label><input id="fcPkg" style="${inp}" value="${esc(f.Package||'')}"></div>
+      <div><label style="${lab}">ขนาดโครงการ (GFA)</label><select id="fcSize" style="${inp}"><option value=""></option>${['0-10000','10001-30000','30000up'].map(x=>`<option ${f.ProjectSize===x?'selected':''}>${x}</option>`).join('')}</select></div>
+    </div>
+    <label style="${lab}">Service Type *</label><select id="fcSvc" style="${inp}"><option value=""></option>${WP_SERVICE_TYPES.map(x=>`<option ${f.ServiceType===x?'selected':''}>${esc(x)}</option>`).join('')}</select>
+    <label style="${lab}">ทีม</label><div id="fcTeam" style="display:flex;gap:12px;flex-wrap:wrap">${WP_TEAM_CHOICES.map(x=>`<label style="font-size:13px;display:flex;gap:4px;align-items:center"><input type="checkbox" value="${esc(x)}" ${teams.includes(x)?'checked':''}>${esc(x)}</label>`).join('')}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div><label style="${lab}">Forecast Start *</label><input id="fcStart" type="date" style="${inp}" value="${fcD10(f.ForecastStart)}"></div>
+      <div><label style="${lab}">Forecast Finish *</label><input id="fcFinish" type="date" style="${inp}" value="${fcD10(f.ForecastFinish)}"></div>
+    </div>
+    <label style="${lab}">ผู้ทำ (คาดการณ์)</label><div id="fcPpl" style="display:flex;gap:5px;flex-wrap:wrap;padding:6px 8px;border:1px solid var(--border);border-radius:7px;background:var(--bg)">${names.map(n=>`<label style="font-size:12px;display:inline-flex;gap:4px;align-items:center;background:#fff;border:1px solid var(--border);border-radius:5px;padding:2px 8px;cursor:pointer"><input type="checkbox" value="${esc(n)}" ${ppl.includes(n)?'checked':''} style="margin:0">${esc(n)}</label>`).join('')}</div>
+    <label style="${lab}">หมายเหตุ</label><textarea id="fcRemark" rows="2" style="${inp}">${esc(f.Remark||'')}</textarea>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px"><button class="btn btn2" onclick="document.getElementById('fcFormOv').remove()">ยกเลิก</button><button class="btn" id="fcSaveBtn" style="background:#7c3aed" onclick="fcSave(${it?`'${esc(it.id)}'`:'null'})">💾 บันทึก</button></div>
+  </div>`;
+}
+async function fcSave(id){
+  const g=x=>document.getElementById(x)?.value?.trim()||'';
+  const proj=g('fcProj'), svc=g('fcSvc'), s=g('fcStart'), e=g('fcFinish');
+  if(!proj||!svc||!s||!e){ toastMsg('⚠️ กรอก โครงการ / Service Type / Start / Finish ให้ครบ'); return; }
+  if(e<s){ toastMsg('⚠️ Finish ต้องไม่ก่อน Start'); return; }
+  const teams=[...document.querySelectorAll('#fcTeam input:checked')].map(x=>x.value);
+  const ppl=[...document.querySelectorAll('#fcPpl input:checked')].map(x=>x.value);
+  const body={ Title:proj, Package:g('fcPkg'), ServiceType:svc, ForecastStart:s+'T00:00:00Z', ForecastFinish:e+'T00:00:00Z',
+    ForecastAssignee:ppl.join(', '), ProjectSize:g('fcSize')||null, Remark:g('fcRemark') };
+  if(teams.length || id) body.Team = teams;
+  if(!id) body.ForecastStatus='Forecast';
+  if(!id && !body.ProjectSize) delete body.ProjectSize;
+  const btn=document.getElementById('fcSaveBtn'); if(btn) btn.disabled=true;
+  try{
+    if(!(await fcResolveList())) throw new Error('ไม่พบ list BOQ Forecast');
+    await fcSpWrite(id, body);
+    toastMsg('✓ บันทึก Forecast แล้ว');
+    document.getElementById('fcFormOv')?.remove();
+    await fcLoad(true); fcRenderWp(); if(document.getElementById('pgCapacity')?.classList.contains('on')) renderCapacity();
+  }catch(err){ console.error(err); toastMsg('⚠️ บันทึก Forecast ไม่สำเร็จ: '+err.message); if(btn) btn.disabled=false; }
+}
+async function fcLinkManual(id){
+  const v = prompt('ใส่เลขรายการ (#) ใน Work Plan ที่ Team Post สั่งงานจริง');
+  if(!v) return; const n=parseInt(String(v).replace(/[^0-9]/g,''),10); if(!n){ toastMsg('⚠️ เลขรายการไม่ถูกต้อง'); return; }
+  try{ await fcSpWrite(id,{ForecastStatus:'Assigned', LinkedWorkPlanID:n}); toastMsg('✓ ผูกกับ Work Plan #'+n+' แล้ว'); await fcLoad(true); fcRenderWp(); }
+  catch(e){ toastMsg('⚠️ '+e.message); }
+}
+async function fcCancel(id){
+  if(!confirm('ยกเลิก Forecast นี้?')) return;
+  try{ await fcSpWrite(id,{ForecastStatus:'Cancelled'}); toastMsg('✓ ยกเลิก Forecast แล้ว'); await fcLoad(true); fcRenderWp(); }
+  catch(e){ toastMsg('⚠️ '+e.message); }
+}
+
 /* ============ ทีมรับงานได้อีกทีเมื่อไร (build .119) ============ */
 // คำนวณจาก Step ที่ยังไม่ปิดในหน้า Timeline (ผู้ทำหลัก + ผู้ร่วมทีม) — ช่วงที่ติดงาน = แผนของ Step
 // Step ที่เลยแผนแต่ยังไม่ปิด ถือว่ายังติดงานถึงวันนี้ (แสดงสีแดง) · "รับงานได้อีกที" = วันทำการถัดจากวันจบงานสุดท้าย
@@ -7136,11 +7332,15 @@ function capBusyByPerson(){
 }
 function renderCapacity(){
   const body=document.getElementById('capBody'); if(!body) return;
+  fcApplyModeUI();
   if(!DATA || !DATA.length){ body.innerHTML=`<div style="padding:32px 16px;text-align:center;color:var(--text3)">⏳ ยังไม่มีข้อมูล Timeline — รอโหลดสักครู่แล้วกด 🔄 รีเฟรช</div>`; return; }
   const esc=v=>String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
   const DAY=864e5, today=new Date(); today.setHours(0,0,0,0);
   const fmtD=d=>d.toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'});
   const busy=capBusyByPerson();
+  // build .121: โหมด Assignment / Forecast / Assignment+Forecast
+  if(_fcMode==='F') Object.keys(busy).forEach(k=>delete busy[k]);
+  if(_fcMode!=='A') fcBusyIntervals().forEach(x=>{ (busy[x.n]=busy[x.n]||[]).push(x); });
   const person=n=>{
     const iv=(busy[n]||[]).filter(x=>x.b>today.getTime()).sort((x,y)=>x.a-y.a);
     const segs=[]; iv.forEach(x=>{ const l=segs[segs.length-1]; if(l && x.a<=l.b){ l.b=Math.max(l.b,x.b); l.items.push(x); l.overdue=l.overdue||x.overdue; } else segs.push({a:x.a,b:x.b,items:[x],overdue:x.overdue}); });
@@ -7148,7 +7348,9 @@ function renderCapacity(){
     // รับงานใหม่ได้ = หลังจบงานที่มีอยู่ทั้งหมด (รวมงานที่ Commit ไว้ล่วงหน้า) · ไม่มีงานค้างเลย = ว่างตอนนี้
     const freeNow=!iv.length;
     const free=freeNow?capNextWorkday(today):capNextWorkday(new Date(lastEnd));
-    return {n, iv, segs, free, freeNow, nOpen:iv.length, nOver:iv.filter(x=>x.overdue).length};
+    const mk=list=>{ const out=[]; list.forEach(x=>{ const l=out[out.length-1]; if(l && x.a<=l.b){ l.b=Math.max(l.b,x.b); l.items.push(x); l.overdue=l.overdue||x.overdue; } else out.push({a:x.a,b:x.b,items:[x],overdue:x.overdue}); }); return out; };
+    const segA=mk(iv.filter(x=>!x.fc)), segF=mk(iv.filter(x=>x.fc));
+    return {n, iv, segs, segA, segF, free, freeNow, nOpen:iv.filter(x=>!x.fc).length, nFc:iv.filter(x=>x.fc).length, nOver:iv.filter(x=>x.overdue).length};
   };
   const pts=[today.getTime()];
   const teams=CAP_TEAMS.map(([label,pool])=>{
@@ -7185,21 +7387,26 @@ function renderCapacity(){
       left+=`<div style="${COLS};height:${RH}px;box-sizing:border-box;border-bottom:1px solid var(--border);background:${bg}">
         <div style="${dc};padding-left:30px;${m.secondary?'color:var(--text3)':'font-weight:600'}">${esc(m.n)}${m.secondary?'&nbsp;<span style="font-size:10px;font-weight:400">(ร่วมทีม)</span>':''}</div>
         <div style="${dc}">${freeTxt(m)}</div>
-        <div style="${dc};color:var(--text2)">${m.nOpen?`${m.nOpen} Step`:'—'}${m.nOver?`&nbsp;<span style="color:#dc2626;font-weight:700">· ค้าง ${m.nOver}</span>`:''}</div></div>`;
+        <div style="${dc};color:var(--text2)">${m.nOpen?`${m.nOpen} Step`:''}${m.nOpen&&m.nFc?'&nbsp;+&nbsp;':''}${m.nFc?`<span style="color:#7c3aed">${m.nFc} Forecast</span>`:''}${!m.nOpen&&!m.nFc?'—':''}${m.nOver?`&nbsp;<span style="color:#dc2626;font-weight:700">· ค้าง ${m.nOver}</span>`:''}</div></div>`;
       let rb='';
       if(sc){
-        m.segs.forEach(g=>{
+        const both = m.segA.length && m.segF.length;
+        const draw=(list,fc)=>list.forEach(g=>{
           let x1=sc.x(new Date(g.a)), x2=sc.x(new Date(g.b)); x1=Math.max(0,x1); x2=Math.min(sc.width,x2); if(x2<=x1) return;
-          const tip=esc(g.items.map(x=>`${x.overdue?'⚠ เลยแผน · ':''}${x.lbl} (ถึง ${fmtD(x.sEnd)})`).join('\n'));
-          rb+=`<div title="${tip}" style="position:absolute;top:9px;height:16px;left:${x1}px;width:${Math.max(6,x2-x1)}px;border-radius:3px;background:${g.overdue?'#dc2626':'#0e7490'};opacity:${g.overdue?.85:.55};box-sizing:border-box"></div>`;
+          const tip=esc(g.items.map(x=>`${x.fc?'🔮 Forecast · ':''}${x.overdue?'⚠ เลยแผน · ':''}${x.lbl} (ถึง ${fmtD(x.sEnd)})`).join('\n'));
+          const top = both ? (fc?19:6) : 9, h = both ? (fc?10:11) : 16;
+          rb+= fc
+            ? `<div title="${tip}" style="position:absolute;top:${top}px;height:${h}px;left:${x1}px;width:${Math.max(6,x2-x1)}px;border-radius:3px;background:rgba(124,58,237,.18);border:1.5px dashed #7c3aed;box-sizing:border-box"></div>`
+            : `<div title="${tip}" style="position:absolute;top:${top}px;height:${h}px;left:${x1}px;width:${Math.max(6,x2-x1)}px;border-radius:3px;background:${g.overdue?'#dc2626':'#0e7490'};opacity:${g.overdue?.85:.55};box-sizing:border-box"></div>`;
         });
+        draw(m.segA,false); draw(m.segF,true);
         const fx=sc.x(m.free)+sc.pxPerDay/2;
         if(!m.freeNow && fx>=0 && fx<=sc.width) rb+=`<div title="รับงานได้อีกที ${fmtD(m.free)}" style="position:absolute;top:17px;left:${fx}px;transform:translate(-50%,-50%);width:9px;height:9px;border-radius:50%;background:#059669;border:2px solid #fff;box-shadow:0 0 0 1px #059669;z-index:4"></div>`;
       }
       right+=`<div style="position:relative;height:${RH}px;box-sizing:border-box;border-bottom:1px solid var(--border);background:${bg}">${rb}</div>`;
     });
   });
-  const lbl=document.getElementById('capLabel'); if(lbl) lbl.textContent=`ข้อมูลจาก Step ที่ยังไม่ปิดในหน้า Timeline · ${fmtD(today)}`;
+  const lbl=document.getElementById('capLabel'); if(lbl) lbl.textContent=`${_fcMode==='A'?'งานที่ถูก Assign (Step ที่ยังไม่ปิด)':_fcMode==='F'?'เฉพาะงาน Forecast':'งานที่ถูก Assign + Forecast'} · ${fmtD(today)}`;
   const _hs=document.getElementById('capHeadScroll'); const keepX=_hs?_hs.scrollLeft:null;
   const TW=sc?sc.width:600;
   const card=t=>{ const tf=t.first; return `<div style="border:1px solid var(--border);border-radius:10px;padding:10px 12px;background:#fff;min-width:180px;flex:1 1 180px">
@@ -7210,6 +7417,7 @@ function renderCapacity(){
     <div style="display:flex;flex-wrap:wrap;gap:14px;font-size:11px;color:var(--text2);margin-top:12px;justify-content:flex-end">
       <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:22px;height:12px;border-radius:3px;background:#0e7490;opacity:.55"></span>ติดงาน (ตามแผน Step)</span>
       <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:22px;height:12px;border-radius:3px;background:#dc2626;opacity:.85"></span>เลยแผนแต่ยังไม่ปิด</span>
+      <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:22px;height:12px;border-radius:3px;background:rgba(124,58,237,.18);border:1.5px dashed #7c3aed;box-sizing:border-box"></span>Forecast (คาดการณ์)</span>
       <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:9px;height:9px;border-radius:50%;background:#059669"></span>รับงานได้อีกที</span>
       <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:22px;height:12px;border-radius:9px;background:#ccfbf1;border:1px solid #5eead4"></span>ทั้งทีมติดงาน</span>
       <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:2px;height:14px;background:var(--bad,#dc2626)"></span>วันนี้</span></div>
