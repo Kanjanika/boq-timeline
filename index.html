@@ -343,7 +343,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-10-29.124</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-10-29.125</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -496,6 +496,7 @@ tr.pick:hover td{background:var(--bg)}
         <div class="field"><label>ประเภท · GFA (จาก SharePoint)</label><div class="read" id="ciType">—</div></div>
         <div class="field"><label>Post ขอส่งภายใน</label><div class="read" id="ciDue">—</div></div>
       </div>
+      <div class="field"><label>Description</label><div class="read" id="ciDesc" style="white-space:pre-line;max-height:110px;overflow-y:auto">—</div></div>
 
       <div class="ai-step"><span class="n">1</span><div>เกณฑ์มาตรฐานตามขนาด GFA: <b id="aiStd">—</b></div></div>
       <div class="ai-step"><span class="n">2</span><div>ปรับตาม Actual ที่เก็บจริง (B8): <b id="aiHist">—</b></div></div>
@@ -2631,6 +2632,7 @@ function buildIntakeEntry(task, sug){
     due: task.dueLabel || task.due || '—', gap: gapWeeks, scen: null,
     recv: task.received && !isNaN(new Date(task.received)) ? fmtY(new Date(task.received)) : '—',
     recvFromCol: !!task.receivedFromCol,
+    desc: task.desc || '',
     nego: `เรียนทีม Post · งาน ${task.name} (${task.service}) ตามเกณฑ์มาตรฐาน+ประวัติจริงของทีม คาดว่าจะดำเนินการเสร็จและส่งได้ประมาณ ${fmtY(sug.finish)} ครับ`,
     // splitSubteam: ค่าเริ่มต้น true = แยกเป็นหลายแถวตาม SUBTEAM_BY_PACKAGE (พฤติกรรมเดิม) — PCM ปรับเป็น false ได้
     // ที่หน้า Commit เองถ้างานนี้ (เช่น Budget เบื้องต้นที่ยังไม่มีแบบ) มีคนเดียวรับผิดชอบทุกระบบย่อย ไม่ต้องแยก
@@ -2725,6 +2727,7 @@ async function loadIntakeFromGraph(){
       // build .109: Received Date — ใช้ column "Received Date" ถ้ามีใน list; ไม่มี → วันที่สร้างรายการ (Post ส่งเข้าระบบ)
       received: f.Received_x0020_Date || f.ReceivedDate || f.Received || it.createdDateTime || f.Created || null,
       receivedFromCol: !!(f.Received_x0020_Date || f.ReceivedDate || f.Received),
+      desc: (f.Description || '').toString().trim(), // build .125
       dueLabel: f.Due_x0020_Date? fmtY(new Date(f.Due_x0020_Date)) : (f.DueDate? fmtY(new Date(f.DueDate)) : (f.PostDueDate? fmtY(new Date(f.PostDueDate)) : null)),
       // build 2026-08-20.7: Version เอกสาร (เช่น "No.1 Rev.1", "No.3") — ใช้ตรวจ isRevisionVersion
       version: f.Version || null
@@ -7857,6 +7860,7 @@ function renderIntake(){
   const ciVersionEl = document.getElementById('ciVersion');
   if(ciVersionEl) ciVersionEl.textContent = it.version || '—';
   ciType.textContent=it.type; ciDue.textContent=it.due;
+  { const d=document.getElementById('ciDesc'); if(d) d.textContent = it.desc || '—'; } // build .125
   { const r=document.getElementById('ciRecv'), rs=document.getElementById('ciRecvSrc');
     if(r) r.textContent = it.recv || '—';
     if(rs) rs.textContent = (it.recv && it.recv!=='—' && !it.recvFromCol) ? '(วันที่ Post ส่งเข้าระบบ)' : ''; }
