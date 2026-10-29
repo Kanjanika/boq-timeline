@@ -292,6 +292,18 @@ tr.pick:hover td{background:var(--bg)}
 @keyframes up{from{transform:translateY(14px);opacity:0}to{transform:none;opacity:1}}
 
 @media print{.top,.tools,.btn,.btn2{display:none!important}.page{display:none}.page.print-target{display:block}}
+/* build .122: พิมพ์หน้า Work Plan — แสดงทุกแถว (ไม่ตัดตามกรอบเลื่อน) · ซ่อนแผงแก้ไข */
+.wp-print-head{display:none}
+@media print{
+  body.wp-printing #wpScroll{max-height:none!important;overflow:visible!important;border:0!important}
+  body.wp-printing #wpFcBox div[style*="overflow:auto"]{max-height:none!important;overflow:visible!important}
+  body.wp-printing #wpEditPanel, body.wp-printing #wpColPanel{display:none!important}
+  body.wp-printing .wp-print-head{display:block!important;margin:0 0 8px}
+  body.wp-printing #pgWorkPlan *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  body.wp-printing #pgWorkPlan thead{position:static!important}
+  body.wp-printing #pgWorkPlan tr{break-inside:avoid}
+  body.wp-printing #wpBody button{display:none!important}
+}
 /* ===== Report · view toggle ===== */
 .rpt-toggle{display:flex;gap:2px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:3px}
 .rpt-mode-btn{background:transparent;border:none;padding:5px 13px;border-radius:6px;cursor:pointer;font-size:12.5px;color:var(--text2);font-weight:500;transition:.15s}
@@ -331,7 +343,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-10-16.121</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-10-29.122</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -692,6 +704,7 @@ tr.pick:hover td{background:var(--bg)}
       <button type="button" data-fcm="AF" onclick="setFcMode('AF')" style="border:0;border-left:1px solid var(--border);padding:5px 9px;cursor:pointer;font-family:inherit">Assignment+Forecast</button>
     </div>
     <button class="btn btn2" onclick="loadWorkPlan()">🔄 รีเฟรช</button>
+    <button class="btn" onclick="printWorkPlan()" title="พิมพ์ หรือเลือก 'Save as PDF' เพื่อบันทึกเป็นไฟล์">🖨️ พิมพ์ / บันทึก</button>
     <button class="btn btn2" id="btnBackfillSF" onclick="backfillStartFinish(this)" title="งานที่ Commit แล้ว: เติม/แก้ Start Date · Finish Date ให้ตรงกับแผน Step จริง">📅 เติม Start/Finish ย้อนหลัง</button>
   </div>
   <!-- Column inspector panel -->
@@ -703,6 +716,7 @@ tr.pick:hover td{background:var(--bg)}
     <div id="wpColBody">⏳ กำลังโหลด...</div>
   </div>
 
+  <div class="wp-print-head" id="wpPrintHead"></div>
   <!-- build .121: Forecast (BOQ Forecast list) -->
   <div id="wpFcBox" style="display:none;margin-top:12px"></div>
   <!-- Main area: table + edit panel side by side -->
@@ -7582,6 +7596,25 @@ async function loadExec(force){
     }
     renderExec();
   }catch(e){ body.innerHTML = `<div style="padding:20px;color:#ef4444">❌ โหลดข้อมูลไม่สำเร็จ: ${String(e.message).replace(/</g,'&lt;')}</div>`; }
+}
+// build .122: พิมพ์ / บันทึก PDF หน้า Work Plan — พิมพ์ตามตัวกรองและโหมดที่เลือกอยู่ (แนวนอน)
+function printWorkPlan(){
+  const pg=document.getElementById('pgWorkPlan'); if(!pg) return;
+  const head=document.getElementById('wpPrintHead');
+  const mode={A:'Assignment',F:'Forecast',AF:'Assignment + Forecast'}[typeof _fcMode!=='undefined'?_fcMode:'A'];
+  const cnt=document.getElementById('wpCountLabel')?.textContent||'';
+  const q=document.getElementById('wpSearch')?.value||'';
+  const sf=document.getElementById('wpSfLabel')?.textContent||'';
+  if(head) head.innerHTML=`<div style="font-size:16px;font-weight:700">📝 BOQ Team Work Plan</div>
+    <div style="font-size:11px;color:#475569">พิมพ์เมื่อ ${new Date().toLocaleString('th-TH')} · มุมมอง: ${mode} · สถานะ: ${sf.replace(/[—▾]/g,'').trim()}${q?` · ค้นหา: "${q}"`:''} · ${cnt}</div>`;
+  let st=document.getElementById('wpPrintPage');
+  if(!st){ st=document.createElement('style'); st.id='wpPrintPage'; document.head.appendChild(st); }
+  st.textContent='@page{size:A4 landscape;margin:8mm}';
+  document.body.classList.add('wp-printing'); pg.classList.add('print-target');
+  const done=()=>{ document.body.classList.remove('wp-printing'); pg.classList.remove('print-target'); st.textContent=''; window.removeEventListener('afterprint',done); };
+  window.addEventListener('afterprint',done);
+  window.print();
+  setTimeout(done, 1500);
 }
 function printExec(){
   const pg = document.getElementById('pgExec'); pg.classList.add('print-target');
