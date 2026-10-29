@@ -343,7 +343,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-10-29.122</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-10-29.124</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -7197,6 +7197,10 @@ async function fcAutoMatch(){
       if(canonicalProjId(g.Project_x0020_Name||g.Title||'')!==canonicalProjId(f.Title||'')) return false;
       if(canonicalProjId(g.Package||'')!==canonicalProjId(f.Package||'')) return false;
       if(fcNorm(g.Service_x0020_Type)!==fcNorm(f.ServiceType)) return false;
+      // build .123: ถ้า Forecast ระบุ Version ต้องตรงกับ Version ใน Work Plan ด้วย (เทียบแบบไม่สนช่องว่าง/จุด/ตัวพิมพ์)
+      const vn = v => String(v||'').toLowerCase().replace(/[\s.]/g,'');
+      // build .124: column ชื่อ ForecastVersion (ชื่อ "Version" ซ้ำกับ column ระบบของ SharePoint)
+      if(f.ForecastVersion && vn(g.Version)!==vn(f.ForecastVersion)) return false;
       const wCreated = new Date(g.Created || w.createdDateTime || 0).getTime();
       return wCreated >= fCreated;
     });
@@ -7229,7 +7233,7 @@ function fcRenderWp(){
   const fd=v=>{ const x=fcD10(v); return x? fmtY(new Date(x+'T00:00:00')) : '—'; };
   const list=(_fcItems||[]).filter(it=>{ const f=it.fields||{}; const st=String(f.ForecastStatus||'Forecast');
     if(!_fcShowAll && st!=='Forecast') return false;
-    return !q || [f.Title,f.Package,f.ServiceType,f.ForecastAssignee].some(x=>String(x||'').toLowerCase().includes(q)); })
+    return !q || [f.Title,f.Package,f.ServiceType,f.ForecastVersion,f.ForecastAssignee].some(x=>String(x||'').toLowerCase().includes(q)); })
     .sort((a,b)=> String(fcD10(a.fields.ForecastStart)).localeCompare(String(fcD10(b.fields.ForecastStart))));
   const th='padding:7px 8px;text-align:left;font-size:11.5px;font-weight:600;white-space:nowrap';
   const td='padding:6px 8px;border-top:1px solid var(--border);font-size:12.5px;vertical-align:middle';
@@ -7239,7 +7243,7 @@ function fcRenderWp(){
   const rows=list.map(it=>{ const f=it.fields||{}; const st=String(f.ForecastStatus||'Forecast'); const team=Array.isArray(f.Team)?f.Team.join(', '):(f.Team||'');
     return `<tr><td style="${td};color:var(--text3)">F${esc(it.id)}</td>
       <td style="${td}"><b>${esc(f.Title||'—')}</b><div style="font-size:11px;color:var(--text3)">${esc(f.Package||'')}</div></td>
-      <td style="${td};color:var(--primary)">${esc(f.ServiceType||'—')}</td><td style="${td}">${esc(team||'—')}</td>
+      <td style="${td};color:var(--primary)">${esc(f.ServiceType||'—')}</td><td style="${td}">${esc(f.ForecastVersion||'—')}</td><td style="${td}">${esc(team||'—')}</td>
       <td style="${td}">${esc(f.ForecastAssignee||'—')}</td><td style="${td};white-space:nowrap">${fd(f.ForecastStart)} – ${fd(f.ForecastFinish)}</td>
       <td style="${td}">${stBadge(st)}${f.LinkedWorkPlanID?`<div style="font-size:10.5px;color:var(--text3)">→ Work Plan #${esc(f.LinkedWorkPlanID)}</div>`:''}</td>
       <td style="${td};white-space:nowrap">${st==='Forecast'?`<button class="btn btn2" style="padding:2px 7px;font-size:11px" onclick="fcOpenForm('${esc(it.id)}')">✏️</button>
@@ -7255,8 +7259,8 @@ function fcRenderWp(){
     </div>
     <div style="overflow:auto;max-height:${_fcMode==='F'?'calc(100vh - 260px)':'300px'};background:#fff">
       <table style="width:100%;border-collapse:collapse"><thead style="position:sticky;top:0;background:#ede9fe;color:#4c1d95"><tr>
-        <th style="${th}">#</th><th style="${th}">โครงการ · Package</th><th style="${th}">Service Type</th><th style="${th}">ทีม</th><th style="${th}">ผู้ทำ (คาดการณ์)</th><th style="${th}">Start – Finish</th><th style="${th}">สถานะ</th><th style="${th}"></th></tr></thead>
-      <tbody>${rows || `<tr><td colspan="8" style="${td};text-align:center;color:var(--text3);padding:18px">ยังไม่มี Forecast — กด ＋ เพิ่ม Forecast</td></tr>`}</tbody></table></div></div>`;
+        <th style="${th}">#</th><th style="${th}">โครงการ · Package</th><th style="${th}">Service Type</th><th style="${th}">Version</th><th style="${th}">ทีม</th><th style="${th}">ผู้ทำ (คาดการณ์)</th><th style="${th}">Start – Finish</th><th style="${th}">สถานะ</th><th style="${th}"></th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="9" style="${td};text-align:center;color:var(--text3);padding:18px">ยังไม่มี Forecast — กด ＋ เพิ่ม Forecast</td></tr>`}</tbody></table></div></div>`;
 }
 function fcOpenForm(id){
   const it = id ? (_fcItems||[]).find(x=>String(x.id)===String(id)) : null; const f = it ? (it.fields||{}) : {};
@@ -7271,8 +7275,9 @@ function fcOpenForm(id){
   ov.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:560px;width:100%;padding:18px 20px;box-shadow:0 20px 50px rgba(0,0,0,.25)">
     <div style="display:flex;align-items:center;gap:8px"><b style="font-size:15px;color:#6d28d9">🔮 ${it?'แก้ไข':'เพิ่ม'} Forecast</b><span style="flex:1"></span><button class="btn btn2" onclick="document.getElementById('fcFormOv').remove()">✕</button></div>
     <label style="${lab}">โครงการ *</label><input id="fcProj" list="fcProjList" style="${inp}" value="${esc(f.Title||'')}"><datalist id="fcProjList">${WP_PROJECT_NAMES.map(p=>`<option value="${esc(p)}">`).join('')}</datalist>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+    <div style="display:grid;grid-template-columns:1.3fr .8fr 1fr;gap:10px">
       <div><label style="${lab}">Package</label><input id="fcPkg" style="${inp}" value="${esc(f.Package||'')}"></div>
+      <div><label style="${lab}">Version</label><input id="fcVer" style="${inp}" placeholder="เช่น No.1" value="${esc(f.ForecastVersion||'')}"></div>
       <div><label style="${lab}">ขนาดโครงการ (GFA)</label><select id="fcSize" style="${inp}"><option value=""></option>${['0-10000','10001-30000','30000up'].map(x=>`<option ${f.ProjectSize===x?'selected':''}>${x}</option>`).join('')}</select></div>
     </div>
     <label style="${lab}">Service Type *</label><select id="fcSvc" style="${inp}"><option value=""></option>${WP_SERVICE_TYPES.map(x=>`<option ${f.ServiceType===x?'selected':''}>${esc(x)}</option>`).join('')}</select>
@@ -7293,7 +7298,7 @@ async function fcSave(id){
   if(e<s){ toastMsg('⚠️ Finish ต้องไม่ก่อน Start'); return; }
   const teams=[...document.querySelectorAll('#fcTeam input:checked')].map(x=>x.value);
   const ppl=[...document.querySelectorAll('#fcPpl input:checked')].map(x=>x.value);
-  const body={ Title:proj, Package:g('fcPkg'), ServiceType:svc, ForecastStart:s+'T00:00:00Z', ForecastFinish:e+'T00:00:00Z',
+  const body={ Title:proj, Package:g('fcPkg'), ForecastVersion:g('fcVer'), ServiceType:svc, ForecastStart:s+'T00:00:00Z', ForecastFinish:e+'T00:00:00Z',
     ForecastAssignee:ppl.join(', '), ProjectSize:g('fcSize')||null, Remark:g('fcRemark') };
   if(teams.length || id) body.Team = teams;
   if(!id) body.ForecastStatus='Forecast';
