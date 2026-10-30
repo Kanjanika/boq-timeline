@@ -343,7 +343,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-10-29.125</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-10-30.126</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -1185,10 +1185,10 @@ const SERVICE_TYPES = ['Blank BOQ','Pretender','Budget','VE','Cost Exercise','VO
   'VO - General',
   'Cost Exercise - Budget Stage','Cost Exercise - Bidding Stage','Cost Exercise - Post Services Stage',
   'VE - Budget Stage','VE - Bidding Stage','VE - Post Services Stage',
-  'Meeting - Online','Meeting - Onsite','Check Progress','Payment Certificate']; // build 2026-08-25.12: แยก Meeting → Meeting - Online + Meeting - Onsite ตาม choice list ใน SharePoint
+  'Meeting - Online','Meeting - Onsite','Check Progress','Payment Certificate','Negotiate with Contractor']; // build 2026-08-25.12: แยก Meeting → Meeting - Online + Meeting - Onsite ตาม choice list ใน SharePoint
 // WP Work Plan field constants — synced from Graph API column definitions 2026-09-25.26
 // (แยกจาก SERVICE_TYPES/ALL_SUBTEAMS/PROJECT_TYPES_WEEKS ที่ใช้กับ Commit Check flow)
-const WP_SERVICE_TYPES = ['Blank BOQ','Pretender','Budget - Preliminaries (Cost/m2)','Budget - Breakdown Detail (บางส่วน เช่น Guestroom 1-2 Type)','Budget - Breakdown Detail (as EIA Drawing)','Budget - Breakdown Detail (as For Tender Drawing)','VO - General','VO - For Con VS For Tender','Cost Exercise - Budget Stage','Cost Exercise - Bidding Stage','Cost Exercise - Post Services Stage','VE - Budget Stage','VE - Bidding Stage','VE - Post Services Stage','Meeting - Online','Meeting - Onsite','Check Progress','Payment Certificate'];
+const WP_SERVICE_TYPES = ['Blank BOQ','Pretender','Budget - Preliminaries (Cost/m2)','Budget - Breakdown Detail (บางส่วน เช่น Guestroom 1-2 Type)','Budget - Breakdown Detail (as EIA Drawing)','Budget - Breakdown Detail (as For Tender Drawing)','VO - General','VO - For Con VS For Tender','Cost Exercise - Budget Stage','Cost Exercise - Bidding Stage','Cost Exercise - Post Services Stage','VE - Budget Stage','VE - Bidding Stage','VE - Post Services Stage','Meeting - Online','Meeting - Onsite','Check Progress','Payment Certificate','Negotiate with Contractor']; // build .126: + Negotiate with Contractor
 const WP_TEAM_CHOICES = ['ST','AR&ID','MEP','Budget'];
 const WP_DEPT_CHOICES = ['Team Benz','Team Meen','Team Prang','Team Sak','Team Pair','Team BOQ'];
 const WP_PROJECT_NAMES = ['Ayara','VOCO','Project M','Moxy','Tubkaeak','Zappenning','Pumpkin','S6 Condo','S6 Hotel','Sixsenses Hotel','Everspring','S26','HIS','Future Park Rangsit','CIB','BUR','Aquaris','Proton','Rehap','Salil','CMBR Ph.2','Chatrium Rawai','Budget Hotel','TRV','Swissotel Pratunam','LALP','LASR','RBP2','Sofitel Luang Prabang','3Nagas','BUR Ph.2','Skyview','SSRF','THR','PABKK','Sport City and Tennis Center','MGV PH.1','MGV PH.2','AIES','Hilton Krabi'];
@@ -1220,6 +1220,8 @@ const DEFAULT_STEP_TEMPLATES = {
   // Check Progress: ยุบไปรวมกับ Payment Certificate → ใช้ชุด Step เดียวกัน
   'Check Progress':       [ {name:'Check Progress', days:1}, {name:'Report', days:2}, {name:'QA', days:1} ],
   'Payment Certificate':  [ {name:'Check Progress', days:1}, {name:'Report', days:2}, {name:'QA', days:1} ],
+  // build .126: Service ใหม่ — ค่าเริ่มต้น เตรียมข้อมูล/ต่อรอง (สัดส่วนที่เหลือ) → QA 2 วัน · ปรับได้ที่ ⚙️ Step Template
+  'Negotiate with Contractor': [ {name:'Negotiate', ratio:1}, {name:'QA', days:2} ],
   'VO - General':                        [ {name:'Estimate', ratio:1}, {name:'QA', days:2} ],
   'Cost Exercise - Budget Stage':        [ {name:'Estimate', ratio:1}, {name:'QA', days:2} ],
   'Cost Exercise - Bidding Stage':       [ {name:'Estimate', ratio:1}, {name:'QA', days:2} ],
