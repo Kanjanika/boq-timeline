@@ -343,7 +343,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-11-03.129</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-11-03.130</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -1247,7 +1247,50 @@ const STAGE_COMPRESS_WEIGHTS = {
 function computeCompressedDurations(weights, availableDays){
   const total = weights.reduce((a,w)=>a+w, 0);
   if(!total || availableDays<1) return weights.map(()=>1);
-  return weights.map(w => Math.max(1, Math.round(w/total*availableDays)));
+  return fitDurationsExact(weights, null, availableDays); // build .130: ผลรวมเท่ากับ availableDays พอดี (เดิม Math.round ทำให้เกิน)
+}
+// build .130: ปรับจำนวนวันของแต่ละ Stage ให้รวมกัน = N วันทำการพอดี (largest remainder, ขั้นต่ำ 1 วัน)
+// fixedMask[i]=true → Stage วันคงที่ (เช่น QA 2 วัน) คงไว้ถ้าพอ ที่เหลือแจกตามสัดส่วนให้ Stage แบบ ratio
+function fitDurationsExact(durs, fixedMask, N){
+  const n = durs.length; if(!n) return [];
+  N = Math.max(1, Math.round(N||1));
+  if(N <= n) return durs.map(()=>1); // วันไม่พอ → Stage ละ 1 วัน (จะซ้อนวันกันตอนวาง)
+  const out = new Array(n).fill(0);
+  let rem = N, idx = [...Array(n).keys()];
+  if(fixedMask && fixedMask.some(Boolean)){
+    const fixedSum = durs.reduce((a,d,i)=> a+(fixedMask[i]?d:0),0);
+    const nRatio = fixedMask.filter(f=>!f).length;
+    if(nRatio>0 && N - fixedSum >= nRatio){
+      fixedMask.forEach((f,i)=>{ if(f){ out[i]=Math.max(1,d0(durs[i])); rem-=out[i]; } });
+      idx = idx.filter(i=>!fixedMask[i]);
+    }
+  }
+  function d0(x){ return Math.round(Number(x)||1); }
+  const w = idx.map(i=> Math.max(Number(durs[i])||0, 0.0001));
+  const wt = w.reduce((a,b)=>a+b,0);
+  const base = idx.map((i,k)=> Math.max(1, Math.floor(w[k]/wt*rem)));
+  let left = rem - base.reduce((a,b)=>a+b,0);
+  const order = idx.map((i,k)=>({k, r:w[k]/wt*rem - Math.floor(w[k]/wt*rem)})).sort((a,b)=>b.r-a.r);
+  for(let j=0; left>0; j=(j+1)%order.length){ base[order[j].k]++; left--; }
+  while(left<0){ let m=-1; base.forEach((v,k)=>{ if(v>1 && (m<0||v>base[m])) m=k; }); if(m<0) break; base[m]--; left++; }
+  idx.forEach((i,k)=> out[i]=base[k]);
+  return out;
+}
+// build .130: วาง Stage ต่อกันแบบไม่ซ้อนวัน (Stage ถัดไปเริ่มวันทำการถัดไป) และ Stage สุดท้ายจบไม่เกิน finish
+function layoutStagesInRange(start, finish, durs){
+  const nextBD = d=>{ const x=new Date(d); do{ x.setDate(x.getDate()+1); }while(x.getDay()===0||x.getDay()===6); return x; };
+  let s0 = new Date(start); s0.setHours(0,0,0,0); while(s0.getDay()===0||s0.getDay()===6) s0.setDate(s0.getDate()+1);
+  let f0 = new Date(finish); f0.setHours(0,0,0,0); while(f0.getDay()===0||f0.getDay()===6) f0.setDate(f0.getDate()-1);
+  if(f0 < s0) f0 = new Date(s0);
+  const out=[]; let cur = s0;
+  durs.forEach((d,i)=>{
+    let ps = cur > f0 ? new Date(f0) : new Date(cur);
+    let pe = addBusinessDaysInclusive(ps, d);
+    if(pe > f0 || i===durs.length-1) pe = new Date(f0);
+    if(pe < ps) pe = new Date(ps);
+    out.push([ps,pe]); cur = nextBD(pe);
+  });
+  return out;
 }
 // getCompressWeights: หา weights ของ service type นี้
 // ถ้ามีใน STAGE_COMPRESS_WEIGHTS → ใช้เลย; ถ้าไม่มี → ใช้ computeStageDurations ที่ needDays เป็น reference
@@ -2882,7 +2925,12 @@ async function commitAndGenerateSteps(task, sug, selectedSubs, editedStart, edit
   const stepSplit = sug.refRow && sug.refRow.StepSplit ? JSON.parse(sug.refRow.StepSplit) : null;
   const totalDays = Math.max(Math.round((finish - start)/864e5),8);
   // build 2026-09-24.22: forcedDurations → "ยึด Due Date" mode ใช้ durations ที่บีบสัดส่วนแล้ว แทน computeStageDurations
-  const durations = forcedDurations || computeStageDurations(template, totalDays, stepSplit, offset);
+  const rawDur = forcedDurations || computeStageDurations(template, totalDays, stepSplit, offset);
+  // build .130: บังคับให้ Step ทั้งหมดอยู่ในช่วง Start→Finish (วันทำการ) — เดิม totalDays เป็นวันปฏิทินแต่ถูกนับเป็นวันทำการ
+  // ทำให้ QA วันสุดท้ายเลย Finish/Due Date
+  const availBD = countWorkingDays(start, new Date(new Date(finish).getTime()+864e5));
+  const durations = fitDurationsExact(rawDur, forcedDurations ? null : template.map(t=>t.days!=null), availBD);
+  const stageRanges = layoutStagesInRange(start, finish, durations);
   // build 2026-08-20.4: whoBySubteam — pre-assigned persons จาก AI Suggest (คำนวณไว้แล้วตอน loadIntake)
   // build 2026-08-20.6: MEP teams (EE/AC/SN/FP) อ่านจาก dropdown ที่ PCM เลือกแทน; QA = หัวหน้าทีม (QA_LEADS)
   const whoBySubteam = (sug && sug.whoBySubteam) || {};
@@ -2900,15 +2948,15 @@ async function commitAndGenerateSteps(task, sug, selectedSubs, editedStart, edit
       const s = i + offset; // เลข Step จริงที่ใช้เก็บ/แสดง (ปรับ offset แล้ว)
       const stage = template[i-1];
       const dur = durations[i-1];
-      const planStart = new Date(cursor);
+      const planStart = stageRanges[i-1][0];
       // build 2026-08-19.3: เหมือน synthesizeStepsForRange — Stage แบบวันคงที่ (days!=null) นับวันเริ่มเป็นวันทำการ
       // วันที่ 1 เลย (ผู้ใช้ยืนยันเคสจริง PABKK: เริ่มพฤหัส 2 วันทำการ ต้องจบศุกร์ ไม่ใช่ข้ามไปจบจันทร์)
       // build 2026-09-24.22: forcedDurations → ทุก stage ใช้ addBusinessDaysInclusive (เป็น business-days แล้ว)
-      const planEnd = (forcedDurations || stage.days!=null) ? addBusinessDaysInclusive(planStart, dur) : addBusinessDays(planStart, dur);
+      const planEnd = stageRanges[i-1][1]; // build .130
       const stepFields = {
         Title:`${task.name} · S${s} ${stage.name}`, ParentTaskID:safeTaskId, Project:task.name,
         Package:task.packageName, SubTeam:st, WBSStep:`S${s}`,
-        PlanStart: toISO(planStart), PlanEnd: toISO(planEnd)
+        PlanStart: localISO(planStart), PlanEnd: localISO(planEnd)
       };
       if(stepWho) stepFields.StepAssignee = stepWho;
       if(stepUid) stepFields.StepAssigneeLookupId = stepUid;
