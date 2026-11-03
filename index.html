@@ -343,7 +343,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-11-03.127</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-11-03.128</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -5002,7 +5002,7 @@ function openDateEditModal(pi, pki, ri){
   DATE_EDIT_PI = pi; DATE_EDIT_PKI = pki; DATE_EDIT_RI = ri;
   const pj = DATA[pi], pk = pj.pkgs[pki], row = pk.rows[ri];
   document.getElementById('dateEditInfo').textContent = `${pj.name} · ${pk.name} · ${row.team}`;
-  const toVal = s => s && !isNaN(new Date(s)) ? toISO(new Date(s)) : '';
+  const toVal = s => s && !isNaN(new Date(s)) ? localISO(new Date(s)) : ''; // build .128: วันที่ตามเวลาไทย (เดิม UTC เพี้ยน 1 วัน)
   document.getElementById('deCommitStart').value = toVal(row.cmtStartRaw);
   document.getElementById('deCommitEnd').value = toVal(row.cmtEndRaw);
   document.getElementById('deDueDate').value = toVal(row.dueRaw);
@@ -5098,7 +5098,7 @@ async function confirmDateEdit(){
   const btn = document.getElementById('deSaveBtn');
   btn.disabled = true; btn.textContent = '⏳...';
   try{
-    const toVal = s => s && !isNaN(new Date(s)) ? toISO(new Date(s)) : '';
+    const toVal = s => s && !isNaN(new Date(s)) ? localISO(new Date(s)) : ''; // build .128: วันที่ตามเวลาไทย (เดิม UTC เพี้ยน 1 วัน)
     const changes = [];
     if(newCS && newCS !== toVal(row.cmtStartRaw)) changes.push({field:'CommitStart', old:row.cmtStartRaw, nv:newCS});
     if(newCE && newCE !== toVal(row.cmtEndRaw)) changes.push({field:'CommitEnd', old:row.cmtEndRaw, nv:newCE});
