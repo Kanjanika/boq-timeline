@@ -343,7 +343,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-11-03.128</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-11-03.129</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -1369,16 +1369,16 @@ const POOLS = {
   // (เดิม build 2026-08-25.15 เอา Yo ออกจาก ST/AR/MEP เหลือแค่ BUDGET+QA_LEADS แต่ตอนนี้เพิ่มกลับครบทุก pool)
   ST:['May','P','Ize','Yo'],           // build 2026-09-29.64: May ขึ้นก่อน ตามลำดับหลักของทีม ST
   AR:['June','Si','Pang','Memie','Mai','Yim','Su','Yo'],
-  MEP:['Jack','Pari','Hongyok','Fah','Wim','Stamp','Yo'],
-  BUDGET:['Best','Yo','Stamp','Jack']  // build 2026-09-29.63: Best+Yo=หลัก, Stamp+Jack=ผู้ร่วมทีม
+  MEP:['Jack','Pari','Hongyok','Fah','Wim','Benzk','Stamp','Yo'],   // build .129: + Benzk
+  BUDGET:['Best','Yo','Nuea','Stamp','Jack']  // build .129: + Nuea  // build 2026-09-29.63: Best+Yo=หลัก, Stamp+Jack=ผู้ร่วมทีม
 };
 // build 2026-09-29.64: POOL_PRIMARY — คนหลักต่อ pool
 // คนที่ไม่อยู่ใน primary จะถูกบวกโทษ 1 ปีในการ sort → ถูกเลือกก็ต่อเมื่อคนหลักทุกคนมีงานเต็มมากจริงๆ
 const POOL_PRIMARY = {
   ST:     ['May','P','Ize'],                              // Yo = cross-team, รองใน ST
   AR:     ['June','Si','Pang','Memie','Mai','Yim','Su'],  // Yo = cross-team, รองใน AR
-  MEP:    ['Jack','Pari','Hongyok','Fah','Wim'],          // Stamp+Yo = cross-team, รองใน MEP
-  BUDGET: ['Best','Yo'],                                  // Stamp+Jack = ผู้ร่วมทีม, รองใน BUDGET
+  MEP:    ['Jack','Pari','Hongyok','Fah','Wim','Benzk'],          // Stamp+Yo = cross-team, รองใน MEP
+  BUDGET: ['Best','Yo','Nuea'],                                  // Stamp+Jack = ผู้ร่วมทีม, รองใน BUDGET
 };
 const SECONDARY_PENALTY_MS = 365 * 24 * 60 * 60 * 1000; // ~1 ปี penalty สำหรับคนรอง
 // build 2026-08-20.6: QA/ผู้ตรวจ = หัวหน้าทีม ต่อ subteam — เขียนลง StepQA ทุก step ตอน Commit อัตโนมัติ
@@ -1424,6 +1424,23 @@ const ASSIGNEE_NAME_ALIASES = {};
 // (อิงจากพฤติกรรมของ Author/Editor field) ผลคือ raw เป็น undefined เสมอ → คืน '-' เสมอ ทั้งที่ PATCH
 // StepAssigneeLookupId ไปถูกต้องแล้วจริงๆ ตอนบันทึก — แก้โดยรับ lookupId (ตัวเลขดิบจาก f.StepAssigneeLookupId) เป็น
 // พารามิเตอร์ที่ 2 ไว้ fallback ย้อนหาชื่อกลับจาก USER_ID_MAP/USER_ID_OVERRIDES เมื่อ raw ไม่มีข้อมูลให้ใช้เลย
+// build .129: หา SharePoint User ID จากอีเมลใน USER_MAP ให้คนที่ยังไม่มีเลข ID (พนักงานใหม่) — เก็บในหน่วยความจำ
+// ใช้ siteusers/getbyemail ก่อน (คนที่เคยเข้า site แล้ว) ไม่เจอค่อยใช้ ensureuser
+async function autoResolveUserIds(){
+  try{
+    const missing = Object.entries(USER_MAP).filter(([em,n])=>getUserId(n)==null);
+    if(!missing.length) return;
+    const token = await getSpToken();
+    const H = {'Authorization':`Bearer ${token}`,'Accept':'application/json;odata=nometadata','Content-Type':'application/json;odata=nometadata'};
+    for(const [em,n] of missing){
+      let id=null;
+      try{ const r=await fetch(`${SP_SITE_URL}/_api/web/siteusers/getbyemail('${encodeURIComponent(em)}')`,{headers:H}); if(r.ok){ const j=await r.json(); id=j.Id; } }catch(_){}
+      if(id==null){ try{ const r=await fetch(`${SP_SITE_URL}/_api/web/ensureuser`,{method:'POST',headers:H,body:JSON.stringify({logonName:'i:0#.f|membership|'+em})}); if(r.ok){ const j=await r.json(); id=j.Id; } }catch(_){} }
+      if(id!=null){ USER_ID_OVERRIDES[n]=id; console.info('[UserId] พบ', n, '=', id); }
+      else console.warn('[UserId] หา User ID ของ', n, em, 'ไม่เจอ — กรอกเองได้ที่ 📇 กรอก User ID');
+    }
+  }catch(e){ console.warn('[UserId] autoResolve ไม่สำเร็จ', e.message); }
+}
 function resolveNameFromUserId(id){
   if(id===undefined || id===null || id==='') return null;
   const idNum = Number(id);
@@ -1506,7 +1523,9 @@ const USER_MAP = {
   'peerada@costplan.co.th':   'Best',
   'poorisit@costplan.co.th':  'Yo',
   'patipat@costplan.co.th':   'Jack',
-  'wimwipha@costplan.co.th':  'Wim',   // build .108: Wimwipha Jitkamen · MEP · COS_Wim · ผู้ทำ
+  'wimwipha@costplan.co.th':  'Wim',
+  'kanyarat@costplan.co.th':  'Benzk', // build .129: Kanyarat Srion · MEP · COS_Benzk
+  'saknarin@costplan.co.th':  'Nuea',  // build .129: Saknarin Thanomthai · Budget · COS_Nuea   // build .108: Wimwipha Jitkamen · MEP · COS_Wim · ผู้ทำ
 };
 let myWorkSysName = null; // ชื่อในระบบของ user ที่ login (จาก USER_MAP + MSAL graphAccount.username)
 // build 2026-09-30.90: ผู้ดูแลระบบ — เห็นทุกหน้าเหมือน PCM และดูงานของทุกคนได้ แต่ "ไม่อยู่ในทีม BOQ"
@@ -4349,6 +4368,7 @@ async function bootLive(){
       if(labelEl) labelEl.textContent = myWorkSysName ? `· ${myWorkSysName}${SYSTEM_ADMINS[email] ? ' — '+SYSTEM_ADMINS[email].role : ''} (${email})` : `· (${email})`;
       // build 2026-09-29.81: account ที่ไม่ได้ map ไว้ (ไม่ใช่ทีม BOQ และไม่ใช่ admin) → เห็นเฉพาะหน้า "ภาพรวมงาน (Team Post)"
       applyPostOnlyMode(!(myWorkSysName || FULL_ACCESS_EMAILS.includes(email)));
+      autoResolveUserIds(); // build .129: หา SharePoint User ID ของคนที่ยังไม่มีใน USER_ID_MAP (เช่นพนักงานใหม่)
     }
     // build 2026-08-25.13: ปรับประสิทธิภาพการโหลด — เดิม recalcTimelineWindow() ดึง STEP_LIST + WORKPLAN_LIST
     // เองก่อน แล้ว Promise.all ด้านล่างดึง STEP_LIST + WORKPLAN_LIST ซ้ำอีกรอบ รวมเป็น 4 round-trip sequential+parallel
@@ -6459,7 +6479,7 @@ function openWpEdit(id){
 
   const aBox = document.getElementById('wpfAssigneeBoxes');
   if(aBox && !aBox.children.length){
-    const asgns = ['Best','Fah','Hongyok','Ize','Jack','June','Mai','May','Memie','P','Pang','Pari','Si','Stamp','Su','Wim','Yim','Yo'];
+    const asgns = [...ALL_TEAM_MEMBERS.keys()].sort((a,b)=>a.localeCompare(b)); // build .129: ดึงจาก roster (คนใหม่ขึ้นเอง)
     aBox.innerHTML = asgns.map(s=>
       `<label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12.5px;padding:4px 6px;border-radius:5px;white-space:nowrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''">
         <input type="checkbox" data-asgn="${s}" onchange="updateWpAssigneeBtnLabel()"> ${s}</label>`
