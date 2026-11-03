@@ -343,7 +343,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-11-03.130</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-11-03.132</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -557,12 +557,22 @@ tr.pick:hover td{background:var(--bg)}
       <button class="rpt-mode-btn on" id="rptBtnProj" onclick="setRptMode('project')">🏗️ Project → Team</button>
       <button class="rpt-mode-btn" id="rptBtnTeam" onclick="setRptMode('team')">👥 Team → Project</button>
     </div>
+    <select id="rptTeamF" onchange="rptSetFilter()" style="padding:6px 8px;border:1px solid var(--border);border-radius:8px;font-size:12.5px">
+      <option value="">ทุกทีม</option><option value="MEP">MEP (ทั้งกลุ่ม)</option><option value="EE">EE</option><option value="AC">AC</option><option value="SN">SN</option><option value="FP">FP</option><option value="ST">ST</option><option value="AR&ID">AR&ID</option><option value="Budget">Budget</option>
+    </select>
+    <label style="font-size:12.5px;display:inline-flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="rptRiskOnly" onchange="rptSetFilter()"> เฉพาะงานล่าช้า/เสี่ยง</label>
+    <span style="display:inline-flex;gap:4px">
+      <button class="btn btn2" onclick="rptSetExpand('all')" title="แสดงทุก Step">➕ ขยายทั้งหมด</button>
+      <button class="btn btn2" onclick="rptSetExpand('job')" title="ซ่อน Step เหลือหัวงาน">➖ ยุบเหลือหัวงาน</button>
+      <button class="btn btn2" onclick="rptSetExpand('top')" title="เหลือแค่หัวทีม/โครงการ">⏫ ยุบทั้งหมด</button>
+    </span>
     <span style="flex:1"></span>
     <button class="btn btn2" onclick="printReport()">🖨️ Export PDF</button>
     <button class="btn btn2" onclick="copyReportForAI()">📋 Copy วิเคราะห์ AI</button>
     <button class="btn" onclick="renderReportWithAI()">🤖 AI สรุป</button>
   </div>
   <div class="kpis" id="rptKpis"></div>
+  <div id="rptWarn"></div>
   <div id="rptBody"></div>
   <div class="ai-box" id="aiBox">
     <h4>🤖 สรุปเชิงวิเคราะห์ (คำนวณจากข้อมูลจริง)</h4>
@@ -8150,6 +8160,116 @@ function printReport(){
 
 let RPT_MODE = 'project'; // 'project' | 'team'
 
+/* build .132: ตัวกรองทีม / เฉพาะงานล่าช้า · ยุบ-ขยาย · แผงเตือนงานที่จะล่าช้า */
+let RPT_TEAM_F = '', RPT_RISK_ONLY = false;
+try{ RPT_TEAM_F = localStorage.getItem('boq_rpt_team')||''; RPT_RISK_ONLY = localStorage.getItem('boq_rpt_risk')==='1'; }catch(_){}
+function rptBaseTeam(row){ return String(row.subteam||row.team||'').split(' · ')[0].trim(); }
+function rptFilterOn(){ return !!(RPT_TEAM_F || RPT_RISK_ONLY); }
+function rptRowPass(row){
+  const t = rptBaseTeam(row);
+  if(RPT_TEAM_F){ if(RPT_TEAM_F==='MEP'){ if(!MEP_SUBTEAMS.includes(t)) return false; } else if(t!==RPT_TEAM_F) return false; }
+  if(RPT_RISK_ONLY && !rptRisk(row)) return false;
+  return true;
+}
+function rptFilteredData(){
+  if(!rptFilterOn()) return DATA;
+  return DATA.map(pj=>({...pj, pkgs:pj.pkgs.map(pk=>({...pk, rows:pk.rows.filter(rptRowPass)})).filter(pk=>pk.rows.length)})).filter(pj=>pj.pkgs.length);
+}
+function rptSetFilter(){
+  RPT_TEAM_F = document.getElementById('rptTeamF')?.value||'';
+  RPT_RISK_ONLY = !!document.getElementById('rptRiskOnly')?.checked;
+  try{ localStorage.setItem('boq_rpt_team',RPT_TEAM_F); localStorage.setItem('boq_rpt_risk',RPT_RISK_ONLY?'1':'0'); }catch(_){}
+  renderRptBody();
+}
+// คาดการณ์วันเสร็จ: ความล่าช้าที่สะสมแล้ว (Step ที่ปิดช้า / Step ปัจจุบันเลยแผน / ยังไม่เริ่มทั้งที่ถึงวันเริ่ม) ดันทุก Step ที่เหลือออกไป
+function rptForecast(row){
+  if(!row || !row.steps || !row.steps.length) return null;
+  const closed=row.closed||{}, astart=row.astart||{};
+  const steps=[...row.steps].sort((a,b)=>a.s-b.s);
+  let slip=0;
+  steps.forEach(st=>{ const c=closed[st.s]; if(c){ slip=Math.max(slip, c.end-(st.start+Math.max(st.dur-1,0))); } });
+  const cur=steps.find(st=>!closed[st.s]);
+  if(!cur) return null;
+  if(cur.s in astart) slip=Math.max(slip, TODAY_D-(cur.start+Math.max(cur.dur-1,0)));
+  else slip=Math.max(slip, TODAY_D-cur.start);
+  slip=Math.max(slip,0);
+  const last=steps[steps.length-1];
+  const endD=last.start+Math.max(last.dur-1,0)+slip;
+  const dueD=row.dueRaw && !isNaN(new Date(row.dueRaw)) ? Math.round((new Date(row.dueRaw)-T0)/864e5) : null;
+  return { cur, slip, endD, dueD, lateBy: dueD!=null ? endD-dueD : null };
+}
+function rptRisk(row){
+  const d=computeDelayStatus(row), f=rptForecast(row);
+  if(!d && !(f && f.lateBy>0)) return null;
+  const reasons=d?[...d.reasons]:[];
+  if(f && f.lateBy>0) reasons.unshift(`คาดว่าเสร็จ ${fmt(addD(T0,f.endD))} เลย Due ${f.lateBy} วัน`);
+  const level = (d && d.level==='overdue') || (f && f.lateBy>0) ? 'overdue' : 'at_risk';
+  return { level, reasons, f };
+}
+function rptBadge(row){ const r=rptRisk(row); return r? delayBadgeHtml(r.level, r.reasons) : ''; }
+function rptCollectWarn(){
+  const list=[];
+  DATA.forEach(pj=>pj.pkgs.forEach(pk=>pk.rows.forEach(row=>{
+    if(RPT_TEAM_F){ const t=rptBaseTeam(row); if(RPT_TEAM_F==='MEP'? !MEP_SUBTEAMS.includes(t) : t!==RPT_TEAM_F) return; }
+    const r=rptRisk(row); if(!r) return;
+    const cur=r.f&&r.f.cur;
+    list.push({ team:rptBaseTeam(row), pj:pj.name, pk:pk.name, svc:row.service||'', due:row.due||'', level:r.level, reasons:r.reasons,
+      step: cur? `S${cur.s} ${cur.name||STEP_NAMES[cur.s]||''}` : '', who: cur? [cur.who,...(cur.coAssignees||[])].filter(Boolean).join(', ') : '' , lateBy:r.f?r.f.lateBy:null });
+  })));
+  list.sort((a,b)=> (a.level===b.level?0:a.level==='overdue'?-1:1) || ((b.lateBy||-99)-(a.lateBy||-99)) || a.team.localeCompare(b.team));
+  return list;
+}
+let _rptWarnOpen = true;
+function renderRptWarn(){
+  const box=document.getElementById('rptWarn'); if(!box) return;
+  if(!DATA.length){ box.innerHTML=''; return; }
+  const list=rptCollectWarn();
+  const nO=list.filter(x=>x.level==='overdue').length, nR=list.length-nO;
+  if(!list.length){ box.innerHTML=`<div class="card" style="margin-bottom:12px;padding:10px 14px;font-size:13px;color:var(--ok)">✅ ไม่มีงานล่าช้าหรือเสี่ยงล่าช้า${RPT_TEAM_F?' ของทีม '+RPT_TEAM_F:''}</div>`; return; }
+  const rows=list.map(x=>`<tr style="font-size:12px;border-top:1px solid var(--border)">
+    <td style="padding:5px 8px">${x.level==='overdue'?'🔴':'🟡'}</td>
+    <td style="padding:5px 8px;font-weight:600">${x.team}</td>
+    <td style="padding:5px 8px">${x.pj} / ${x.pk}${x.svc?' · '+x.svc:''}</td>
+    <td style="padding:5px 8px;white-space:nowrap">${x.step}</td>
+    <td style="padding:5px 8px">${x.who||'—'}</td>
+    <td style="padding:5px 8px;white-space:nowrap">${x.due||'—'}</td>
+    <td style="padding:5px 8px;color:var(--text2)">${x.reasons.join(' · ')}</td></tr>`).join('');
+  box.innerHTML=`<div class="card" style="margin-bottom:12px;padding:0;overflow:hidden;border:1.5px solid #fca5a5">
+    <div style="display:flex;align-items:center;gap:8px;padding:9px 14px;background:#fef2f2;cursor:pointer" onclick="_rptWarnOpen=!_rptWarnOpen;renderRptWarn()">
+      <b style="color:#991b1b">⚠️ งานที่ต้องเตือนทีม${RPT_TEAM_F?' · '+RPT_TEAM_F:''}</b>
+      <span style="font-size:12px;color:#991b1b">🔴 ล่าช้า/คาดว่าเลย Due ${nO} · 🟡 เสี่ยง ${nR}</span>
+      <span style="flex:1"></span>
+      <button class="btn btn2" style="padding:3px 10px;font-size:12px" onclick="event.stopPropagation();rptCopyWarn()">📋 คัดลอกข้อความเตือน</button>
+      <span style="font-size:12px;color:#991b1b">${_rptWarnOpen?'▲ ซ่อน':'▼ แสดง'}</span>
+    </div>
+    ${_rptWarnOpen?`<div style="max-height:320px;overflow:auto"><table style="width:100%;border-collapse:collapse">
+      <thead><tr style="font-size:11.5px;color:var(--text3);text-align:left"><th></th><th style="padding:5px 8px">ทีม</th><th style="padding:5px 8px">งาน</th><th style="padding:5px 8px">Step ตอนนี้</th><th style="padding:5px 8px">ผู้ทำ</th><th style="padding:5px 8px">Due</th><th style="padding:5px 8px">เหตุผล</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>`:''}
+  </div>`;
+}
+function rptCopyWarn(){
+  const list=rptCollectWarn(); if(!list.length){ toastMsg('ไม่มีงานที่ต้องเตือน'); return; }
+  const byTeam={}; list.forEach(x=>(byTeam[x.team]=byTeam[x.team]||[]).push(x));
+  let t=`⚠️ แจ้งเตือนงานล่าช้า/เสี่ยงล่าช้า (${fmtY(TODAY)})\n`;
+  Object.entries(byTeam).forEach(([tm,xs])=>{
+    t+=`\n【ทีม ${tm}】\n`;
+    xs.forEach(x=>{ t+=`${x.level==='overdue'?'🔴':'🟡'} ${x.pj} / ${x.pk}${x.svc?' · '+x.svc:''} — ${x.step}${x.who?' ('+x.who+')':''}${x.due?' · Due '+x.due:''}\n   ${x.reasons.join(' · ')}\n`; });
+  });
+  const done=()=>toastMsg('📋 คัดลอกแล้ว — วางใน Teams/LINE ได้เลย');
+  if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(done).catch(()=>{ prompt('คัดลอกข้อความนี้',t); });
+  else { prompt('คัดลอกข้อความนี้',t); }
+}
+// ยุบ/ขยาย: all = ทุก Step · job = เหลือหัวงาน · top = เหลือหัวทีม/โครงการ
+function rptSetExpand(mode){
+  const maxLvl = mode==='all' ? 3 : mode==='job' ? 2 : 0;
+  document.querySelectorAll('#rptBody tr.rpt-group-row, #rptBody tr.rpt-step-row').forEach(tr=>{
+    const lvl = tr.classList.contains('rpt-step-row') ? 3 : Number(tr.dataset.lvl||0);
+    tr.style.display = lvl<=maxLvl ? '' : 'none';
+    if(tr.classList.contains('rpt-group-row')){
+      const a=tr.querySelector('.rpt-arrow'); if(a) a.style.transform = lvl<maxLvl ? '' : 'rotate(-90deg)';
+    }
+  });
+}
 function setRptMode(mode){
   RPT_MODE = mode;
   document.getElementById('rptBtnProj').classList.toggle('on', mode==='project');
@@ -8158,6 +8278,7 @@ function setRptMode(mode){
 }
 
 function renderReport(){
+  { const f=document.getElementById('rptTeamF'); if(f) f.value=RPT_TEAM_F; const c=document.getElementById('rptRiskOnly'); if(c) c.checked=RPT_RISK_ONLY; }
   renderRptKpis();
   renderRptBody();
 }
@@ -8293,7 +8414,7 @@ function rptGroupRow(label, sublabel, pct, bg, color, gid, parentGid, indent){
   const pp = rptProjBar(pct, bg!=='#1e3a5f');
   const cls = parentGid ? `rpt-grp-${parentGid}` : '';
   const pad = indent ? `padding-left:${indent}px` : '';
-  return `<tr class="rpt-group-row ${cls}" style="cursor:pointer;user-select:none" onclick="rptToggleRows('rpt-grp-${gid}')" data-toggle="rpt-grp-${gid}">
+  return `<tr class="rpt-group-row ${cls}" data-lvl="${parentGid?1:0}" style="cursor:pointer;user-select:none" onclick="rptToggleRows('rpt-grp-${gid}')" data-toggle="rpt-grp-${gid}">
     <td colspan="11" style="background:${bg};padding:7px 12px;${pad}">
       <span style="color:${color};font-weight:700;font-size:12.5px">
         <span class="rpt-arrow" style="display:inline-block;transition:transform .2s;margin-right:6px">▼</span>${label}
@@ -8322,7 +8443,8 @@ function rptProjBar(pp, light){
 }
 
 function renderRptByProject(body){
-  if(!DATA.length){body.innerHTML='<div class="card" style="text-align:center;padding:40px;color:var(--text3)">⏳ ยังไม่มีข้อมูล</div>';return;}
+  const DATA=rptFilteredData();
+  if(!DATA.length){body.innerHTML='<div class="card" style="text-align:center;padding:40px;color:var(--text3)">⏳ ยังไม่มีข้อมูล'+(rptFilterOn()?' ตามตัวกรองที่เลือก':'')+'</div>';return;}
   _rptGid=0; // reset IDs each render
   let html='';
   DATA.forEach(pj=>{
@@ -8347,10 +8469,10 @@ function renderRptByProject(body){
         // multi-level: belongs to both pkgGid and projGid classes
         const teamLabel=`👥 ${row.team}${svc}${due?` <span style="font-weight:400;font-size:11px">${due}</span>`:''}`;
         const rowCls=`rpt-grp-${pkgGid} rpt-grp-${projGid}`;
-        html+=`<tr class="rpt-group-row ${rowCls}" style="cursor:pointer;user-select:none" onclick="rptToggleRows('rpt-grp-${rowGid}')" data-toggle="rpt-grp-${rowGid}">
+        html+=`<tr class="rpt-group-row ${rowCls}" data-lvl="2" style="cursor:pointer;user-select:none" onclick="rptToggleRows('rpt-grp-${rowGid}')" data-toggle="rpt-grp-${rowGid}">
           <td colspan="11" style="background:var(--bg);padding:5px 12px 5px 28px;border-top:1px solid var(--border)">
             <span style="color:var(--text1);font-weight:600;font-size:12px">
-              <span class="rpt-arrow" style="display:inline-block;transition:transform .2s;margin-right:5px">▼</span>${teamLabel}
+              <span class="rpt-arrow" style="display:inline-block;transition:transform .2s;margin-right:5px">▼</span>${teamLabel}${rptBadge(row)}
             </span>
             <span style="float:right;font-size:11.5px;color:var(--text2)">${rp.done}/${rp.total} ${rptProjBar(rp,true)}</span>
           </td></tr>`;
@@ -8369,47 +8491,56 @@ function renderRptByProject(body){
 }
 
 function renderRptByTeam(body){
-  if(!DATA.length){body.innerHTML='<div class="card" style="text-align:center;padding:40px;color:var(--text3)">⏳ ยังไม่มีข้อมูล</div>';return;}
+  const DATA=rptFilteredData();
+  if(!DATA.length){body.innerHTML='<div class="card" style="text-align:center;padding:40px;color:var(--text3)">⏳ ยังไม่มีข้อมูล'+(rptFilterOn()?' ตามตัวกรองที่เลือก':'')+'</div>';return;}
   _rptGid=0;
-  // Build team map: team → [{pj,pk,row}]
+  // build .131: EE/AC/SN/FP (และ MEP รวม) อยู่ในกลุ่ม MEP กลุ่มเดียว แยกย่อยเป็นทีมย่อยข้างใน
   const teamMap={};
   DATA.forEach(pj=>pj.pkgs.forEach(pk=>pk.rows.forEach(row=>{
-    if(!teamMap[row.team])teamMap[row.team]=[];
-    teamMap[row.team].push({pj,pk,row});
+    const g = MEP_SUBTEAMS.includes(rptBaseTeam(row)) ? 'MEP' : row.team;
+    (teamMap[g]=teamMap[g]||[]).push({pj,pk,row});
   })));
-  let html='';
-  Object.entries(teamMap).sort((a,b)=>a[0].localeCompare(b[0],'th')).forEach(([team,entries])=>{
-    let t=0,d=0;
-    entries.forEach(({row})=>{t+=row.steps.length;d+=row.steps.filter(st=>row.closed[st.s]).length;});
-    const pp={done:d,total:t,pct:t?Math.round(d/t*100):0};
-    const teamGid=rptGid();
-    // Open unified table for this team
-    html+=`<div class="card" style="margin-bottom:14px;padding:0;overflow:hidden">
-    <table style="width:100%;border-collapse:collapse;table-layout:fixed">${RPT_COLS}${RPT_THEAD}<tbody>`;
-    // Team header row (level 0)
-    html+=rptGroupRow('👥 '+team, '', pp, '#1e3a5f','#fff', teamGid, null, 0);
+  const pctOf = entries=>{ let t=0,d=0; entries.forEach(({row})=>{t+=row.steps.length;d+=row.steps.filter(st=>row.closed[st.s]).length;}); return {done:d,total:t,pct:t?Math.round(d/t*100):0}; };
+  const entryRows = (entries, parentGids, pad)=>{
+    let h='';
+    const pcls = parentGids.map(g=>`rpt-grp-${g}`).join(' ');
     entries.forEach(({pj,pk,row})=>{
       const rp=rptRowPct(row);
       const svc=row.service?` · ${row.service}`:'';
       const due=row.due?` · Due: ${row.due}`:'';
       const rowGid=rptGid();
-      // Project/package sub-header (child of team)
       const subLabel=`🏗️ ${pj.name} / 📦 ${pk.name}${svc}${due?` · ${due}`:''}`;
-      const rowCls=`rpt-grp-${teamGid}`;
-      html+=`<tr class="rpt-group-row ${rowCls}" style="cursor:pointer;user-select:none" onclick="rptToggleRows('rpt-grp-${rowGid}')" data-toggle="rpt-grp-${rowGid}">
-        <td colspan="11" style="background:#eff6ff;padding:5px 12px 5px 18px;border-top:1px solid #bfdbfe">
+      h+=`<tr class="rpt-group-row ${pcls}" data-lvl="2" style="cursor:pointer;user-select:none" onclick="rptToggleRows('rpt-grp-${rowGid}')" data-toggle="rpt-grp-${rowGid}">
+        <td colspan="11" style="background:#eff6ff;padding:5px 12px 5px ${pad}px;border-top:1px solid #bfdbfe">
           <span style="color:#1e40af;font-weight:600;font-size:12px">
-            <span class="rpt-arrow" style="display:inline-block;transition:transform .2s;margin-right:5px">▼</span>${subLabel}
+            <span class="rpt-arrow" style="display:inline-block;transition:transform .2s;margin-right:5px">▼</span>${subLabel}${rptBadge(row)}
           </span>
           <span style="float:right;font-size:11.5px;color:var(--text2)">${rp.done}/${rp.total} ${rptProjBar(rp,true)}</span>
         </td></tr>`;
-      // Step rows — belong to rowGid + teamGid
       row.steps.forEach(st=>{
         const sRow=rptStepRow(row,st,rowGid);
-        html+=sRow.replace(`class="rpt-step-row rpt-grp-${rowGid}"`,
-          `class="rpt-step-row rpt-grp-${rowGid} rpt-grp-${teamGid}"`);
+        h+=sRow.replace(`class="rpt-step-row rpt-grp-${rowGid}"`, `class="rpt-step-row rpt-grp-${rowGid} ${pcls}"`);
       });
     });
+    return h;
+  };
+  let html='';
+  Object.entries(teamMap).sort((a,b)=>a[0].localeCompare(b[0],'th')).forEach(([team,entries])=>{
+    const teamGid=rptGid();
+    html+=`<div class="card" style="margin-bottom:14px;padding:0;overflow:hidden">
+    <table style="width:100%;border-collapse:collapse;table-layout:fixed">${RPT_COLS}${RPT_THEAD}<tbody>`;
+    html+=rptGroupRow('👥 '+team, '', pctOf(entries), '#1e3a5f','#fff', teamGid, null, 0);
+    if(team==='MEP'){
+      MEP_SUBTEAMS.forEach(sub=>{
+        const se = entries.filter(e=>rptBaseTeam(e.row)===sub);
+        if(!se.length) return;
+        const subGid=rptGid();
+        html+=rptGroupRow('🔧 '+(sub==='MEP'?'MEP (รวม)':sub), '', pctOf(se), '#dbeafe','#1e3a5f', subGid, teamGid, 22);
+        html+=entryRows(se, [teamGid, subGid], 34);
+      });
+    } else {
+      html+=entryRows(entries, [teamGid], 18);
+    }
     html+=`</tbody></table></div>`;
   });
   body.innerHTML=html;
@@ -8632,6 +8763,7 @@ function renderTodayTasks(){
 
 function renderRptBody(){
   const body=document.getElementById('rptBody'); if(!body)return;
+  try{ renderRptWarn(); }catch(e){ console.warn('[rptWarn]',e); }
   if(RPT_MODE==='project')renderRptByProject(body);
   else renderRptByTeam(body);
 }
