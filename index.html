@@ -343,7 +343,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-11-03.132</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-11-05.133</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -686,15 +686,15 @@ tr.pick:hover td{background:var(--bg)}
           <span style="cursor:pointer;color:var(--primary);font-weight:600" onclick="wpSfDefault()" title="ไม่แสดง Done / Reject / Replace">ค่าเริ่มต้น</span>
         </div>
         <hr class="team-divider">
-        <label class="team-check-item"><input type="checkbox" class="wp-sf-cb" value="Not Started" checked onchange="filterWpRows();updateWpSfLabel()"> Not Started</label>
-        <label class="team-check-item"><input type="checkbox" class="wp-sf-cb" value="Review เอกสาร" checked onchange="filterWpRows();updateWpSfLabel()"> Review เอกสาร</label>
-        <label class="team-check-item"><input type="checkbox" class="wp-sf-cb" value="In Progress" checked onchange="filterWpRows();updateWpSfLabel()"> In Progress</label>
-        <label class="team-check-item"><input type="checkbox" class="wp-sf-cb" value="ตรวจก่อนส่งออก" checked onchange="filterWpRows();updateWpSfLabel()"> ตรวจก่อนส่งออก</label>
-        <label class="team-check-item"><input type="checkbox" class="wp-sf-cb" value="Done" onchange="filterWpRows();updateWpSfLabel()"> Done</label>
-        <label class="team-check-item"><input type="checkbox" class="wp-sf-cb" value="On Hold" checked onchange="filterWpRows();updateWpSfLabel()"> On Hold</label>
-        <label class="team-check-item"><input type="checkbox" class="wp-sf-cb" value="Reject" onchange="filterWpRows();updateWpSfLabel()"> Reject</label>
-        <label class="team-check-item"><input type="checkbox" class="wp-sf-cb" value="Replace" onchange="filterWpRows();updateWpSfLabel()"> Replace</label>
-        <label class="team-check-item"><input type="checkbox" class="wp-sf-cb" value="" checked onchange="filterWpRows();updateWpSfLabel()"> (ไม่มี Status)</label>
+        <label class="team-check-item"><input type="checkbox" class="wp-sf-cb" autocomplete="off" value="Not Started" checked onchange="filterWpRows();updateWpSfLabel()"> Not Started</label>
+        <label class="team-check-item"><input type="checkbox" class="wp-sf-cb" autocomplete="off" value="Review เอกสาร" checked onchange="filterWpRows();updateWpSfLabel()"> Review เอกสาร</label>
+        <label class="team-check-item"><input type="checkbox" class="wp-sf-cb" autocomplete="off" value="In Progress" checked onchange="filterWpRows();updateWpSfLabel()"> In Progress</label>
+        <label class="team-check-item"><input type="checkbox" class="wp-sf-cb" autocomplete="off" value="ตรวจก่อนส่งออก" checked onchange="filterWpRows();updateWpSfLabel()"> ตรวจก่อนส่งออก</label>
+        <label class="team-check-item"><input type="checkbox" class="wp-sf-cb" autocomplete="off" value="Done" onchange="filterWpRows();updateWpSfLabel()"> Done</label>
+        <label class="team-check-item"><input type="checkbox" class="wp-sf-cb" autocomplete="off" value="On Hold" checked onchange="filterWpRows();updateWpSfLabel()"> On Hold</label>
+        <label class="team-check-item"><input type="checkbox" class="wp-sf-cb" autocomplete="off" value="Reject" onchange="filterWpRows();updateWpSfLabel()"> Reject</label>
+        <label class="team-check-item"><input type="checkbox" class="wp-sf-cb" autocomplete="off" value="Replace" onchange="filterWpRows();updateWpSfLabel()"> Replace</label>
+        <label class="team-check-item"><input type="checkbox" class="wp-sf-cb" autocomplete="off" value="" checked onchange="filterWpRows();updateWpSfLabel()"> (ไม่มี Status)</label>
       </div>
     </div>
     <select id="wpGroupBy" onchange="_wpGroupBy=this.value||null;renderWpTable()"
@@ -6170,6 +6170,11 @@ function toggleWpStatusPanel(){
     }, 50);
   }
 }
+// build .133: เบราว์เซอร์ (Chrome) จำสถานะ checkbox จากครั้งก่อนตอนรีเฟรช → เปิดหน้ามาไม่ใช่ค่าเริ่มต้น ทั้งที่ป้ายเขียนว่าค่าเริ่มต้น
+// บังคับกลับเป็นค่าเริ่มต้นทุกครั้งที่โหลดหน้า (รวมกรณีกลับมาจาก back/forward cache)
+function wpSfResetOnLoad(){ document.querySelectorAll('.wp-sf-cb').forEach(cb=>{ cb.checked=cb.defaultChecked; }); updateWpSfLabel(); if(document.querySelector('#wpBody tr.wp-row')) filterWpRows(); }
+document.addEventListener('DOMContentLoaded', wpSfResetOnLoad);
+window.addEventListener('pageshow', wpSfResetOnLoad);
 function wpSfAll(v){
   document.querySelectorAll('.wp-sf-cb').forEach(cb=>{ cb.checked=v; });
   filterWpRows(); updateWpSfLabel();
