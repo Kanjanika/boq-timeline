@@ -343,7 +343,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-11-05.133</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-11-05.134</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -6137,8 +6137,14 @@ let _wpLoading = false;
 let _wpSort = { col: null, dir: 1 };   // col = field key, dir: 1=asc / -1=desc
 let _wpGroupBy = null;                 // null or field key for grouping
 
-async function loadWorkPlan(){
-  if(_wpLoading) return;
+// build .134: ถ้ากำลังโหลดอยู่ คืน promise เดิม ให้คนที่รอ (เช่น ✏️ แก้ไขในหน้า Work Plan) รอจนโหลดเสร็จจริง
+let _wpLoadPromise = null;
+function loadWorkPlan(){
+  if(_wpLoading && _wpLoadPromise) return _wpLoadPromise;
+  _wpLoadPromise = _loadWorkPlanImpl();
+  return _wpLoadPromise;
+}
+async function _loadWorkPlanImpl(){
   _wpLoading = true;
   const body = document.getElementById('wpBody');
   if(body) body.innerHTML = '<div style="padding:20px;color:var(--text3)">⏳ กำลังโหลด...</div>';
@@ -7677,7 +7683,8 @@ async function openWpDetail(id){
 async function wpOpenFromTimeline(id){
   const tab = document.getElementById('tabWorkPlan'); if(!tab) return;
   tab.click();
-  if(!_wpItems.length) await loadWorkPlan();
+  if(!_wpItems.length || _wpLoading) await loadWorkPlan();
+  if(!_wpItems.some(x=>String(x.id)===String(id))){ toastMsg('⚠️ ไม่พบรายการ #'+id+' ใน Work Plan — กด 🔄 รีเฟรช แล้วลองใหม่'); return; }
   setTimeout(()=>{ try{ openWpEdit(id); }catch(e){ console.warn(e); } }, 50);
 }
 
