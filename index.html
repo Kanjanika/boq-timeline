@@ -343,7 +343,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-11-05.134</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-11-12.136</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -482,7 +482,8 @@ tr.pick:hover td{background:var(--bg)}
     </div>
 
     <div class="card">
-      <h3>🤖 AI Suggest กำหนดการ <small>AI คำนวณจากเกณฑ์ GFA (Procurement Plan) + Actual จริง + คิวทีม → PCM แค่ตรวจสอบ</small></h3>
+      <h3 style="display:flex;align-items:flex-start;gap:8px"><span style="flex:1">🤖 AI Suggest กำหนดการ <small>AI คำนวณจากเกณฑ์ GFA (Procurement Plan) + Actual จริง + คิวทีม → PCM แค่ตรวจสอบ</small></span>
+        <button class="btn btn2" id="ciWpLink" style="font-size:12px;white-space:nowrap" onclick="ciOpenWpDetail()" title="ดูรายละเอียดงานนี้ใน BOQ Team Work Plan (ไฟล์แนบ, ผู้สั่งงาน ฯลฯ) และกดแก้ไขต่อได้">📄 ดูใน Work Plan</button></h3>
 
       <div class="frow">
         <div class="field"><label>โครงการ</label><div class="read" id="ciName">—</div></div>
@@ -4966,6 +4967,7 @@ const DELAY_WARN_DAYS = 3; // จำนวนวันล่วงหน้า�
 // ใหม่ๆ โดยไม่จำเป็น — คืนค่า {level:'overdue'|'at_risk', reasons:[ข้อความ,...]} หรือ null
 function computeDelayStatus(row){
   if(!row || !row.steps || !row.steps.length) return null;
+  if(row.wpStatus && /^(on hold|reject|replace)$/i.test(String(row.wpStatus).trim())) return null; // build .135
   const closed = row.closed || {};
   const st = row.steps.find(s=> !(s.s in closed));
   if(!st) return null; // ทุก Step ในแถวนี้ปิดหมดแล้ว
@@ -6953,7 +6955,8 @@ function renderPostView(){
       team: team || '—', assignee: (Array.isArray(assignee)?assignee.join(', '):assignee) || '—',
       due, dueD, committed: f.CommittedFinish || '', start: f.StartDate || '', finish: f.FinishDate || '', status, done,
       isCommitted: String(f.CommitStatus||'').trim().toLowerCase()==='committed',   // build .93
-      late: !done && dueD && !isNaN(dueD) && dueD < today
+      // build .135: On Hold / Reject / Replace ไม่นับว่าเลยกำหนด (On Hold = งานถูกพักและกลับไปรอ Commit ใหม่)
+      late: !done && !PV_NOT_LATE.has(status.toLowerCase()) && dueD && !isNaN(dueD) && dueD < today
     };
   });
   // เติมตัวเลือก Department
@@ -7173,6 +7176,7 @@ const PV_BAR = {
 const PV_MARK_DUE = `<span style="display:inline-block;width:6px;height:6px;background:#b45309;transform:rotate(45deg);border:1px solid #fff;box-shadow:0 0 0 1px #b45309"></span>`;
 const PV_MARK_COM = `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#0f766e;border:1px solid #fff;box-shadow:0 0 0 1px #0f766e"></span>`;
 const PV_BLANK_STATUS = '(ว่าง) ยังไม่ระบุสถานะ';   // build .93
+const PV_NOT_LATE = new Set(['on hold','reject','replace']); // build .135
 function pvBarKind(r){
   const st = r.status.toLowerCase();
   if(r.done) return 'done';
@@ -7757,6 +7761,7 @@ function exBuildRows(){
     const excluded = st==='reject' || st==='replace';
     let result = 'open';
     if(done){ result = doneAt && due ? (doneAt <= due ? 'ontime' : 'late') : 'done-nodate'; }
+    else if(st==='on hold') result = 'open';   // build .135: On Hold ไม่นับว่าเลยกำหนด
     else if(due && due < today) result = 'overdue';
     const lateDays = (result==='late') ? Math.round((doneAt-due)/DAY) : (result==='overdue' ? Math.round((today-due)/DAY) : 0);
     const hist = (histById[id]||[]).filter(h => h.delta > 0 && /due|commitend|finish/i.test(h.field));
@@ -7948,6 +7953,13 @@ let INTAKE=[
   nego:'งาน Salil Blank BOQ (ID) — AI จัดตารางให้ Memie เริ่ม 8 ก.ย. ส่ง 29 ก.ย. ทันตาม due 30 ก.ย. · buffer 1 วัน ขอให้ Post ยืนยันแบบครบภายใน 8 ก.ย.'},
 ];
 let curIntake=0;
+// build .136: ปุ่ม "📄 ดูใน Work Plan" ที่หน้า Commit Check — เปิดหน้าต่างรายละเอียดแบบเดียวกับหน้า Timeline
+function ciOpenWpDetail(){
+  const it = (typeof INTAKE!=='undefined') ? INTAKE[curIntake] : null;
+  const id = it && it._liveTask && it._liveTask.itemId;
+  if(!id){ toastMsg('⚠️ เลือกงานจากรายการด้านซ้ายก่อน (หรือยังไม่ได้เข้าสู่ระบบ SharePoint)'); return; }
+  openWpDetail(id);
+}
 function pickIntake(tr,i){
   document.querySelectorAll('#pgCommit tr.pick').forEach(x=>x.classList.remove('sel'));
   tr.classList.add('sel');curIntake=i;renderIntake();
@@ -8196,6 +8208,7 @@ function rptSetFilter(){
 // คาดการณ์วันเสร็จ: ความล่าช้าที่สะสมแล้ว (Step ที่ปิดช้า / Step ปัจจุบันเลยแผน / ยังไม่เริ่มทั้งที่ถึงวันเริ่ม) ดันทุก Step ที่เหลือออกไป
 function rptForecast(row){
   if(!row || !row.steps || !row.steps.length) return null;
+  if(row.wpStatus && /^(on hold|reject|replace)$/i.test(String(row.wpStatus).trim())) return null; // build .135
   const closed=row.closed||{}, astart=row.astart||{};
   const steps=[...row.steps].sort((a,b)=>a.s-b.s);
   let slip=0;
