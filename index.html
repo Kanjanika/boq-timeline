@@ -150,7 +150,7 @@ body{font-family:'Segoe UI','Sarabun','Tahoma',sans-serif;background:var(--bg);c
 /* build 2026-08-20.8: Issue 2+3 — min-width 14px กัน bar หายเมื่อ stage แคบมาก (เช่น ครึ่งวัน หรือ commit < 1 สัปดาห์) */
 .seg{position:absolute;top:0;height:16px;border-radius:0;color:#fff;font-size:9.5px;font-weight:700;display:flex;align-items:center;justify-content:center;overflow:hidden;white-space:nowrap;line-height:1;cursor:pointer;min-width:14px}
 .seg.plan{opacity:.45}
-.seg-part{position:absolute;top:12px;height:4px;border-radius:2px;background:#0f172a;opacity:.8;z-index:3;cursor:pointer}
+.seg-part{position:absolute;top:13px;height:3px;border-radius:2px;background:#2563eb;z-index:3;cursor:pointer}
 .seg-part.done{background:#15803d}
 .sa-card{border:1px solid var(--border);border-radius:8px;padding:6px 8px;background:var(--bg)}
 .sa-card input,.sa-card select{padding:3px 6px;font-size:12px}
@@ -347,7 +347,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-11-18.138</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-11-18.140</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -5780,6 +5780,7 @@ function openStep(el){
   };
   document.getElementById('mHistory').textContent = dedupNotes(st.notes) || 'ยังไม่มีประวัติ';
   saOpenParts(row, st); // build .137
+  saApplyFocus(el.dataset.who||'', row, st); // build .140: จากหน้างานของฉัน → แสดงเฉพาะส่วนของคนนั้น
   renderHrsInputs();
   document.getElementById('mbg').classList.add('on');
 }
@@ -5824,8 +5825,9 @@ function saTip(st){
 }
 // แถบเล็กใต้แท่งแผน = ช่วงวันของแต่ละคน (เลือก "ดูงานของ" คนไหน จะเห็นเฉพาะของคนนั้น)
 function saStrips(st, person, pct, ref){
-  if(!st.parts || !st.parts.length) return '';
-  return st.parts.filter(p=>p.ps && (!person || p.who===person)).map(p=>{
+  // build .139: แสดงแถบรายคนเฉพาะตอนเลือก "ดูงานของ" คนใดคนหนึ่ง (ดูทุกคน = แถบซ้อนกันจนเป็นเส้นดำทึบ อ่านไม่ออก)
+  if(!st.parts || !st.parts.length || !person) return '';
+  return st.parts.filter(p=>p.ps && p.who===person).map(p=>{
     const a=saOff(p.ps), b=saOff(p.pe||p.ps);
     return `<div class="seg-part ${p.ae?'done':''}" style="left:${pct(a)};width:${pct(Math.max(b-a+1,1))}" title="${p.who}${p.scope?' · '+String(p.scope).replace(/"/g,"'"):''}" ${ref} onclick="openStep(this)"></div>`;
   }).join('');
@@ -5867,6 +5869,23 @@ function saAddPart(p){
   box.appendChild(d);
   if(arguments.length===0 || !arguments[0]) renderHrsInputs();
 }
+// build .140: โหมดเฉพาะคน (เปิดจากหน้างานของฉัน) — เห็น/แก้เฉพาะแถวของตัวเอง ซ่อนผู้ร่วมทีมและวันเริ่ม/ปิดของทั้ง Step
+let _saFocus = '';
+function saApplyFocus(who, row, st){
+  const hasPart = !!(who && st.parts && st.parts.some(p=>p.who===who));
+  _saFocus = hasPart ? who : '';
+  const show = (id, v) => { const e=document.getElementById(id); if(e) e.style.display = v ? '' : 'none'; };
+  const stepDates = document.getElementById('mStart')?.closest('.frow');
+  if(stepDates) stepDates.style.display = _saFocus ? 'none' : '';
+  show('mCoAssignField', !_saFocus);
+  document.querySelectorAll('#mParts .sa-card').forEach(c=>{ const w=c.querySelector('[data-k=who]')?.value; c.style.display = (!_saFocus || w===_saFocus) ? '' : 'none'; if(_saFocus && w===_saFocus){ const sel=c.querySelector('[data-k=who]'); if(sel) sel.disabled=true; } });
+  const addBtn = document.querySelector('#mPartsField button'); if(addBtn) addBtn.style.display = _saFocus ? 'none' : '';
+  const hint = document.getElementById('mPartsHint');
+  if(hint && _saFocus) hint.innerHTML = `แสดงเฉพาะส่วนของ <b>${_saFocus}</b> · กรอกวันจบจริงแล้วกด "✓ ปิดงานของฉัน" · <a href="#" onclick="saApplyFocus('', DATA[cur.pi].pkgs[cur.ki].rows[cur.ri], DATA[cur.pi].pkgs[cur.ki].rows[cur.ri].steps.find(x=>x.s===cur.s));renderHrsInputs();return false">ดูทุกคน</a>`;
+  const btnC = document.getElementById('btnCloseStep');
+  if(btnC) btnC.textContent = _saFocus ? '✓ ปิดงานของฉัน' : '✓ ปิด Step';
+  if(!_saFocus) document.querySelectorAll('#mParts [data-k=who]').forEach(s=>s.disabled=false);
+}
 function saCollectParts(){
   const typed={}; document.querySelectorAll('#mHrsList input[data-name]').forEach(i=>{ if(Number(i.value)>0) typed[i.dataset.name]=Number(i.value); });
   const arr = [...document.querySelectorAll('#mParts .sa-card')].map(c=>{
@@ -5891,9 +5910,9 @@ function saFillStepFromParts(parts, closing){
   const allDone = parts.every(p=>p.ae);
   if(md && !md.value && allDone) md.value=parts.map(p=>p.ae).sort().pop();
 }
-async function saSaveParts(row, stepNum, parts, pj){
-  if(!LIVE_MODE || !_saEdit) return;
-  const orig=_saEdit.orig||[];
+async function saSaveParts(row, stepNum, parts, pj, origIn){
+  if(!LIVE_MODE || (!_saEdit && !origIn)) return;
+  const orig = origIn || _saEdit.orig || [];
   if(!parts.length && !orig.length) return;
   if(!(await saResolveList())){ toastMsg('⚠️ บันทึก "แบ่งงานรายคน" ไม่ได้ — ยังไม่มี list "BOQ Step Assignment" ใน SharePoint'); return; }
   const stepId = row.itemIds && row.itemIds[stepNum] ? String(row.itemIds[stepNum]).split(':')[0] : '';
@@ -5946,7 +5965,7 @@ function renderHrsInputs(){
   const who=document.getElementById('mWho').value;
   const co=[...document.querySelectorAll('#mCoAssign input[type=checkbox]:checked')].map(c=>c.dataset.name);
   const partNames=[...document.querySelectorAll('#mParts [data-k=who]')].map(x=>x.value); // build .137
-  const names=[...new Set([who,...co,...partNames].filter(Boolean))];
+  const names = _saFocus ? [_saFocus] : [...new Set([who,...co,...partNames].filter(Boolean))];
   const acc=hrsByPerson(st&&st.notes);
   wrap.innerHTML=names.map((n,i)=>`<div style="display:flex;align-items:center;gap:6px">
     <span style="min-width:62px;font-size:12.5px;font-weight:${i===0?600:400}">${n}</span>
@@ -6250,6 +6269,16 @@ async function saveOnly(){
 }
 async function saveClose(){
   if(!cur)return;
+  if(_saFocus){ // build .140: ปิดเฉพาะส่วนของคนนี้ — Step ปิดเองเมื่อทุกคนปิดครบ
+    const card=[...document.querySelectorAll('#mParts .sa-card')].find(c=>c.querySelector('[data-k=who]')?.value===_saFocus);
+    const ae=card?.querySelector('[data-k=ae]'), as=card?.querySelector('[data-k=as]');
+    if(ae && !ae.value) ae.value = localISO(new Date());
+    if(as && !as.value) as.value = ae.value;
+    const parts = saCollectParts();
+    if(parts.every(p=>p.ae)){ _saFocus=''; return saveClose(); }
+    toastMsg('✓ ปิดงานของ '+card.querySelector('[data-k=who]').value+' แล้ว · Step ยังเปิดอยู่จนกว่าทุกคนจะปิดครบ');
+    return saveOnly();
+  }
   const row=DATA[cur.pi].pkgs[cur.ki].rows[cur.ri];
   const st=row.steps.find(x=>x.s===cur.s);
   const stepNum=cur.s;
@@ -9098,11 +9127,26 @@ function renderMyWork(){
           const coHit    = (st.coAssignees||[]).filter(n => view.names.has(n));
           const isCo     = !isPrimary && coHit.length > 0;
           if(!isPrimary && !isCo) return;
-          const person   = isPrimary ? st.who : coHit.join(', ');
+          // build .140: Step ที่แบ่งงานรายคนไว้ → แสดงแยกแถวต่อคน ใช้วันแผน/จริงของคนนั้นเอง
+          const matched = [...new Set([...(isPrimary?[st.who]:[]), ...coHit])];
+          const withPart = (st.parts&&st.parts.length) ? matched.filter(n=>st.parts.some(p=>p.who===n)) : [];
+          withPart.forEach(n=>{
+            const p = st.parts.find(x=>x.who===n);
+            const ps = p.ps ? saOff(p.ps) : st.start, pe = p.pe ? saOff(p.pe) : st.start+Math.max(st.dur-1,0);
+            const vst = Object.assign(Object.create(st), { start:ps, dur:Math.max(pe-ps+1,1) });
+            const pClosed = p.ae ? { end:saOff(p.ae), over: saOff(p.ae) > pe } : (row.closed[st.s] || null);
+            const pAOff = p.as ? saOff(p.as) : undefined;
+            if(pClosed && !showDone) return;
+            tasks.push({ pi, ki, ri, st:vst, row, pj, pk, closed:pClosed, aOff:pAOff, isPrimary: n===st.who, isCo: n!==st.who, person:n, part:p });
+          });
+          const rest = matched.filter(n=>!withPart.includes(n));
+          if(!rest.length) return;
+          const restPrimary = rest.includes(st.who);
+          const person   = restPrimary && rest.length===1 ? st.who : rest.join(', ');
           const closed  = row.closed[st.s];
           const aOff    = row.astart[st.s];
           if(closed && !showDone) return; // ซ่อนงานเสร็จแล้วถ้าไม่ได้เลือก
-          tasks.push({ pi, ki, ri, st, row, pj, pk, closed, aOff, isPrimary, isCo, person });
+          tasks.push({ pi, ki, ri, st, row, pj, pk, closed, aOff, isPrimary:restPrimary, isCo:!restPrimary, person });
         });
       });
     });
@@ -9138,7 +9182,7 @@ function renderMyWork(){
     <th>แผนเริ่ม–จบ</th><th>สถานะ</th><th style="text-align:center">การดำเนินการ</th>
   </tr></thead>`;
 
-  const rows = tasks.map(({pi,ki,ri,st,row,pj,pk,closed,aOff,isPrimary,isCo,person}) => {
+  const rows = tasks.map(({pi,ki,ri,st,row,pj,pk,closed,aOff,isPrimary,isCo,person,part}) => {
     const planS   = fmt(addD(T0, st.start));
     const planE   = fmt(addD(T0, st.start + Math.max(st.dur-1,0)));
     const today   = TODAY_D;
@@ -9156,7 +9200,8 @@ function renderMyWork(){
     else badge = `<span class="r-badge" style="background:#f1f5f9;color:var(--text3)">🕐 รอเริ่ม</span>`;
 
     // ref attribute เหมือนที่ openStep ใช้ — format "pi,ki,ri,s"
-    const ref = `data-r="${pi},${ki},${ri},${st.s}"`;
+    const ref = `data-r="${pi},${ki},${ri},${st.s}"${part?` data-who="${part.who}"`:''}`;
+    const scopeTxt = part && part.scope ? ` <span style="font-size:10px;color:var(--primary)">🧩 ${String(part.scope).replace(/</g,'&lt;')}</span>` : (part?' <span style="font-size:10px">🧩</span>':'');
 
     // ปุ่มการดำเนินการ
     let actions = '';
@@ -9166,7 +9211,7 @@ function renderMyWork(){
     } else if(!isInProg && !aOff){
       // ยังไม่ได้เริ่ม — ปุ่มเริ่มงาน + รายละเอียด
       actions = `
-        <button class="btn" style="font-size:11px;padding:3px 10px;background:#16a34a;border-color:#16a34a" onclick="myWorkStartStep(${pi},${ki},${ri},${st.s})" title="บันทึกวันเริ่มงานจริงเป็นวันนี้">▶ เริ่มงาน</button>
+        <button class="btn" style="font-size:11px;padding:3px 10px;background:#16a34a;border-color:#16a34a" onclick="myWorkStartStep(${pi},${ki},${ri},${st.s}${part?`,'${part.who}'`:''})" title="บันทึกวันเริ่มงานจริงเป็นวันนี้">▶ เริ่มงาน</button>
         <button class="btn btn2" style="font-size:11px;padding:3px 8px;margin-left:4px" ${ref} onclick="openStep(this)" title="ดู/แก้ไข Step นี้">📋 รายละเอียด</button>`;
     } else {
       // กำลังทำอยู่ — ปุ่มปิดงาน + รายละเอียด
@@ -9188,7 +9233,7 @@ function renderMyWork(){
       <td style="color:var(--text3);font-size:11.5px" title="${row.team}">${row.team.split('·')[0].trim()}</td>
       <td style="color:var(--primary);font-size:11px;font-weight:600" title="${svcCell}">${svcCell}</td>
       <td style="text-align:center">${verCell}</td>
-      <td style="color:var(--text1);font-weight:500;${row.parentTaskId?'cursor:pointer':''}" ${row.parentTaskId?`onclick="openWpDetail('${row.parentTaskId}')" title="คลิกเพื่อดูรายละเอียดงาน (Details · ไฟล์แนบ)"`:''}>${stepName}</td>
+      <td style="color:var(--text1);font-weight:500;${row.parentTaskId?'cursor:pointer':''}" ${row.parentTaskId?`onclick="openWpDetail('${row.parentTaskId}')" title="คลิกเพื่อดูรายละเอียดงาน (Details · ไฟล์แนบ)"`:''}>${stepName}${scopeTxt}</td>
       <td style="color:var(--text3);font-size:11.5px">${role}</td>
       <td style="color:var(--text3);font-size:11px">${planS}–${planE}</td>
       <td style="white-space:nowrap">${badge}</td>
@@ -9233,7 +9278,7 @@ function buildMyWorkGantt(tasks, showPerson){
   }
   const todayLine = `<div title="วันนี้" style="position:absolute;top:0;bottom:0;left:${pct(TODAY_D + 0.5)};width:2px;background:#ef4444;z-index:2"></div>`;
 
-  const bars = list.map(({pi,ki,ri,st,row,pj,pk,closed,aOff,isPrimary,person})=>{
+  const bars = list.map(({pi,ki,ri,st,row,pj,pk,closed,aOff,isPrimary,person,part})=>{
     const isInProg = aOff !== undefined && !closed;
     const isOverdue = !closed && TODAY_D > st.start + st.dur;
     const color = closed ? '#16a34a' : isOverdue ? '#dc2626' : isInProg ? '#2563eb' : '#94a3b8';
@@ -9250,7 +9295,7 @@ function buildMyWorkGantt(tasks, showPerson){
       </div>
       <div style="position:relative;flex:1;height:30px">
         ${actMark}
-        <div data-r="${pi},${ki},${ri},${st.s}" onclick="openStep(this)" title="${tip}"
+        <div data-r="${pi},${ki},${ri},${st.s}"${part?` data-who="${part.who}"`:''} onclick="openStep(this)" title="${tip}"
           style="position:absolute;top:8px;height:14px;left:${pct(st.start)};width:${(dur/span*100).toFixed(3)}%;min-width:6px;background:${color};border-radius:4px;cursor:pointer;opacity:${closed?'.7':'1'};z-index:1"></div>
       </div>
     </div>`;
@@ -9282,12 +9327,23 @@ function buildMyWorkGantt(tasks, showPerson){
 }
 
 // เริ่มงาน: บันทึกวันเริ่มจริงเป็น "วันนี้" แล้ว sync SharePoint (ไม่ต้องเปิด modal)
-async function myWorkStartStep(pi, ki, ri, s){
+async function myWorkStartStep(pi, ki, ri, s, who){
   const pj  = DATA[pi];
   const pk  = pj.pkgs[ki];
   const row = pk.rows[ri];
   // คำนวณ day-offset จาก T0 → วันนี้
   const todayOffset = Math.round((new Date(new Date().toDateString()) - T0) / 864e5);
+  // build .140: งานที่แบ่งรายคน → บันทึกวันเริ่มของคนนั้น (วันเริ่มของ Step ใส่ให้ถ้ายังว่าง)
+  const st0 = row.steps.find(x=>x.s===s);
+  if(who && st0 && st0.parts){
+    const orig = st0.parts.map(p=>({...p}));
+    const parts = st0.parts.map(p=>({...p})); const p = parts.find(x=>x.who===who);
+    if(p && !p.as){ p.as = localISO(new Date()); }
+    if(row.astart[s]===undefined){ row.astart[s] = todayOffset; if(row.inprog <= s) row.inprog = s; await syncStepToGraph(row, s, pj, pk); }
+    parts.typed = {};
+    await saSaveParts(row, s, parts, pj, orig);
+    renderMyWork(); return;
+  }
   row.astart[s] = todayOffset;
   if(row.inprog <= s) row.inprog = s;
   renderRows(); renderMyWork(); // อัปเดต Timeline + หน้างานของฉัน
