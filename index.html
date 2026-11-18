@@ -347,7 +347,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-11-18.140</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-11-18.141</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -5858,6 +5858,8 @@ function saAddPart(p){
     p={id:'', who:cand, scope:'', ps, pe, as:'', ae:'', hrs:0, note:''};
   }
   const names=saPeopleOptions(row); if(p.who && !names.includes(p.who)) names.unshift(p.who);
+  // build .141: ชั่วโมงสะสม = ค่าที่มากกว่าระหว่าง Hours ใน list กับที่รวมได้จากประวัติ (ชั่วโมงที่กรอกก่อนแบ่งงานรายคนจะไม่หาย)
+  if(p.who){ const accN = hrsByPerson(st && st.notes)[p.who] || 0; p.hrs = Math.max(Number(p.hrs)||0, accN); }
   const d=document.createElement('div'); d.className='sa-card'; d.dataset.id=p.id||''; d.dataset.hrs=p.hrs||0;
   d.innerHTML=`<div style="display:flex;gap:6px;align-items:center">
       <select data-k="who" style="width:110px" onchange="renderHrsInputs()"><option value="">— คน —</option>${names.map(n=>`<option ${n===p.who?'selected':''}>${n}</option>`).join('')}</select>
@@ -5925,7 +5927,9 @@ async function saSaveParts(row, stepNum, parts, pj, origIn){
   let ok=0, fail=0;
   try{
     for(const p of parts){
-      const hrs = Math.round(((p.hrs||0) + (typed[p.who]||0))*100)/100; p.hrs=hrs;
+      // build .141: ประวัติ (StepNotes) รวมครั้งนี้แล้ว → ใช้ยอดจากประวัติถ้ามากกว่า กันชั่วโมงเดิมก่อนแบ่งงานหาย
+      const accN = (st && hrsByPerson(st.notes)[p.who]) || 0;
+      const hrs = Math.round(Math.max((p.hrs||0) + (typed[p.who]||0), accN)*100)/100; p.hrs=hrs;
       const fields = { Title:`${pj?pj.name:''} · S${stepNum} · ${p.who}`, StepItemId:stepId, ParentTaskID:String(row.parentTaskId||''), Person:p.who, Scope:p.scope,
         PlanStart:dv(p.ps), PlanEnd:dv(p.pe), ActualStart:dv(p.as), ActualEnd:dv(p.ae), Hours:hrs };
       try{
