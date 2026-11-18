@@ -347,7 +347,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-11-18.137</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-11-18.138</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -6223,7 +6223,8 @@ function applyCommon(row,st){
     const add = Number(hrsVal)||0;
     st.hrs = (Number(st.hrs)||0) + add; // ชั่วโมงสะสม ไม่ใช่ทับค่าเดิม
   }
-  const allWhoStamp=[st.who,...(st.coAssignees||[])].filter(Boolean);
+  // build .138: ถ้ากรอกชั่วโมง → บันทึกเฉพาะชื่อคนที่กรอกชั่วโมงครั้งนี้ (เดิมใส่ทุกคนในทีม ทำให้ดูเหมือนทุกคนทำ)
+  const allWhoStamp = hrsParts.length ? hrsParts.map(p=>p.n) : [st.who,...(st.coAssignees||[])].filter(Boolean);
   const stamp = `[${fmtY(new Date())}] ${roleVal}: ${allWhoStamp.join('+')}${hrsVal!==''? ' · '+hrsVal+' ชม.'+hrsDetail:''}${noteVal? ' · '+noteVal:''}`;
   // build 2026-09-11.1: ป้องกันต่อท้าย stamp ซ้ำ — ถ้า stamp (ไม่รวมวันที่) เหมือนรายการล่าสุดใน st.notes ให้ข้าม
   const stampBody = stamp.replace(/^\[[^\]]+\]\s*/, ''); // ตัดส่วน [วันที่] ออก เหลือแค่เนื้อหา
