@@ -150,6 +150,10 @@ body{font-family:'Segoe UI','Sarabun','Tahoma',sans-serif;background:var(--bg);c
 /* build 2026-08-20.8: Issue 2+3 — min-width 14px กัน bar หายเมื่อ stage แคบมาก (เช่น ครึ่งวัน หรือ commit < 1 สัปดาห์) */
 .seg{position:absolute;top:0;height:16px;border-radius:0;color:#fff;font-size:9.5px;font-weight:700;display:flex;align-items:center;justify-content:center;overflow:hidden;white-space:nowrap;line-height:1;cursor:pointer;min-width:14px}
 .seg.plan{opacity:.45}
+.seg-part{position:absolute;top:12px;height:4px;border-radius:2px;background:#0f172a;opacity:.8;z-index:3;cursor:pointer}
+.seg-part.done{background:#15803d}
+.sa-card{border:1px solid var(--border);border-radius:8px;padding:6px 8px;background:var(--bg)}
+.sa-card input,.sa-card select{padding:3px 6px;font-size:12px}
 /* build 2026-08-19.7/.7: ผู้ใช้ชี้ว่า Stage ที่วันที่ชนกันพอดี (PlanEnd ของ Stage ก่อนหน้า = PlanStart ของ Stage
    ถัดไปเป๊ะ) แท่ง Gantt ควรต้องแสดงต่อกันสนิท (ไม่ควรมีการ "ปรับวันที่" ใดๆ มาแก้ปัญหานี้ — ต้องแก้ที่การแสดงผลล้วนๆ:
    วันชนวัน กราฟต้องชนกัน วันซ้อนกัน กราฟต้องซ้อนกัน ให้ตรงกับข้อมูลจริงเสมอ) ต้นเหตุมี 2 จุด: (1) border-radius:3px
@@ -343,7 +347,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-11-12.136</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-11-18.137</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -913,7 +917,7 @@ tr.pick:hover td{background:var(--bg)}
 
 <!-- ============ MODAL · STEP ============ -->
 <div class="mbg" id="mbg">
-  <div class="modal">
+  <div class="modal" id="mStepModal">
     <h3>⚙️ จัดการ Step</h3>
     <div class="sub" id="mSub">—</div>
     <div class="frow">
@@ -929,6 +933,12 @@ tr.pick:hover td{background:var(--bg)}
     <div class="field" id="mCoAssignField">
       <label>👥 ผู้ร่วมทีม <small style="color:var(--text3);font-weight:400">(เลือกเพิ่มได้ เพราะอาจวัดร่วมกัน)</small></label>
       <div id="mCoAssign" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:5px;padding:6px 8px;background:var(--bg);border-radius:7px;border:1px solid var(--border);min-height:34px"></div>
+    </div>
+    <div class="field" id="mPartsField">
+      <label style="display:flex;align-items:center;gap:6px">🧩 แบ่งงานรายคน <small style="color:var(--text3);font-weight:400;flex:1">พื้นที่/ขอบเขต และวันของแต่ละคน (เริ่ม/จบไม่ตรงกันได้)</small>
+        <button type="button" class="btn btn2" style="padding:2px 9px;font-size:11.5px" onclick="saAddPart()">＋ เพิ่มคน</button></label>
+      <div id="mParts" style="display:flex;flex-direction:column;gap:6px;margin-top:5px"></div>
+      <small id="mPartsHint" style="color:var(--text3);font-size:11px"></small>
     </div>
     <div class="frow">
       <div class="field"><label>▶ วันเริ่มงานจริง<br><small style="color:var(--text3);font-weight:400">เริ่มก่อน/ช้ากว่าแผนได้</small></label><input type="date" id="mStart"></div>
@@ -4736,6 +4746,7 @@ async function bootLive(){
     initFilters();
     LIVE_MODE = true; // build 2026-08-25.4: ต้องเซ็ตก่อน renderRows() ไม่งั้น onclick Status/edit ไม่ติดตอน render ครั้งแรก
     renderRows();
+    saLoadAndAttach().then(n=>{ if(n) renderRows(); }); // build .137: แบ่งงานรายคน
     scrollTimelineToToday(); // ให้ "วันนี้" อยู่กึ่งกลางจอตั้งแต่โหลดข้อมูลจริงเสร็จครั้งแรก
     renderIntakeTable();
     if(INTAKE.length){
@@ -5382,7 +5393,7 @@ function renderRows(){
           const edge = `${sidx===0?'seg-first':''} ${sidx===row.steps.length-1?'seg-last':''}`;
           const ref = `data-r="${realPi},${ki},${ri},${st.s}"`;
           const whoTxt=[st.who,...(st.coAssignees||[])].filter(Boolean).join('+');
-          const tP = `S${st.s} ${st.name || STEP_NAMES[st.s] || ''} · ${whoTxt} · แผน ${fmt(addD(T0,st.start))} – ${fmt(addD(T0,st.start+st.dur))} · คลิกเพื่อ Assign/แก้ไข`;
+          const tP = `S${st.s} ${st.name || STEP_NAMES[st.s] || ''} · ${whoTxt} · แผน ${fmt(addD(T0,st.start))} – ${fmt(addD(T0,st.start+st.dur))}${saTip(st)} · คลิกเพื่อ Assign/แก้ไข`;
           // build 2026-08-19.8: bridge gap ≤1 วัน ระหว่างแท่งติดกัน
           // ผู้ใช้มักตั้ง PlanEnd S1 = วันX, PlanStart S2 = วันX+1 ("วันชนวัน") ทำให้มี 1-day gap ในข้อมูล
           // แก้โดยยืดแท่งถึง start ของ Step ถัดไปเมื่อ gap ≤1 วัน (ไม่แตะข้อมูล — แก้ที่การแสดงผลเท่านั้น)
@@ -5390,7 +5401,8 @@ function renderRows(){
           const gapToNext = nextSt ? nextSt.start - (st.start + st.dur) : 0;
           // build 2026-08-20.8: Issue 1 — Math.max(...,1) กัน vizDur=0 เมื่อ 2 step อยู่วันเดียวกัน (gapToNext≤1 แต่ nextSt.start=st.start)
           const vizDur = Math.max(nextSt && gapToNext <= 1 ? nextSt.start - st.start : st.dur, 1);
-          plan += `<div class="seg plan ${stepClass(st.s, st.name)} ${dim} ${hi} ${edge}" style="left:${pct(st.start)};width:${pct(vizDur)}" title="${tP}" ${ref} onclick="openStep(this)">S${st.s}·${whoTxt}</div>`;
+          plan += `<div class="seg plan ${stepClass(st.s, st.name)} ${dim} ${hi} ${edge}" style="left:${pct(st.start)};width:${pct(vizDur)}" title="${tP}" ${ref} onclick="openStep(this)">S${st.s}·${whoTxt}${(st.parts&&st.parts.length)?' 🧩':''}</div>`;
+          plan += saStrips(st, person, pct, ref);
 
           const c=row.closed[st.s], as=row.astart[st.s];
           // act lane: bridge gap ≤1 วันระหว่างแท่ง ok/pending ติดกัน (เหมือน plan lane ด้านบน)
@@ -5767,10 +5779,151 @@ function openStep(el){
     return [...seen.values()].join('\n');
   };
   document.getElementById('mHistory').textContent = dedupNotes(st.notes) || 'ยังไม่มีประวัติ';
+  saOpenParts(row, st); // build .137
   renderHrsInputs();
   document.getElementById('mbg').classList.add('on');
 }
 function closeModal(){document.getElementById('mbg').classList.remove('on')}
+/* ============ build .137 · แบ่งงานรายคน (list "BOQ Step Assignment") ============
+   1 แถว = 1 คนใน 1 Step: StepItemId, ParentTaskID, Person, Scope, PlanStart, PlanEnd, ActualStart, ActualEnd, Hours, Note
+   - วันเริ่มจริงของ Step = วันที่เร็วสุดของคนที่เริ่มแล้ว · วันปิด Step = วันที่ช้าสุด เมื่อทุกคนปิดครบ
+   - ชื่อคนในตารางถูกรวมเข้า "ผู้ร่วมทีม" (StepCoAssignees) ด้วย หน้าอื่นๆ ที่ใช้ผู้ร่วมทีมจึงยังทำงานเหมือนเดิม */
+let SA_LIST = null, _saResolved = false, _saByStep = {};
+async function saResolveList(){
+  if(_saResolved) return SA_LIST;
+  try{
+    const d = await graphFetch(`/sites/${SITE_ID}/lists?$filter=displayName eq 'BOQ Step Assignment'&$select=id,displayName`);
+    SA_LIST = d?.value?.[0]?.id || null;
+  }catch(e){ SA_LIST = null; }
+  _saResolved = true;
+  if(!SA_LIST) console.warn('[BOQ Step Assignment] ไม่พบ list — ส่วน "แบ่งงานรายคน" จะยังบันทึกไม่ได้');
+  return SA_LIST;
+}
+const saDay = v => { if(!v) return ''; const d=new Date(v); return isNaN(d)?'':localISO(d); };
+function saFromItem(it){ const f=it.fields||{}; return { id:String(it.id), stepId:String(f.StepItemId||''), who:String(f.Person||'').trim(), scope:f.Scope||'',
+  ps:saDay(f.PlanStart), pe:saDay(f.PlanEnd), as:saDay(f.ActualStart), ae:saDay(f.ActualEnd), hrs:Number(f.Hours)||0, note:f.Note||'' }; }
+async function saLoadAndAttach(){
+  if(!LIVE_MODE) return 0;
+  if(!(await saResolveList())) return 0;
+  let items=[];
+  try{ items = await graphFetchAllItems(`/sites/${SITE_ID}/lists/${SA_LIST}/items?$expand=fields&$top=500`); }catch(e){ console.warn('[SA] load',e); return 0; }
+  _saByStep = {};
+  items.map(saFromItem).filter(p=>p.stepId && p.who).forEach(p=>(_saByStep[p.stepId]=_saByStep[p.stepId]||[]).push(p));
+  let n=0;
+  DATA.forEach(pj=>pj.pkgs.forEach(pk=>pk.rows.forEach(row=>{
+    (row.steps||[]).forEach(st=>{ const id=row.itemIds && row.itemIds[st.s]; const ps=id && _saByStep[String(id).split(':')[0]];
+      st.parts = ps ? ps.slice().sort((a,b)=>(a.ps||'').localeCompare(b.ps||'')) : []; if(ps) n++; });
+  })));
+  return n;
+}
+const saOff = iso => Math.round((new Date(iso+'T00:00:00') - T0)/864e5);
+function saTip(st){
+  if(!st.parts || !st.parts.length) return '';
+  const f = iso => iso ? fmt(new Date(iso+'T00:00:00')) : '?';
+  return ' | แบ่งงาน: ' + st.parts.map(p=>`${p.who}${p.scope?' ['+p.scope+']':''} ${f(p.ps)}–${f(p.pe)}${p.ae?' ✓':p.as?' (เริ่ม '+f(p.as)+')':''}`).join(' · ').replace(/"/g,"'");
+}
+// แถบเล็กใต้แท่งแผน = ช่วงวันของแต่ละคน (เลือก "ดูงานของ" คนไหน จะเห็นเฉพาะของคนนั้น)
+function saStrips(st, person, pct, ref){
+  if(!st.parts || !st.parts.length) return '';
+  return st.parts.filter(p=>p.ps && (!person || p.who===person)).map(p=>{
+    const a=saOff(p.ps), b=saOff(p.pe||p.ps);
+    return `<div class="seg-part ${p.ae?'done':''}" style="left:${pct(a)};width:${pct(Math.max(b-a+1,1))}" title="${p.who}${p.scope?' · '+String(p.scope).replace(/"/g,"'"):''}" ${ref} onclick="openStep(this)"></div>`;
+  }).join('');
+}
+let _saEdit = null; // {stepId, orig:[parts]}
+function saPeopleOptions(row){
+  const pool = POOLS[row.pool] || [];
+  return [...new Set([...pool, ...(typeof ALL_TEAM_MEMBERS!=='undefined' ? [...ALL_TEAM_MEMBERS] : [])])];
+}
+function saOpenParts(row, st){
+  const box=document.getElementById('mParts'), hint=document.getElementById('mPartsHint'), modal=document.getElementById('mStepModal');
+  if(!box) return;
+  _saEdit = { row, st, orig:(st.parts||[]).map(p=>({...p})) };
+  const list = (st.parts||[]).map(p=>({...p}));
+  box.innerHTML=''; list.forEach(p=>saAddPart(p));
+  if(modal) modal.style.maxWidth = '660px';
+  if(hint) hint.textContent = !LIVE_MODE ? 'โหมดตัวอย่าง — ยังไม่บันทึกลง SharePoint'
+    : (_saResolved && !SA_LIST) ? '⚠️ ยังไม่พบ list "BOQ Step Assignment" ใน SharePoint — สร้าง list ก่อนจึงจะบันทึกได้'
+    : list.length ? 'ชื่อในตารางนี้ถูกนับเป็นผู้ร่วมทีมด้วย · เว้นว่างวันจบจริง = ยังทำอยู่' : 'ยังไม่ได้แบ่ง — กด "＋ เพิ่มคน" ถ้าทำหลายคนแยกพื้นที่/วัน';
+}
+function saAddPart(p){
+  const box=document.getElementById('mParts'); if(!box || !_saEdit) return;
+  const row=_saEdit.row, st=_saEdit.st;
+  if(!p){
+    const ps=toISO(addD(T0,st.start)), pe=toISO(addD(T0,st.start+Math.max(st.dur-1,0)));
+    const used=[...box.querySelectorAll('[data-k=who]')].map(x=>x.value);
+    const cand=[document.getElementById('mWho')?.value, ...[...document.querySelectorAll('#mCoAssign input:checked')].map(c=>c.dataset.name)].find(n=>n && !used.includes(n)) || '';
+    p={id:'', who:cand, scope:'', ps, pe, as:'', ae:'', hrs:0, note:''};
+  }
+  const names=saPeopleOptions(row); if(p.who && !names.includes(p.who)) names.unshift(p.who);
+  const d=document.createElement('div'); d.className='sa-card'; d.dataset.id=p.id||''; d.dataset.hrs=p.hrs||0;
+  d.innerHTML=`<div style="display:flex;gap:6px;align-items:center">
+      <select data-k="who" style="width:110px" onchange="renderHrsInputs()"><option value="">— คน —</option>${names.map(n=>`<option ${n===p.who?'selected':''}>${n}</option>`).join('')}</select>
+      <input data-k="scope" placeholder="พื้นที่/ขอบเขต เช่น ชั้น 1–5, อาคาร B" value="${String(p.scope||'').replace(/"/g,'&quot;')}" style="flex:1;min-width:0">
+      <button type="button" class="btn btn2" style="padding:2px 8px;font-size:12px;color:#b91c1c" title="ลบคนนี้" onclick="this.closest('.sa-card').remove();renderHrsInputs()">✕</button></div>
+    <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;margin-top:5px;font-size:11px;color:var(--text2)">
+      <div>📅 แผน<div style="display:flex;gap:3px;align-items:center"><input type="date" data-k="ps" value="${p.ps||''}" style="flex:1;min-width:0;width:auto">–<input type="date" data-k="pe" value="${p.pe||''}" style="flex:1;min-width:0;width:auto"></div></div>
+      <div>▶ จริง (เริ่ม–จบ · จบว่าง = ยังทำอยู่)${p.hrs?` · สะสม ${p.hrs} ชม.`:''}<div style="display:flex;gap:3px;align-items:center"><input type="date" data-k="as" value="${p.as||''}" style="flex:1;min-width:0;width:auto">–<input type="date" data-k="ae" value="${p.ae||''}" style="flex:1;min-width:0;width:auto"></div></div></div>`;
+  box.appendChild(d);
+  if(arguments.length===0 || !arguments[0]) renderHrsInputs();
+}
+function saCollectParts(){
+  const typed={}; document.querySelectorAll('#mHrsList input[data-name]').forEach(i=>{ if(Number(i.value)>0) typed[i.dataset.name]=Number(i.value); });
+  const arr = [...document.querySelectorAll('#mParts .sa-card')].map(c=>{
+    const g=k=>c.querySelector(`[data-k=${k}]`)?.value||'';
+    return { id:c.dataset.id||'', who:g('who').trim(), scope:g('scope').trim(), ps:g('ps'), pe:g('pe'), as:g('as'), ae:g('ae'), hrs:Number(c.dataset.hrs)||0, note:'' };
+  }).filter(p=>p.who);
+  arr.forEach(p=>{ if(p.ps && p.pe && p.pe<p.ps) p.pe=p.ps; if(p.as && p.ae && p.ae<p.as) p.ae=p.as; }); // กันวันจบก่อนวันเริ่ม
+  arr.typed = typed; return arr;
+}
+// ใช้ข้อมูลรายคนเติมช่องของ Step (ผู้ร่วมทีม · วันเริ่มจริง · วันปิด) ก่อน applyCommon อ่านค่า
+function saFillStepFromParts(parts, closing){
+  if(!parts.length) return;
+  const who=document.getElementById('mWho')?.value;
+  const names=new Set(parts.map(p=>p.who));
+  document.querySelectorAll('#mCoAssign input[type=checkbox]').forEach(cb=>{ if(names.has(cb.dataset.name) && cb.dataset.name!==who) cb.checked=true; });
+  // คนที่ไม่อยู่ใน pool ของทีม → เพิ่ม checkbox ซ่อนไว้ให้ applyCommon เก็บเป็นผู้ร่วมทีมด้วย
+  const wrap=document.getElementById('mCoAssign');
+  names.forEach(n=>{ if(n!==who && wrap && !wrap.querySelector(`input[data-name="${CSS.escape(n)}"]`)){ const l=document.createElement('label'); l.style.display='none'; l.innerHTML=`<input type="checkbox" checked data-name="${n}">`; wrap.appendChild(l); } });
+  const ms=document.getElementById('mStart'), md=document.getElementById('mDate');
+  const starts=parts.map(p=>p.as).filter(Boolean).sort();
+  if(ms && !ms.value && starts.length) ms.value=starts[0];
+  const allDone = parts.every(p=>p.ae);
+  if(md && !md.value && allDone) md.value=parts.map(p=>p.ae).sort().pop();
+}
+async function saSaveParts(row, stepNum, parts, pj){
+  if(!LIVE_MODE || !_saEdit) return;
+  const orig=_saEdit.orig||[];
+  if(!parts.length && !orig.length) return;
+  if(!(await saResolveList())){ toastMsg('⚠️ บันทึก "แบ่งงานรายคน" ไม่ได้ — ยังไม่มี list "BOQ Step Assignment" ใน SharePoint'); return; }
+  const stepId = row.itemIds && row.itemIds[stepNum] ? String(row.itemIds[stepNum]).split(':')[0] : '';
+  if(!stepId){ toastMsg('⚠️ ยังไม่มี Step ใน SharePoint — บันทึกแบ่งงานรายคนไม่ได้'); return; }
+  // ชั่วโมงที่กรอกครั้งนี้ (ช่องชั่วโมงรายคนเดิม) → บวกเข้า Hours ของคนนั้น
+  const typed = parts.typed || {};
+  const st=row.steps.find(x=>x.s===stepNum);
+  const dv = v => v ? v : null;
+  const base = `/sites/${SITE_ID}/lists/${SA_LIST}/items`;
+  let ok=0, fail=0;
+  try{
+    for(const p of parts){
+      const hrs = Math.round(((p.hrs||0) + (typed[p.who]||0))*100)/100; p.hrs=hrs;
+      const fields = { Title:`${pj?pj.name:''} · S${stepNum} · ${p.who}`, StepItemId:stepId, ParentTaskID:String(row.parentTaskId||''), Person:p.who, Scope:p.scope,
+        PlanStart:dv(p.ps), PlanEnd:dv(p.pe), ActualStart:dv(p.as), ActualEnd:dv(p.ae), Hours:hrs };
+      try{
+        if(p.id){ await graphFetch(`${base}/${p.id}/fields`, {method:'PATCH', body:JSON.stringify(fields)}); }
+        else { Object.keys(fields).forEach(k=>{ if(fields[k]===null) delete fields[k]; });
+          const r = await graphFetch(base, {method:'POST', body:JSON.stringify({fields})}); if(r && r.id) p.id=String(r.id); }
+        ok++;
+      }catch(e){ fail++; console.warn('[SA] save',p.who,e); }
+    }
+    const keep=new Set(parts.map(p=>p.id).filter(Boolean));
+    for(const o of orig){ if(o.id && !keep.has(o.id)){ try{ await graphFetch(`${base}/${o.id}`, {method:'DELETE'}); ok++; }catch(e){ fail++; console.warn('[SA] delete',e); } } }
+  }finally{
+    if(st){ st.parts = parts.slice().sort((a,b)=>(a.ps||'').localeCompare(b.ps||'')); _saByStep[stepId]=st.parts; }
+    renderRows();
+  }
+  toastMsg(fail ? `⚠️ บันทึกแบ่งงานรายคนไม่สำเร็จ ${fail} รายการ (ดู Console)` : `✓ บันทึกแบ่งงานรายคนแล้ว (${parts.length} คน)`);
+}
 // build 2026-08-20.2: renderCoAssignChips — สร้าง chip checkboxes ผู้ร่วมทีมตาม pool ของ row
 // เรียกตอนเปิด modal และตอนเปลี่ยนผู้ทำหลัก (mWho onchange) เพื่ออัปเดตรายชื่อที่เลือกได้
 // build .104: ชั่วโมงแยกรายคน (ผู้ทำหลัก + ผู้ร่วมทีมที่ติ๊ก) — ไม่ต้องเพิ่ม column ใน SharePoint:
@@ -5792,7 +5945,8 @@ function renderHrsInputs(){
   const row=DATA[cur.pi].pkgs[cur.ki].rows[cur.ri]; const st=row.steps.find(x=>x.s===cur.s);
   const who=document.getElementById('mWho').value;
   const co=[...document.querySelectorAll('#mCoAssign input[type=checkbox]:checked')].map(c=>c.dataset.name);
-  const names=[...new Set([who,...co].filter(Boolean))];
+  const partNames=[...document.querySelectorAll('#mParts [data-k=who]')].map(x=>x.value); // build .137
+  const names=[...new Set([who,...co,...partNames].filter(Boolean))];
   const acc=hrsByPerson(st&&st.notes);
   wrap.innerHTML=names.map((n,i)=>`<div style="display:flex;align-items:center;gap:6px">
     <span style="min-width:62px;font-size:12.5px;font-weight:${i===0?600:400}">${n}</span>
@@ -6083,18 +6237,22 @@ async function saveOnly(){
   if(!cur)return;
   const row=DATA[cur.pi].pkgs[cur.ki].rows[cur.ri];
   const stepNum=cur.s;
+  const _saParts = saCollectParts(); saFillStepFromParts(_saParts, false);
   applyCommon(row,row.steps.find(x=>x.s===cur.s));
   closeModal();renderRows();
   // ตอนนี้ sync ได้ทุกแถวแล้ว รวมถึงแถว "⚠ ประมาณการ" (ถ้ายังไม่มี Step จริงใน SharePoint จะถูกสร้างให้อัตโนมัติ
   // ก่อน sync — ดู syncStepToGraph/backfillStepTrackingRow)
   toastMsg(LIVE_MODE? '💾 บันทึกแล้ว · กำลัง sync SharePoint...' : '💾 บันทึกแล้ว · Assign/วันเริ่มจริง อัปเดต');
-  await syncStepToGraph(row, stepNum, DATA[cur.pi], DATA[cur.pi].pkgs[cur.ki]);
+  const _pj=DATA[cur.pi], _pk=DATA[cur.pi].pkgs[cur.ki];
+  await syncStepToGraph(row, stepNum, _pj, _pk);
+  await saSaveParts(row, stepNum, _saParts, _pj);
 }
 async function saveClose(){
   if(!cur)return;
   const row=DATA[cur.pi].pkgs[cur.ki].rows[cur.ri];
   const st=row.steps.find(x=>x.s===cur.s);
   const stepNum=cur.s;
+  const _saParts = saCollectParts(); saFillStepFromParts(_saParts, true);
   applyCommon(row,st);
   const dv=document.getElementById('mDate').value;
   if(!dv){toastMsg('⚠️ ใส่วันที่ปิดจบงานก่อน');return}
@@ -6103,7 +6261,9 @@ async function saveClose(){
   if(cur.s>=row.inprog)row.inprog=cur.s+1;
   closeModal();renderRows();
   toastMsg(LIVE_MODE? '✓ ปิด step แล้ว · กำลังบันทึกลง SharePoint...' : '✓ ปิด step แล้ว · บันทึกลง SharePoint');
-  await syncStepToGraph(row, stepNum, DATA[cur.pi], DATA[cur.pi].pkgs[cur.ki]);
+  const _pj=DATA[cur.pi], _pk=DATA[cur.pi].pkgs[cur.ki];
+  await syncStepToGraph(row, stepNum, _pj, _pk);
+  await saSaveParts(row, stepNum, _saParts, _pj);
 }
 // build 2026-09-11.9: ยกเลิกการปิด Step — ล้าง ActualEnd ใน memory + patch SharePoint
 async function reopenStep(){
