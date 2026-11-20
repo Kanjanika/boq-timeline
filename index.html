@@ -347,7 +347,7 @@ tr.pick:hover td{background:var(--bg)}
 <body>
 
 <div class="top">
-  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-11-18.141</small></div>
+  <div class="brand">📐 BOQ Timeline<small>COST PLAN · BOQ TEAM · build 2026-11-20.142</small></div>
   <div class="tabs">
     <div class="tab on" data-p="pgTimeline">🗓️ Timeline</div>
     <div class="tab" data-p="pgCommit">🚦 Commit Check</div>
@@ -1794,6 +1794,20 @@ async function signIn(){
     return true;
   }catch(e){ console.warn('login failed', e); toastMsg('⚠️ เข้าสู่ระบบไม่สำเร็จ: '+e.message); return false; }
 }
+// build .142: ให้มีหน้าต่าง login ได้ทีละ 1 หน้าต่างเท่านั้น — เดิม token ของ Graph กับ SharePoint หมดอายุพร้อมกัน
+// ต่างคนต่างเปิด popup เอง จึงขึ้น 2 หน้าต่าง · ตอนนี้ตัวที่สองรอตัวแรก login เสร็จ แล้วลองขอ token แบบเงียบอีกครั้ง
+// (login แล้ว Microsoft จำ session ไว้ ส่วนใหญ่จึงไม่ต้องเปิดหน้าต่างที่สอง)
+let _interactLock = Promise.resolve();
+function acquireTokenInteractive(scopes){
+  const run = _interactLock.then(async()=>{
+    try{ const r = await msalInstance.acquireTokenSilent({scopes, account:graphAccount}); return r; }catch(_){}
+    const r = await msalInstance.acquireTokenPopup({scopes, account:graphAccount});
+    if(r && r.account) graphAccount = r.account;
+    return r;
+  });
+  _interactLock = run.catch(()=>{});
+  return run;
+}
 // build 2026-09-23.10: cache token promise ป้องกัน interaction_in_progress เมื่อ Promise.all เรียก getToken() พร้อมกัน
 let _tokenPromise = null;
 async function getToken(){
@@ -1806,8 +1820,7 @@ async function getToken(){
     }catch(e){
       // InteractionRequiredAuthError → fallback to popup (เรียกครั้งเดียว ไม่ซ้อนกัน)
       try{
-        const res = await msalInstance.acquireTokenPopup({scopes:GRAPH_SCOPES, account:graphAccount});
-        graphAccount = res.account;
+        const res = await acquireTokenInteractive(GRAPH_SCOPES);
         return res.accessToken;
       }catch(e2){
         throw e2;
@@ -1843,7 +1856,7 @@ async function getSpToken(){
       const r = await msalInstance.acquireTokenSilent({scopes:SP_SCOPES, account:graphAccount});
       return r.accessToken;
     }catch(e){
-      const r = await msalInstance.acquireTokenPopup({scopes:SP_SCOPES, account:graphAccount});
+      const r = await acquireTokenInteractive(SP_SCOPES);
       return r.accessToken;
     }
   })().finally(()=>{ _spTokenPromise=null; });
